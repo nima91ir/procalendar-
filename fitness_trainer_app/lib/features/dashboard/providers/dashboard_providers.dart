@@ -37,3 +37,14 @@ final bonusSessionClientsProvider = FutureProvider.autoDispose<List<Map<String, 
 final todayAttendanceProvider = FutureProvider.autoDispose<Map<int, String>>((ref) {
   return ref.watch(dashboardServiceProvider).getTodayAttendance();
 });
+
+/// `jalali date -> status` for every recorded day, used by the dashboard
+/// calendar so a dot lands on the correct day only.
+final attendanceByDateProvider = FutureProvider.autoDispose<Map<String, String>>((ref) {
+  return ref.watch(dashboardServiceProvider).getAttendanceByDate();
+});
+
+/// Client names keyed by id, so lists can show names instead of raw ids.
+final clientNamesProvider = FutureProvider.autoDispose<Map<int, String>>((ref) {
+  return ref.watch(dashboardServiceProvider).getClientNames();
+});

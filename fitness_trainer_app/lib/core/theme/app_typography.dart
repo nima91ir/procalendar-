@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 class AppTypography {
-  static const fontFamily = 'Vazir';
+  /// Must match the family name declared in `pubspec.yaml`
+  /// (`Vazirmatn`). Previously 'Vazir' silently fell back to the
+  /// platform default font.
+  static const fontFamily = 'Vazirmatn';
 
   static const displayLarge = TextStyle(
     fontFamily: fontFamily,

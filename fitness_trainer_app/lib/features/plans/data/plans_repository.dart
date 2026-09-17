@@ -109,6 +109,25 @@ class PlansRepository {
   }
 
   Future<int> countQueuedPlans(int clientId) => db.countQueuedPlans(clientId);
+
+  /// Plans that were created from a given template (used to propagate
+  /// template edits to the plans already in use).
+  Future<List<domain.ClientPlan>> getPlansUsingTemplate(int templateId) async {
+    final rows = await db.getPlansUsingTemplate(templateId);
+    return rows.map((r) => domain.ClientPlan(
+      id: r.id,
+      clientId: r.clientId,
+      templateId: r.templateId,
+      startDate: r.startDate,
+      sessions: r.sessions,
+      days: r.days,
+      remaining: r.remaining,
+      status: r.status,
+      queueOrder: r.queueOrder,
+      createdAt: r.createdAt,
+    )).toList();
+  }
+
   Future<void> updatePlanRemaining(int planId, int remaining) => db.updatePlanRemaining(planId, remaining);
   Future<void> updatePlanStatus(int planId, String status, {int? queueOrder}) => db.updatePlanStatus(planId, status, queueOrder: queueOrder);
 }

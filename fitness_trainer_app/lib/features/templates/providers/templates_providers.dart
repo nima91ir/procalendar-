@@ -3,13 +3,19 @@ import 'package:fitness_trainer_app/core/database/database_providers.dart';
 import 'package:fitness_trainer_app/features/templates/data/templates_repository.dart';
 import 'package:fitness_trainer_app/features/templates/data/templates_service.dart';
 import 'package:fitness_trainer_app/features/templates/domain/plan_template.dart' as domain;
+import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 
 final templatesRepositoryProvider = Provider<TemplatesRepository>((ref) {
   return TemplatesRepository(ref.watch(databaseProvider));
 });
 
 final templatesServiceProvider = Provider<TemplatesService>((ref) {
-  return TemplatesService(ref.watch(templatesRepositoryProvider));
+  // Injects the plans service so template edits propagate to the
+  // active/frozen plans created from that template.
+  return TemplatesService(
+    ref.watch(templatesRepositoryProvider),
+    plansService: ref.watch(plansServiceProvider),
+  );
 });
 
 final templatesProvider = NotifierProvider<TemplatesNotifier, List<domain.PlanTemplate>>(() {

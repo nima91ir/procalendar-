@@ -8,6 +8,7 @@ import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
+import 'package:fitness_trainer_app/routing/routes.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -24,6 +25,9 @@ class DashboardScreen extends ConsumerWidget {
     final lowSessionAsync = ref.watch(lowSessionPlansProvider);
     final bonusAsync = ref.watch(bonusSessionClientsProvider);
     final todayAttendanceAsync = ref.watch(todayAttendanceProvider);
+    final attendanceByDateAsync = ref.watch(attendanceByDateProvider);
+    final clientNamesAsync = ref.watch(clientNamesProvider);
+    final clientNames = clientNamesAsync.value ?? const <int, String>{};
 
     return Scaffold(
       appBar: AppBar(
@@ -43,6 +47,8 @@ class DashboardScreen extends ConsumerWidget {
           ref.invalidate(lowSessionPlansProvider);
           ref.invalidate(bonusSessionClientsProvider);
           ref.invalidate(todayAttendanceProvider);
+          ref.invalidate(attendanceByDateProvider);
+          ref.invalidate(clientNamesProvider);
         },
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -55,11 +61,20 @@ class DashboardScreen extends ConsumerWidget {
             _buildStatsRow(context, totalClientsAsync, expiredAsync, frozenAsync, queuedAsync),
             const SizedBox(height: AppSpacing.xxl),
             if (lowSessionAsync.value != null && lowSessionAsync.value!.isNotEmpty) ...[
-              SectionHeader(title: 'برنامه‌های با جلسات کم', actionLabel: 'مشاهده', onAction: () {}),
-              ...lowSessionAsync.value!.map((p) => ListTile(
-                    title: Text('مشتری #${p['clientId']}'),
-                    trailing: Text('${p['remaining']} جلسه باقی', style: const TextStyle(color: AppColors.warning)),
-                  )),
+              SectionHeader(
+                title: 'برنامه‌های با جلسات کم',
+                actionLabel: 'مشاهده مشتریان',
+                onAction: () => Navigator.pushNamed(context, AppRoutes.clients),
+              ),
+              ...lowSessionAsync.value!.map((p) {
+                final clientId = p['clientId'] as int;
+                return ListTile(
+                  leading: const Icon(Icons.timelapse, color: AppColors.warning),
+                  title: Text(clientNames[clientId] ?? 'مشتری #$clientId'),
+                  trailing: Text('${p['remaining']} جلسه باقی', style: const TextStyle(color: AppColors.warning)),
+                  onTap: () => Navigator.pushNamed(context, '${AppRoutes.clientDetail}/$clientId'),
+                );
+              }),
               const SizedBox(height: AppSpacing.xxl),
             ],
             if (bonusAsync.value != null && bonusAsync.value!.isNotEmpty) ...[
@@ -83,7 +98,7 @@ class DashboardScreen extends ConsumerWidget {
             ],
             SectionHeader(title: 'تقویم حضور و غیاب'),
             const SizedBox(height: AppSpacing.md),
-            _buildMiniCalendar(context, todayAttendanceAsync.value ?? {}),
+            _buildMiniCalendar(context, attendanceByDateAsync.value ?? const <String, String>{}),
             const SizedBox(height: AppSpacing.xxl),
             SectionHeader(title: 'حضور امروز'),
             const SizedBox(height: AppSpacing.md),
@@ -94,16 +109,18 @@ class DashboardScreen extends ConsumerWidget {
                     itemCount: todayAttendanceAsync.value!.length,
                     itemBuilder: (context, index) {
                       final entry = todayAttendanceAsync.value!.entries.elementAt(index);
+                      final clientId = entry.key;
                       return ListTile(
                         leading: Icon(
                           entry.value == 'present' ? Icons.check_circle : Icons.cancel,
                           color: entry.value == 'present' ? AppColors.present : AppColors.absent,
                         ),
-                        title: Text('مشتری #${entry.key}'),
+                        title: Text(clientNames[clientId] ?? 'مشتری #$clientId'),
                         trailing: AppPill(
                           label: entry.value == 'present' ? 'حاضر' : 'غایب',
                           color: entry.value == 'present' ? AppColors.successSoft : AppColors.errorSoft,
                         ),
+                        onTap: () => Navigator.pushNamed(context, '${AppRoutes.clientDetail}/$clientId'),
                       );
                     },
                   )
@@ -126,7 +143,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMiniCalendar(BuildContext context, Map<int, String> attendanceMap) {
+  Widget _buildMiniCalendar(BuildContext context, Map<String, String> attendanceMap) {
     final now = DateTime.now();
     final j = Jalali.fromDateTime(now);
     final daysInMonth = j.monthLength;
@@ -156,7 +173,11 @@ class DashboardScreen extends ConsumerWidget {
               children: List.generate(7, (dayOfWeek) {
                 final dayIndex = week * 7 + dayOfWeek - firstDayWeekDay + 1;
                 if (dayIndex < 1 || dayIndex > daysInMonth) return const Expanded(child: SizedBox());
-                final hasAttendance = attendanceMap.values.any((status) => status == 'present');
+                // Dots must be per-day: previously this checked whether *any*
+                // status existed in a client-id keyed map, so every day in the
+                // month got a dot as soon as one client was marked today.
+                final dateKey = '${j.year}/${j.month.toString().padLeft(2, '0')}/${dayIndex.toString().padLeft(2, '0')}';
+                final status = attendanceMap[dateKey];
                 final isToday = dayIndex == j.day;
                 return Expanded(
                   child: Center(
@@ -171,17 +192,22 @@ class DashboardScreen extends ConsumerWidget {
                       child: Stack(
                         children: [
                           Center(child: Text('$dayIndex', style: AppTypography.bodySmall.copyWith(color: isToday ? AppColors.onSurface : AppColors.onSurfaceVar))),
-                          if (hasAttendance)
+                          if (status != null)
                             Positioned(
-                              bottom: 2,
+                              bottom: 3,
                               left: 0,
                               right: 0,
-                              child: Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.present,
-                                  shape: BoxShape.circle,
+                              // `Center` is required: with left+right set the
+                              // 6px container was being stretched into a bar
+                              // across the whole cell.
+                              child: Center(
+                                child: Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: status == 'present' ? AppColors.present : AppColors.absent,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                               ),
                             ),

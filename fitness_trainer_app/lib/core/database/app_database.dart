@@ -72,9 +72,9 @@ class AppSettings extends Table {
   AppSettings,
 ])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase(QueryExecutor executor) : super(executor);
+  AppDatabase(super.executor);
 
-  AppDatabase.forTesting(QueryExecutor executor) : super(executor);
+  AppDatabase.forTesting(super.executor);
 
   static Future<AppDatabase> create() async {
     final executor = await connection.createExecutor();
@@ -138,6 +138,8 @@ class AppDatabase extends _$AppDatabase {
     final rows = await (select(clientPlans)..where((p) => p.templateId.equals(templateId))).get();
     return rows.length;
   }
+  Future<List<ClientPlan>> getPlansUsingTemplate(int templateId) =>
+      (select(clientPlans)..where((p) => p.templateId.equals(templateId))).get();
 
   Future<List<ClientPlan>> getClientPlans(int clientId) => (select(clientPlans)..where((p) => p.clientId.equals(clientId))).get();
   Future<ClientPlan?> getActivePlan(int clientId) => (select(clientPlans)..where((p) => p.clientId.equals(clientId) & p.status.equals('active'))).getSingleOrNull();
@@ -155,38 +157,29 @@ class AppDatabase extends _$AppDatabase {
     final rows = await (select(clientPlans)..where((p) => p.clientId.equals(clientId) & p.status.equals('queued'))).get();
     return rows.length;
   }
-  Future<void> updatePlanRemaining(int planId, int remaining) async {
-    final plan = await getPlan(planId);
-    if (plan == null) return;
-    await updatePlan(ClientPlansCompanion.insert(
-      id: Value(planId),
-      clientId: plan.clientId,
-      templateId: plan.templateId,
-      sessions: plan.sessions,
-      days: plan.days,
-      remaining: remaining,
-      status: Value(plan.status),
-      queueOrder: plan.queueOrder != null ? Value(plan.queueOrder!) : const Value.absent(),
-    ));
-  }
-  Future<void> updatePlanStatus(int planId, String status, {int? queueOrder}) async {
-    final plan = await getPlan(planId);
-    if (plan == null) return;
-    await updatePlan(ClientPlansCompanion.insert(
-      id: Value(planId),
-      clientId: plan.clientId,
-      templateId: plan.templateId,
-      sessions: plan.sessions,
-      days: plan.days,
-      remaining: plan.remaining,
-      status: Value(status),
-      queueOrder: queueOrder != null ? Value(queueOrder) : Value(null),
-    ));
-  }
+  /// Partial update of a single plan row.
+  ///
+  /// The previous implementations used `updatePlan(...replace(...))` with a
+  /// full companion, which replaced the whole row: any column that was
+  /// `Value.absent()` (e.g. `start_date`) fell back to its SQL default and
+  /// was silently wiped whenever a session was consumed.
+  Future<void> patchPlan(int planId, ClientPlansCompanion patch) =>
+      (update(clientPlans)..where((p) => p.id.equals(planId))).write(patch);
 
-  Future<void> clearPlanQueueOrder(int planId) async {
-    await customUpdate('UPDATE client_plans SET queue_order = NULL WHERE id = ?', variables: [Variable<int>(planId)]);
-  }
+  Future<void> updatePlanRemaining(int planId, int remaining) => patchPlan(
+        planId,
+        ClientPlansCompanion(remaining: Value(remaining)),
+      );
+
+  Future<void> updatePlanStatus(int planId, String status, {int? queueOrder}) => patchPlan(
+        planId,
+        ClientPlansCompanion(status: Value(status), queueOrder: Value(queueOrder)),
+      );
+
+  Future<void> clearPlanQueueOrder(int planId) => patchPlan(
+        planId,
+        ClientPlansCompanion(queueOrder: const Value(null)),
+      );
 
   Future<List<AttendanceData>> getClientAttendance(int clientId) => (select(attendance)..where((a) => a.clientId.equals(clientId))..orderBy([(a) => OrderingTerm.desc(a.date)])).get();
   Future<AttendanceData?> getAttendance(int clientId, String date) => (select(attendance)..where((a) => a.clientId.equals(clientId) & a.date.equals(date))).getSingleOrNull();

@@ -11,6 +11,7 @@ class PlansService {
 
   Future<List<domain.ClientPlan>> getClientPlans(int clientId) => repository.getClientPlans(clientId);
   Future<domain.ClientPlan?> getActivePlan(int clientId) => repository.getActivePlan(clientId);
+  Future<domain.ClientPlan?> getPlan(int planId) => repository.getPlan(planId);
   Future<domain.ClientPlan?> getFrozenPlan(int clientId) async {
     final plans = await repository.getClientPlans(clientId);
     return plans.where((p) => p.status == 'frozen').firstOrNull;
@@ -59,6 +60,10 @@ class PlansService {
 
   Future<void> deletePlan(int planId) async => repository.deletePlan(planId);
 
+  /// Plans created from [templateId], used to propagate template edits.
+  Future<List<domain.ClientPlan>> getPlansUsingTemplate(int templateId) =>
+      repository.getPlansUsingTemplate(templateId);
+
   Future<void> consumeSession(int planId) async {
     final plan = await repository.getPlan(planId);
     if (plan == null || plan.status != 'active') return;
@@ -71,51 +76,47 @@ class PlansService {
     }
   }
 
+  /// Gives one session back to a plan (used when an attendance record is
+  /// deleted/undone). Capped at the plan's total session count.
+  Future<void> restoreSession(int planId) async {
+    final plan = await repository.getPlan(planId);
+    if (plan == null || plan.status == 'queued') return;
+    final restored = plan.remaining + 1;
+    if (restored <= plan.sessions) {
+      await repository.updatePlanRemaining(planId, restored);
+    }
+  }
+
   Future<void> _promoteQueuedPlan(int clientId) async {
     final queued = await (db.select(db.clientPlans)..where((p) => p.clientId.equals(clientId) & p.status.equals('queued'))..orderBy([(p) => OrderingTerm.asc(p.queueOrder)])).get();
     if (queued.isEmpty) return;
     final next = queued.first;
-    final today = jalaliToday();
-    await db.updatePlan(ClientPlansCompanion.insert(
-      id: Value(next.id),
-      clientId: next.clientId,
-      templateId: next.templateId,
-      sessions: next.sessions,
-      days: next.days,
-      remaining: next.remaining,
-      status: const Value('active'),
-      startDate: Value(today),
-    ));
-    await db.clearPlanQueueOrder(next.id);
+    // Partial update so the rest of the row (created_at, days, ...) survives
+    // the promotion; the previous full-row replace reset those columns.
+    await db.patchPlan(
+      next.id,
+      ClientPlansCompanion(
+        status: const Value('active'),
+        startDate: Value(jalaliToday()),
+        queueOrder: const Value(null),
+      ),
+    );
   }
 
   Future<void> updatePlanFromTemplate(int planId, int sessions, int days) async {
     final plan = await repository.getPlan(planId);
     if (plan == null) return;
-    final remaining = plan.remaining;
-    final maxRemaining = (remaining / plan.sessions * sessions).round();
-    final updated = domain.ClientPlan(
-      id: plan.id,
-      clientId: plan.clientId,
-      templateId: plan.templateId,
-      startDate: plan.startDate,
-      sessions: sessions,
-      days: days,
-      remaining: maxRemaining > sessions ? sessions : maxRemaining,
-      status: plan.status,
-      queueOrder: plan.queueOrder,
-      createdAt: plan.createdAt,
+    if (sessions <= 0 || days <= 0) return;
+    // Keep the consumed/total ratio so an in-progress plan stays consistent.
+    final maxRemaining = plan.sessions <= 0 ? sessions : (plan.remaining / plan.sessions * sessions).round();
+    final remaining = maxRemaining > sessions ? sessions : maxRemaining;
+    await db.patchPlan(
+      planId,
+      ClientPlansCompanion(
+        sessions: Value(sessions),
+        days: Value(days),
+        remaining: Value(remaining),
+      ),
     );
-    await repository.updatePlan(ClientPlansCompanion.insert(
-      id: Value(updated.id!),
-      clientId: updated.clientId,
-      templateId: updated.templateId,
-      sessions: updated.sessions,
-      days: updated.days,
-      remaining: updated.remaining,
-      status: Value(updated.status),
-      startDate: updated.startDate != null ? Value(updated.startDate!) : const Value.absent(),
-      queueOrder: updated.queueOrder != null ? Value(updated.queueOrder!) : const Value.absent(),
-    ));
   }
 }

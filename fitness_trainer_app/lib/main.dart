@@ -3,7 +3,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
+import 'package:fitness_trainer_app/core/theme/app_colors.dart';
 import 'package:fitness_trainer_app/core/theme/app_theme.dart';
+import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/clients_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/add_edit_client_screen.dart';
@@ -18,10 +21,58 @@ import 'package:fitness_trainer_app/features/attendance/presentation/past_attend
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final db = await AppDatabase.create();
-  runApp(ProviderScope(overrides: [
-    databaseProvider.overrideWithValue(db),
-  ], child: const ProCalendarApp()));
+  try {
+    final db = await AppDatabase.create();
+    runApp(ProviderScope(overrides: [
+      databaseProvider.overrideWithValue(db),
+    ], child: const ProCalendarApp()));
+  } catch (error, stackTrace) {
+    // Without this guard a database failure (corrupt file, unsupported
+    // platform, missing sqlite3) produced a black screen with no UI.
+    debugPrint('PRO CALENDAR: database initialisation failed -> $error');
+    debugPrintStack(stackTrace: stackTrace);
+    runApp(StartupErrorApp(message: error.toString()));
+  }
+}
+
+/// Shown when the database cannot be opened, instead of a blank window.
+class StartupErrorApp extends StatelessWidget {
+  final String message;
+
+  const StartupErrorApp({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'تقویم حرفه‌ای',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xxxl),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.storage_rounded, size: 64, color: AppColors.error),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'راه‌اندازی بانک اطلاعاتی ناموفق بود',
+                    style: AppTypography.headlineMedium.copyWith(color: AppColors.onSurface),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(message, style: AppTypography.bodySmall, textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class ProCalendarApp extends ConsumerWidget {
@@ -35,6 +86,9 @@ class ProCalendarApp extends ConsumerWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
+      // Force the Persian locale so the whole app lays out RTL even on
+      // English/other system locales (previously it rendered LTR).
+      locale: const Locale('fa', 'IR'),
       initialRoute: '/dashboard',
       onGenerateRoute: AppRouter.onGenerateRoute,
       localizationsDelegates: const [

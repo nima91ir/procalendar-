@@ -4,8 +4,10 @@ import 'package:fitness_trainer_app/core/theme/app_colors.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
+import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
+import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
 import 'package:fitness_trainer_app/routing/routes.dart';
 
 class ClientDetailScreen extends ConsumerWidget {
@@ -16,18 +18,60 @@ class ClientDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final clientsAsync = ref.watch(allClientsProvider);
     final plansAsync = ref.watch(clientPlansProvider(clientId));
+    final templatesAsync = ref.watch(allTemplatesProvider);
+
+    // Was `firstWhere(..., orElse: () => clients.first)`, which silently
+    // showed a *different* client when the id no longer existed.
+    final client = clientsAsync.value?.where((c) => c.id == clientId).firstOrNull;
+    final clientName = client?.name ?? 'مشتری';
+    final templates = templatesAsync.value;
+
+    String templateLabel(int templateId) =>
+        templates?.where((t) => t.id == templateId).firstOrNull?.name ?? 'قالب #$templateId';
+
+    Future<void> deleteClient() async {
+      final confirmed = await AppConfirmDialog.show(
+        context,
+        title: 'حذف مشتری',
+        message: 'آیا از حذف «$clientName» اطمینان دارید؟ برنامه‌ها و سوابق حضور هم حذف میشوند.',
+        confirmLabel: 'حذف',
+      );
+      if (!confirmed) return;
+      await ref.read(clientsServiceProvider).deleteClient(clientId);
+      if (context.mounted) Navigator.pop(context, true);
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: clientsAsync.value != null
-            ? Text(clientsAsync.value!.firstWhere((c) => c.id == clientId, orElse: () => clientsAsync.value!.first).name)
-            : const Text('جزئیات مشتری'),
+        title: Text(client?.name ?? 'جزئیات مشتری'),
+        actions: [
+          IconButton(
+            tooltip: 'ویرایش مشتری',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () async {
+              final changed = await Navigator.pushNamed(context, '${AppRoutes.editClient}/$clientId');
+              if (changed == true) {
+                ref.invalidate(allClientsProvider);
+              }
+            },
+          ),
+          IconButton(
+            tooltip: 'حذف مشتری',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () {
+              if (client == null) return;
+              deleteClient();
+            },
+          ),
+        ],
       ),
       body: clientsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => AppErrorState(message: e.toString()),
         data: (clients) {
-          final client = clients.firstWhere((c) => c.id == clientId, orElse: () => clients.isNotEmpty ? clients.first : throw StateError('No client'));
+          if (client == null) {
+            return const AppEmptyState(icon: Icons.person_off_outlined, title: 'مشتری یافت نشد');
+          }
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
@@ -36,7 +80,7 @@ class ClientDetailScreen extends ConsumerWidget {
                   CircleAvatar(
                     radius: 32,
                     backgroundColor: AppColors.primaryLight,
-                    child: Text(client.name[0], style: AppTypography.displayLarge.copyWith(fontSize: 28)),
+                    child: Text(client.name.isNotEmpty ? client.name[0] : '؟', style: AppTypography.displayLarge.copyWith(fontSize: 28)),
                   ),
                   const SizedBox(width: AppSpacing.lg),
                   Expanded(
@@ -104,7 +148,7 @@ class ClientDetailScreen extends ConsumerWidget {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('برنامه ${plan.id ?? 0}', style: AppTypography.headlineMedium),
+                                  Text(templateLabel(plan.templateId), style: AppTypography.headlineMedium),
                                   AppPill(
                                     label: status == 'active' ? 'فعال' : status == 'frozen' ? 'قفل شده' : status == 'queued' ? 'در صف' : 'منقضی شده',
                                     color: status == 'active' ? AppColors.success : status == 'frozen' ? AppColors.frozen : status == 'queued' ? AppColors.queued : AppColors.error,
@@ -120,7 +164,49 @@ class ClientDetailScreen extends ConsumerWidget {
                                 ),
                               ),
                               const SizedBox(height: AppSpacing.sm),
-                              Text('باقی‌مانده: $remaining/$sessions جلسه', style: AppTypography.bodySmall),
+                              Text(
+                                'باقی‌مانده: ${toPersian(remaining.toString())} از ${toPersian(sessions.toString())} جلسه',
+                                style: AppTypography.bodySmall,
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  if (status == 'active')
+                                    TextButton.icon(
+                                      onPressed: () async {
+                                        await ref.read(plansServiceProvider).freezePlan(plan.id!);
+                                        ref.invalidate(clientPlansProvider(clientId));
+                                      },
+                                      icon: const Icon(Icons.pause_circle_outline, size: 18),
+                                      label: const Text('قفل'),
+                                    ),
+                                  if (status == 'frozen')
+                                    TextButton.icon(
+                                      onPressed: () async {
+                                        await ref.read(plansServiceProvider).unfreezePlan(plan.id!);
+                                        ref.invalidate(clientPlansProvider(clientId));
+                                      },
+                                      icon: const Icon(Icons.play_circle_outline, size: 18),
+                                      label: const Text('فعال‌سازی'),
+                                    ),
+                                  TextButton.icon(
+                                    onPressed: () async {
+                                      final confirmed = await AppConfirmDialog.show(
+                                        context,
+                                        title: 'حذف برنامه',
+                                        message: 'این برنامه حذف شود؟',
+                                        confirmLabel: 'حذف',
+                                      );
+                                      if (!confirmed) return;
+                                      await ref.read(plansServiceProvider).deletePlan(plan.id!);
+                                      ref.invalidate(clientPlansProvider(clientId));
+                                    },
+                                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                                    label: const Text('حذف'),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),

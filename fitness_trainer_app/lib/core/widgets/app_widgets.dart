@@ -195,22 +195,32 @@ class AppConfirmDialog extends StatelessWidget {
     );
   }
 
-  static Future<bool?> show(BuildContext context, {
+  static Future<bool> show(BuildContext context, {
     required String title,
     required String message,
-    required String confirmLabel,
-    String? cancelLabel,
-  }) {
-    return showDialog<bool>(
+    String confirmLabel = 'تایید',
+    String? cancelLabel = 'لغو',
+    VoidCallback? onConfirm,
+  }) async {
+    final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AppConfirmDialog(
-        title: title,
-        message: message,
-        confirmLabel: confirmLabel,
-        cancelLabel: cancelLabel,
-        onConfirm: () {},
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          if (cancelLabel != null)
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(cancelLabel)),
+          ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(confirmLabel)),
+        ],
       ),
     );
+    // Previously this helper discarded the dialog result and always
+    // reported "not confirmed", so every caller got `null`/false.
+    if (result == true) {
+      onConfirm?.call();
+      return true;
+    }
+    return false;
   }
 }
 

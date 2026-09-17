@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_repository.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_service.dart';
