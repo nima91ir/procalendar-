@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 
@@ -62,7 +63,12 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
           bonusSessions: bonus,
         );
       }
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        // Refresh every data provider (client lists, dashboard aggregates, ...)
+        // so the new/updated client is visible everywhere immediately.
+        ref.invalidateAppData();
+        if (Navigator.canPop(context)) Navigator.pop(context, true);
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطا: $e')));
     } finally {

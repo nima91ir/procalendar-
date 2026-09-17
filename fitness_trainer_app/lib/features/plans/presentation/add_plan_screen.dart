@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shamsi_date/shamsi_date.dart';
+import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_colors.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
@@ -252,6 +253,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
       startDate: _startDateKey,
     );
     if (mounted) {
+      ref.invalidateAppData();
       navigator.pop();
       messenger.showSnackBar(
         SnackBar(content: Text('برنامه اضافه شد (شروع: ${formatJalali(_startDateKey)})')),

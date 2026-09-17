@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
+import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_repository.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_service.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_session_service.dart';
@@ -67,12 +68,12 @@ class AttendanceNotifier extends Notifier<AsyncValue<void>> {
     }
   }
 
-  /// Attendance changes consume sessions, so the client's plans and the
-  /// dashboard aggregates have to be refreshed too.
+  /// Attendance changes consume sessions, so the client's plans, lists and
+  /// the dashboard aggregates have to be refreshed too.
   void _invalidateFor(int clientId) {
     ref.invalidate(clientAttendanceProvider(clientId));
     ref.invalidate(clientPlansProvider(clientId));
-    ref.invalidate(clientsProvider);
+    ref.invalidateAppData();
   }
 }
 

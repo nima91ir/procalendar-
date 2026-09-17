@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_colors.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
@@ -18,14 +19,8 @@ class ClientsScreen extends ConsumerStatefulWidget {
 
 class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   final _searchController = TextEditingController();
-  List<domain.Client> _displayedClients = [];
+  String _query = '';
   int? _selectedTagId;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadClients();
-  }
 
   @override
   void dispose() {
@@ -33,22 +28,12 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     super.dispose();
   }
 
-  Future<void> _loadClients() async {
-    final clients = await ref.read(clientsServiceProvider).getAllClients();
-    setState(() => _displayedClients = clients);
-  }
-
-  Future<void> _onSearch(String query) async {
-    if (query.trim().isEmpty) {
-      final clients = await ref.read(clientsServiceProvider).getAllClients();
-      setState(() => _displayedClients = clients);
-    } else {
-      final clients = await ref.read(clientsServiceProvider).searchClients(query);
-      setState(() => _displayedClients = clients);
-    }
-  }
+  /// Search is applied locally on top of the watched provider list, so the
+  /// list also reflects any create/update/delete from anywhere in the app.
+  void _onSearch(String query) => setState(() => _query = query);
 
   Future<void> _deleteClient(domain.Client client) async {
+    final messenger = ScaffoldMessenger.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -62,9 +47,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     );
     if (confirm == true && mounted) {
       await ref.read(clientsServiceProvider).deleteClient(client.id!);
-      _loadClients();
+      ref.invalidateAppData();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${client.name} حذف شد')));
+        messenger.showSnackBar(SnackBar(content: Text('${client.name} حذف شد')));
       }
     }
   }
@@ -72,6 +57,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   @override
   Widget build(BuildContext context) {
     final tagsAsync = ref.watch(allTagsProvider);
+    final clientsAsync = ref.watch(allClientsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('مشتریان')),
@@ -130,13 +116,30 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
             },
           ),
           Expanded(
-            child: _displayedClients.isEmpty
-                ? const AppEmptyState(icon: Icons.people_outline, title: 'هنوز مشتری‌ای اضافه نشده', subtitle: 'برای شروع اولین مشتری را اضافه کنید')
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                    itemCount: _displayedClients.length,
-                    itemBuilder: (context, index) {
-                      final client = _displayedClients[index];
+            child: clientsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => AppErrorState(message: error.toString()),
+              data: (allClients) {
+                final query = _query.trim();
+                final clients = query.isEmpty
+                    ? allClients
+                    : allClients
+                        .where((c) => c.name.contains(query) || (c.contact ?? '').contains(query))
+                        .toList();
+                if (clients.isEmpty) {
+                  return query.isEmpty
+                      ? const AppEmptyState(
+                          icon: Icons.people_outline,
+                          title: 'هنوز مشتری‌ای اضافه نشده',
+                          subtitle: 'برای شروع اولین مشتری را اضافه کنید',
+                        )
+                      : const AppEmptyState(icon: Icons.search_off, title: 'نتیجه‌ای پیدا نشد');
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  itemCount: clients.length,
+                  itemBuilder: (context, index) {
+                    final client = clients[index];
                       return Dismissible(
                         key: ValueKey(client.id),
                         direction: DismissDirection.endToStart,
@@ -163,10 +166,13 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                             ),
                           );
                         },
-                        onDismissed: (_) {
-                          ref.read(clientsServiceProvider).deleteClient(client.id!);
-                          setState(() => _displayedClients = _displayedClients.where((c) => c.id != client.id).toList());
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${client.name} حذف شد')));
+                        onDismissed: (_) async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          await ref.read(clientsServiceProvider).deleteClient(client.id!);
+                          ref.invalidateAppData();
+                          if (mounted) {
+                            messenger.showSnackBar(SnackBar(content: Text('${client.name} حذف شد')));
+                          }
                         },
                         child: Card(
                           margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -197,27 +203,19 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                               icon: const Icon(Icons.delete_outline, color: AppColors.error),
                               onPressed: () => _deleteClient(client),
                             ),
-onTap: () async {
-  await Navigator.pushNamed(context, '${AppRoutes.clientDetail}/${client.id}');
-  if (mounted) {
-    _loadClients();
-  }
-},
+onTap: () => Navigator.pushNamed(context, '${AppRoutes.clientDetail}/${client.id}'),
                           ),
                         ),
                       );
                     },
-                  ),
-          ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
-floatingActionButton: FloatingActionButton.extended(
-  onPressed: () async {
-    final result = await Navigator.pushNamed(context, AppRoutes.addClient);
-    if (result == true && mounted) {
-      _loadClients();
-    }
-  },
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.pushNamed(context, AppRoutes.addClient),
         icon: const Icon(Icons.add),
         label: const Text('افزودن مشتری'),
       ),

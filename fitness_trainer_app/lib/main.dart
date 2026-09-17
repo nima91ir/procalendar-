@@ -180,7 +180,12 @@ class MainShell extends StatelessWidget {
 
   void _onTap(BuildContext context, int index) {
     if (index == tabIndex) return;
-    Navigator.pushNamed(context, _routes[index]);
+    // Switching sections *replaces* the stack instead of stacking routes on
+    // top of each other. dashboard -> plans -> clients never accumulates
+    // history, so there is no step-by-step back to walk through and tab
+    // roots never show a back arrow. Sub-screens (client detail, forms,
+    // attendance) are still pushed normally, so back returns from them.
+    Navigator.pushNamedAndRemoveUntil(context, _routes[index], (route) => route.isFirst);
   }
 
   @override
