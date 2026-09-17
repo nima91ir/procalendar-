@@ -16,6 +16,7 @@ import 'package:fitness_trainer_app/features/templates/presentation/add_edit_tem
 import 'package:fitness_trainer_app/features/tags/presentation/tags_screen.dart';
 import 'package:fitness_trainer_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fitness_trainer_app/features/settings/presentation/settings_screen.dart';
+import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
 import 'package:fitness_trainer_app/features/plans/presentation/add_plan_screen.dart';
 import 'package:fitness_trainer_app/features/attendance/presentation/past_attendance_screen.dart';
 
@@ -85,7 +86,9 @@ class ProCalendarApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      // Now driven by the (persisted) choice in Settings instead of being
+      // hardcoded to ThemeMode.system.
+      themeMode: ref.watch(themeModeProvider),
       // Force the Persian locale so the whole app lays out RTL even on
       // English/other system locales (previously it rendered LTR).
       locale: const Locale('fa', 'IR'),
