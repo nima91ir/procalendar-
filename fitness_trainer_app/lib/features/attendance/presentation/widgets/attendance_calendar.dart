@@ -19,6 +19,13 @@ class AttendanceCalendar extends StatelessWidget {
   final void Function(String date, String status) onDayChanged;
   final VoidCallback? onPreviousMonth;
   final VoidCallback? onNextMonth;
+  final String? todayKey;
+
+  /// When non-null, the calendar acts as a **date picker**: tapping a day
+  /// reports the `yyyy/MM/dd` key through [onDaySelected] instead of cycling
+  /// attendance status, and [selectionKey] is drawn as the picked day.
+  final void Function(String dateKey)? onDaySelected;
+  final String? selectionKey;
 
   const AttendanceCalendar({
     super.key,
@@ -28,6 +35,9 @@ class AttendanceCalendar extends StatelessWidget {
     required this.onDayChanged,
     this.onPreviousMonth,
     this.onNextMonth,
+    this.todayKey,
+    this.onDaySelected,
+    this.selectionKey,
   });
 
   /// Jalali `yyyy/MM/dd` key used by the database and by [attendanceMap].
@@ -99,20 +109,34 @@ class AttendanceCalendar extends StatelessWidget {
                   child: _DayCell(
                     day: dayIndex,
                     status: status,
-                    onTap: () => onDayChanged(key, AttendanceCalendar.nextStatus(status)),
+                    isToday: key == todayKey,
+                    isPicked: onDaySelected != null && key == selectionKey,
+                    onTap: () {
+                      final pick = onDaySelected;
+                      if (pick != null) {
+                        pick(key);
+                      } else {
+                        onDayChanged(key, AttendanceCalendar.nextStatus(status));
+                      }
+                    },
                   ),
                 );
               }),
             );
           }),
           const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              const _LegendDot(color: AppColors.present, label: 'حاضر'),
-              const SizedBox(width: AppSpacing.md),
-              const _LegendDot(color: AppColors.absent, label: 'غایب'),
-            ],
-          ),
+          // Legend is attendance-specific; the picker mode shows its own
+          // confirm controls below the grid.
+          if (onDaySelected == null)
+            Row(
+              children: [
+                const _LegendDot(color: AppColors.today, label: 'امروز'),
+                const SizedBox(width: AppSpacing.md),
+                const _LegendDot(color: AppColors.present, label: 'حاضر'),
+                const SizedBox(width: AppSpacing.md),
+                const _LegendDot(color: AppColors.absent, label: 'غایب'),
+              ],
+            ),
         ],
       ),
     );
@@ -122,9 +146,17 @@ class AttendanceCalendar extends StatelessWidget {
 class _DayCell extends StatelessWidget {
   final int day;
   final String? status;
+  final bool isToday;
+  final bool isPicked;
   final VoidCallback onTap;
 
-  const _DayCell({required this.day, required this.status, required this.onTap});
+  const _DayCell({
+    required this.day,
+    required this.status,
+    required this.isToday,
+    required this.isPicked,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +167,19 @@ class _DayCell extends StatelessWidget {
         ? AppColors.present
         : isAbsent
             ? AppColors.absent
-            : AppColors.surfaceVariant;
+            : isPicked
+                ? AppColors.primaryLight
+                : AppColors.surfaceVariant;
+    // Today always shows in orange: filled when unmarked, and an orange ring
+    // around the present/absent colour when attendance is already recorded.
+    final borderColor = isPicked
+        ? AppColors.primary
+        : isToday
+            ? AppColors.today
+            : selected
+                ? color
+                : AppColors.outlineVariant;
+    final ringWidth = isToday || isPicked ? 2.0 : 1.0;
 
     return Padding(
       padding: const EdgeInsets.all(2),
@@ -147,7 +191,7 @@ class _DayCell extends StatelessWidget {
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(AppRadius.sm),
-            border: Border.all(color: selected ? color : AppColors.outlineVariant),
+            border: Border.all(color: borderColor, width: ringWidth),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -155,7 +199,11 @@ class _DayCell extends StatelessWidget {
               Text(
                 toPersian(day.toString()),
                 style: AppTypography.bodySmall.copyWith(
-                  color: selected ? Colors.white : AppColors.onSurface,
+                  color: selected
+                      ? Colors.white
+                      : isToday
+                          ? AppColors.todayInk
+                          : AppColors.onSurface,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -163,6 +211,8 @@ class _DayCell extends StatelessWidget {
                 const Icon(Icons.check, size: 12, color: Colors.white)
               else if (isAbsent)
                 const Icon(Icons.close, size: 12, color: Colors.white)
+              else if (isToday)
+                const Icon(Icons.circle, size: 6, color: AppColors.today)
               else
                 const SizedBox(height: 12),
             ],

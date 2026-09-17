@@ -17,7 +17,14 @@ class PlansService {
     return plans.where((p) => p.status == 'frozen').firstOrNull;
   }
 
-  Future<int> assignPlan(int clientId, int templateId, int sessions, int days) async {
+  /// Assigns a plan from a template.
+  ///
+  /// [startDate] is a Jalali `yyyy/MM/dd` key chosen in the UI. It is stored
+  /// exactly as picked. When the client already has an active/frozen plan the
+  /// new plan is queued regardless — its real start date is stamped (today)
+  /// at promotion time, because queuing implies "starts when the current plan
+  /// finishes".
+  Future<int> assignPlan(int clientId, int templateId, int sessions, int days, {String? startDate}) async {
     final active = await repository.getActivePlan(clientId);
     final frozen = await repository.getFrozenPlan(clientId);
     if (active != null || frozen != null) {
@@ -37,7 +44,7 @@ class PlansService {
     return repository.insertPlan(ClientPlansCompanion.insert(
       clientId: clientId,
       templateId: templateId,
-      startDate: Value(today),
+      startDate: Value(startDate ?? today),
       sessions: sessions,
       days: days,
       remaining: sessions,

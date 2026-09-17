@@ -185,13 +185,15 @@ class DashboardScreen extends ConsumerWidget {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: isToday ? AppColors.primaryLight : AppColors.surfaceVariant,
+                        // Today is highlighted in orange (unrelated to the
+                        // sage/green attendance colouring) on every calendar.
+                        color: isToday ? AppColors.todaySoft : AppColors.surfaceVariant,
                         borderRadius: BorderRadius.circular(AppRadius.sm),
-                        border: isToday ? Border.all(color: AppColors.primary) : null,
+                        border: isToday ? Border.all(color: AppColors.today, width: 2) : null,
                       ),
                       child: Stack(
                         children: [
-                          Center(child: Text('$dayIndex', style: AppTypography.bodySmall.copyWith(color: isToday ? AppColors.onSurface : AppColors.onSurfaceVar))),
+                          Center(child: Text('$dayIndex', style: AppTypography.bodySmall.copyWith(color: isToday ? AppColors.todayInk : AppColors.onSurfaceVar, fontWeight: isToday ? FontWeight.w800 : null))),
                           if (status != null)
                             Positioned(
                               bottom: 3,

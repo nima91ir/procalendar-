@@ -148,6 +148,7 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
             onDayChanged: _apply,
             onPreviousMonth: () => _shiftMonth(-1),
             onNextMonth: () => _shiftMonth(1),
+            todayKey: jalaliToday(),
           ),
           const SizedBox(height: AppSpacing.xxl),
           SectionHeader(title: 'سوابق ثبت شده'),

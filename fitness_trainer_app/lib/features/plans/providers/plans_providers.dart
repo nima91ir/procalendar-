@@ -29,9 +29,9 @@ class PlansNotifier extends Notifier<List<domain.ClientPlan>> {
     state = await service.getClientPlans(clientId);
   }
 
-  Future<void> assignPlan(int clientId, int templateId, int sessions, int days) async {
+  Future<void> assignPlan(int clientId, int templateId, int sessions, int days, {String? startDate}) async {
     final service = ref.read(plansServiceProvider);
-    await service.assignPlan(clientId, templateId, sessions, days);
+    await service.assignPlan(clientId, templateId, sessions, days, startDate: startDate);
   }
 
   Future<void> freezePlan(int planId) async {

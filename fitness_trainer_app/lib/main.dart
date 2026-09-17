@@ -108,106 +108,88 @@ class ProCalendarApp extends ConsumerWidget {
 }
 
 class AppRouter {
+  /// Extracts the numeric id from a `prefix/<id>` route name, or null when the
+  /// name is not that route.
+  ///
+  /// This replaces `name.startsWith(prefix)` + `int.parse(name.split('/').last)`,
+  /// which crashed with `FormatException: Invalid radix-10 number` whenever the
+  /// route had no id. Two real cases hit that:
+  ///  * Flutter's deep-link handling asks for the *intermediate* route first
+  ///    (`/clients/detail` before `/clients/detail/1`), so any browser URL /
+  ///    restored route matching a detail path threw.
+  ///  * Any `pushNamed` of a prefix without an id.
+  static int? _idFrom(String? name, String prefix) {
+    if (name == null || !name.startsWith('$prefix/')) return null;
+    return int.tryParse(name.substring(prefix.length + 1));
+  }
+
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     final name = settings.name;
+    MaterialPageRoute<dynamic> page(Widget child, {required int tab}) => MaterialPageRoute(
+      settings: settings,
+      // Every screen lives inside the shell so the nav bar is always visible;
+      // `tab` pins the highlight for that screen. Sub-screens keep their
+      // section highlighted and never move the selection on their own.
+      builder: (_) => MainShell(tabIndex: tab, child: child),
+    );
 
-    if (name == AppRoutes.dashboard) {
-      return MaterialPageRoute(builder: (_) => const MainShell(child: DashboardScreen()));
-    }
-    if (name == AppRoutes.clients) {
-      return MaterialPageRoute(builder: (_) => const MainShell(child: ClientsScreen()));
-    }
-    if (name == AppRoutes.templates) {
-      return MaterialPageRoute(builder: (_) => const MainShell(child: TemplatesScreen()));
-    }
-    if (name == AppRoutes.tags) {
-      return MaterialPageRoute(builder: (_) => const MainShell(child: TagsScreen()));
-    }
-    if (name == AppRoutes.settings) {
-      return MaterialPageRoute(builder: (_) => const MainShell(child: SettingsScreen()));
-    }
-    if (name != null && name.startsWith(AppRoutes.clientDetail)) {
-      final clientId = int.parse(name.split('/').last);
-      return MaterialPageRoute(builder: (_) => ClientDetailScreen(clientId: clientId));
-    }
-    if (name == AppRoutes.addClient) {
-      return MaterialPageRoute(builder: (_) => const AddEditClientScreen());
-    }
-    if (name != null && name.startsWith(AppRoutes.editClient)) {
-      final clientId = int.parse(name.split('/').last);
-      return MaterialPageRoute(builder: (_) => AddEditClientScreen(clientId: clientId));
-    }
-    if (name == AppRoutes.addTemplate) {
-      return MaterialPageRoute(builder: (_) => const AddEditTemplateScreen());
-    }
-    if (name != null && name.startsWith(AppRoutes.editTemplate)) {
-      final templateId = int.parse(name.split('/').last);
-      return MaterialPageRoute(builder: (_) => AddEditTemplateScreen(templateId: templateId));
-    }
-    if (name != null && name.startsWith(AppRoutes.attendance)) {
-      final clientId = int.parse(name.split('/').last);
-      return MaterialPageRoute(builder: (_) => PastAttendanceScreen(clientId: clientId));
-    }
-    if (name != null && name.startsWith(AppRoutes.addPlan)) {
-      final clientId = int.parse(name.split('/').last);
-      return MaterialPageRoute(builder: (_) => AddPlanScreen(clientId: clientId));
-    }
+    if (name == AppRoutes.dashboard || name == '/') return page(const DashboardScreen(), tab: 0);
+    if (name == AppRoutes.clients) return page(const ClientsScreen(), tab: 1);
+    if (name == AppRoutes.templates) return page(const TemplatesScreen(), tab: 2);
+    if (name == AppRoutes.tags) return page(const TagsScreen(), tab: 3);
+    if (name == AppRoutes.settings) return page(const SettingsScreen(), tab: 4);
+    if (name == AppRoutes.addClient) return page(const AddEditClientScreen(), tab: 1);
+    if (name == AppRoutes.addTemplate) return page(const AddEditTemplateScreen(), tab: 2);
+
+    final clientDetailId = _idFrom(name, AppRoutes.clientDetail);
+    if (clientDetailId != null) return page(ClientDetailScreen(clientId: clientDetailId), tab: 1);
+    final editClientId = _idFrom(name, AppRoutes.editClient);
+    if (editClientId != null) return page(AddEditClientScreen(clientId: editClientId), tab: 1);
+    final editTemplateId = _idFrom(name, AppRoutes.editTemplate);
+    if (editTemplateId != null) return page(AddEditTemplateScreen(templateId: editTemplateId), tab: 2);
+    final attendanceClientId = _idFrom(name, AppRoutes.attendance);
+    if (attendanceClientId != null) return page(PastAttendanceScreen(clientId: attendanceClientId), tab: 1);
+    final addPlanClientId = _idFrom(name, AppRoutes.addPlan);
+    if (addPlanClientId != null) return page(AddPlanScreen(clientId: addPlanClientId), tab: 1);
     return null;
   }
 }
 
-class MainShell extends StatefulWidget {
+/// Wraps every screen with the persistent bottom navigation bar.
+///
+/// The bar is always visible (dashboard, tabs *and* sub-screens like client
+/// detail or attendance). `tabIndex` is passed per route, so the highlight
+/// reflects *which screen you are on* and does not change by itself — tapping
+/// another section pushes that screen (back preserves where you were).
+class MainShell extends StatelessWidget {
   final Widget child;
-  const MainShell({super.key, required this.child});
 
-  @override
-  State<MainShell> createState() => _MainShellState();
-}
+  /// Index of the nav item highlighted for the wrapped screen
+  /// (0 dashboard, 1 clients, 2 templates, 3 tags, 4 settings).
+  final int tabIndex;
 
-class _MainShellState extends State<MainShell> {
-  int _selectedIndex = 0;
+  const MainShell({super.key, required this.child, required this.tabIndex});
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final name = ModalRoute.of(context)?.settings.name;
-    if (name == null) return;
-    if (name.startsWith('/clients')) {
-      _selectedIndex = 1;
-    } else if (name.startsWith('/templates')) {
-      _selectedIndex = 2;
-    } else if (name.startsWith('/tags')) {
-      _selectedIndex = 3;
-    } else if (name.startsWith('/settings')) {
-      _selectedIndex = 4;
-    } else {
-      _selectedIndex = 0;
-    }
-  }
+  static const _routes = [
+    AppRoutes.dashboard,
+    AppRoutes.clients,
+    AppRoutes.templates,
+    AppRoutes.tags,
+    AppRoutes.settings,
+  ];
 
-  void _onTap(int index) {
-    setState(() => _selectedIndex = index);
-    switch (index) {
-      case 0:
-        Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-      case 1:
-        Navigator.pushReplacementNamed(context, AppRoutes.clients);
-      case 2:
-        Navigator.pushReplacementNamed(context, AppRoutes.templates);
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.tags);
-      case 4:
-        Navigator.pushReplacementNamed(context, AppRoutes.settings);
-    }
+  void _onTap(BuildContext context, int index) {
+    if (index == tabIndex) return;
+    Navigator.pushNamed(context, _routes[index]);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: widget.child,
+      body: child,
       bottomNavigationBar: BottomNavBar(
-        selectedIndex: _selectedIndex,
-        onTap: _onTap,
+        selectedIndex: tabIndex,
+        onTap: (index) => _onTap(context, index),
       ),
     );
   }

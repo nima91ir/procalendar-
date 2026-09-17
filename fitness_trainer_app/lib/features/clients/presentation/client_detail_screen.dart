@@ -111,20 +111,24 @@ class ClientDetailScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.xxl),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  SectionHeader(title: 'برنامه‌های فعال', actionLabel: 'افزودن', onAction: () {
-                    Navigator.pushNamed(context, '${AppRoutes.addPlan}/$clientId');
-                  }),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '${AppRoutes.attendance}/$clientId');
-                    },
-                    icon: const Icon(Icons.calendar_month),
-                    label: const Text('حضور و غیاب'),
-                  ),
-                ],
+              // NOTE: SectionHeader must not be placed inside a Row - it uses
+              // `Expanded` internally, and inside a Row the width constraint is
+              // unbounded, which threw "RenderFlex children have non-zero flex
+              // but incoming width constraints are unbounded" and blanked the
+              // whole client detail screen.
+              SectionHeader(
+                title: 'برنامه‌های فعال',
+                actionLabel: 'افزودن برنامه',
+                onAction: () => Navigator.pushNamed(context, '${AppRoutes.addPlan}/$clientId'),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, '${AppRoutes.attendance}/$clientId'),
+                  icon: const Icon(Icons.calendar_month),
+                  label: const Text('حضور و غیاب'),
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               plansAsync.when(
