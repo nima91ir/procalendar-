@@ -1,0 +1,50 @@
+name: fitness_trainer_app
+description: "Personal trainer management app (PRO CALENDAR)"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  flutter_riverpod: ^3.0.3
+  riverpod_annotation: ^3.0.3
+
+  drift: ^2.31.0
+  sqlite3_flutter_libs: ^0.5.42
+  path_provider: ^2.1.6
+  path: ^1.9.1
+
+  shamsi_date: ^1.1.1
+  shared_preferences: ^2.5.5
+
+  flutter_svg: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  build_runner: ^2.15.1
+  drift_dev: ^2.31.0
+  riverpod_generator: ^3.0.3
+  riverpod_lint: ^3.0.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/
+  fonts:
+    - family: Vazirmatn
+      fonts:
+        - asset: assets/fonts/Vazirmatn-Regular.ttf
+        - asset: assets/fonts/Vazirmatn-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Vazirmatn-Bold.ttf
+          weight: 700
