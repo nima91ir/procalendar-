@@ -168,6 +168,39 @@ Session 2 additions:
 - **Attendance multi-per-day rework (requested by user, IN PROGRESS)** — see
   §5a below.
 
+### 5i. Jalali weekday off-by-one fix (DONE, analyze clean + 118 tests green)
+
+`shamsi_date`'s `Jalali.weekDay` is **Saturday-based** (شنبه=1 … جمعه=7), NOT
+Dart's Monday-based `DateTime.weekDay` (Mon=1…Sun=7). Two sites wrongly applied
+`% 7` to it, shifting every weekday by one — so today (a Friday) was rendered as
+«شنبه»:
+- `core/utils/jalali_calendar.dart` `formatJalaliLong`:
+  `dayNames[j.weekDay % 7]` → `dayNames[j.weekDay - 1]`. Drives the dashboard
+  «امروز: …» label (and `past_attendance_screen` date headers via
+  `formatDateLong`).
+- `features/attendance/presentation/widgets/attendance_calendar.dart` month grid:
+  `firstDayWeekDay = firstOfMonth.weekDay % 7` → `weekDay - 1`, so day 1 — and
+  every day — sits under the correct column (ش…ج).
+- `core/utils/date_format.dart` was already correct (it uses Dart's Gregorian
+  `DateTime.weekday`).
+- New `test/widget/attendance_calendar_weekday_test.dart` (7 tests): asserts
+  `formatJalaliLong` names for known dates and that the 27th (Friday) / 28th
+  (Saturday) land under the `ج` / `ش` header columns.
+- New `test/widget/plan_creation_refresh_test.dart`: regression guard that a
+  newly created plan appears on the client detail plans list **in place** (the
+  user reported "must revisit the page"; `invalidateAppData` was already
+  correct — the new card simply sits below the fold).
+- `core/providers/app_refresh.dart`: added the six DB-backed providers that were
+  missing from `_appDataProviders` — `activePlanProvider`,
+  `todayAttendanceCountProvider`, `todayAttendanceStatusCountsProvider`,
+  `planStatusClientIdsProvider`, `quickFilterClientIdsProvider`,
+  `templateUsageCountProvider`. The clients-list **quick-filter** chips
+  (`clients_screen.dart:194`) read `quickFilterClientIdsProvider`
+  (→ `planStatusClientIdsProvider`), so they could show a stale client set after
+  a plan freeze/expire/create until the provider was recreated.
+
+**110 → 118 tests.**
+
 ### 5b. Clients screen refresh (Phase 2b/8b — DONE, analyze clean + 96 tests green)
 
 Session 2b (this session):
@@ -276,6 +309,76 @@ per-tab nested navigators, polish). **Phase 1 shipped:**
 Remaining: Phase 2 (tap→profile + actions overflow/long-press, 4 tabs, Tags under
 Settings, localize Tags/Templates), Phase 3 (per-tab nested navigators), Phase 4
 (polish).
+
+### 5g. Navigation UX overhaul — Phase 2 (DONE, analyze clean + 109 tests green)
+
+- **Tabs 5→4; Tags no longer a bottom destination.**
+  - `lib/main.dart`: `MainShell._screens` is now
+    [dashboard, clients, templates, settings]; `AppRoutes.tags` added to
+    `AppRouter.onGenerateRoute` (pushes `TagsScreen` on the root navigator);
+    `_invalidateTabProviders` updated (case 3 = settings, tags case removed).
+  - `lib/core/widgets/bottom_nav_bar.dart`: dropped the Tags destination.
+- **Tap a client → profile.** `ClientCard` gained `onLongPress` +
+  `onShowActions` params (`onLongPress` on its inner `InkWell`; the `⋮`
+  `IconButton` renders only when `onShowActions != null`).
+  `clients_screen.dart`: `onTap` → `/clients/detail/<id>`; long-press or `⋮` →
+  `_showClientActions(client)` (renamed from `_openClientSheet`; the old
+  "view profile" sheet row removed). Bonus ± and freeze stay inline on the card.
+- **Tags under Settings**: `settings_screen.dart` gets a «مدیریت برچسبها» row →
+  `AppRoutes.tags`. NOTE: the row's `ListTile` is wrapped in
+  `Material(type: MaterialType.transparency)` — `AppCard`'s colored
+  `DecoratedBox` otherwise trips Flutter's "ListTile background or ink splashes
+  may be invisible" debug assertion, which fired for *every* `MainShell` test.
+- **Localization**: `tags_screen.dart` + `templates_screen.dart` now go through
+  `AppStrings`; added `clientActionsTitle` + the templates/tags keys
+  (`templatesTitle, noTemplatesTitle, noTemplatesSubtitle, addTemplate,
+  usedByCountTemplate, deleteTemplateTitle, deleteTemplateMessageTemplate,
+  sessionsCountTemplate, daysCountTemplate, oneSessionPerDaysTemplate, newTag,
+  editTagTitle, deleteTagTitle, deleteTagMessageTemplate, tagNameLabel,
+  emojiOptionalLabel, colorLabel, tagClientCountTemplate,
+  noTagsDefinedSubtitle, manageTags`) + their formatting methods (fa+en).
+- Tests updated: `bottom_nav_bar_test` (5→4, «برچسبها» absent),
+  `screens_smoke_test` (`/tags` moved to sub-routes; primary set now 4),
+  `clients_navigation_test` (tap→detail screen + new long-press→actions-sheet
+  test), `navigation_ux_test` (+ settings→tags nav test; use
+  `scrollUntilVisible` — Settings is a lazy `ListView`).
+  **107 → 109 tests.**
+
+### 5h. Navigation UX overhaul — Phase 3+: nested per-tab navigators + back (DONE, analyze clean + 110 tests green)
+
+- Goals: each tab keeps its own back stack; a pushed screen (client detail,
+  add/edit, attendance, tags…) lives *inside* its tab, so the bottom bar stays
+  visible and state survives tab switches.
+- `lib/main.dart`:
+  - `AppRouter.onGenerateRoute` gained the four tab-root branches
+    (`/dashboard`, `/clients`, `/templates`, `/settings`) so nested navigators
+    can use the same router.
+  - `MainShell` replaced its direct `_screens` `IndexedStack` children with
+    four nested `Navigator`s (`initialRoute: <tab route>`,
+    `onGenerateRoute`/`onUnknownRoute: AppRouter.*`), each with a
+    `GlobalKey<NavigatorState>`.
+  - System back: **`PopScope` does NOT work for this** — the root navigator's
+    first route is `isFirst`, so `maybePop` *bubbles* (returns false) and calls
+    `SystemNavigator.pop`, never consulting the `PopScope`. Instead
+    `_MainShellState` is now a `WidgetsBindingObserver`: `WidgetsApp.didPopRoute`
+    runs first (root pop → bubble → false, so the event still reaches us), then
+    `didPopRoute()` forwards to the active tab's nested navigator
+    (`maybePop`), returning false only when that stack is empty so the system
+    can exit the app. (Verified with a throwaway probe test against
+    `C:\flutter\...\widgets\binding.dart` `handlePopRoute` + `navigator.dart`
+    `maybePop`.)
+  - Removed dead code: `AppStrings.viewProfile` (fa+en field, ctor param,
+    values) — the Phase 2 actions sheet dropped its last user.
+- Behavior changes to remember for tests: pushed routes now leave the bottom
+  bar on screen (finders see BOTH a detail-section title and the matching
+  bottom-nav label, e.g. «برنامهها» appears twice), and non-selected tabs are
+  offstage in the `IndexedStack` (only the active tab's `Navigator` is found).
+- Tests: `clients_navigation_test` «برنامهها» now `findsWidgets`;
+  `navigation_ux_test` gained "pushed screens keep the bottom bar and system
+  back pops the tab stack" — mocks `SystemChannels.platform`
+  (`SystemNavigator.pop`) to assert the first back pops the nested detail
+  (handled=true, no pop) and the second back exits (handled=false, one pop).
+  **109 → 110 tests.**
 
 ### 5e. Assign/remove tags on a client (DONE, analyze clean + 101 tests green)
 
@@ -628,7 +731,7 @@ In `app_database.dart`:
 
 ## 11. Phase 9 — verification checklist
 - `flutter analyze` → No issues found.
-- `flutter test` → all green (107 today; will grow with new tests —
+- `flutter test` → all green (118 today; will grow with new tests —
   add service unit tests for revenue/measurements/backup + a widget test that
   switches language in Settings and asserts an English label appears).
 - Smoke builds (as past commits did): `flutter build web --release` and

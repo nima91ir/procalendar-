@@ -50,7 +50,7 @@ class AttendanceCalendar extends StatelessWidget {
     final t = context.tones;
     final firstOfMonth = Jalali(year, month, 1);
     final daysInMonth = firstOfMonth.monthLength;
-    final firstDayWeekDay = firstOfMonth.weekDay % 7;
+    final firstDayWeekDay = firstOfMonth.weekDay - 1;
     final weeks = ((daysInMonth + firstDayWeekDay) / 7).ceil();
 
     return Container(
