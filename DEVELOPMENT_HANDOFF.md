@@ -234,6 +234,49 @@ palette, so dark mode showed dark-on-dark text (client cards, bottom sheet, etc.
 - `screens_smoke_test.dart` already renders every screen in both **light and
   dark**, so dark-mode regressions are covered. 99 tests stay green.
 
+### 5f. Navigation UX overhaul — Phase 1 (DONE, analyze clean + 107 tests green)
+
+User feedback: "the app is very hard to navigate". Full 4-phase plan agreed
+(tabs reduced 5→4 with Tags under Settings, tap-a-client opens the profile,
+per-tab nested navigators, polish). **Phase 1 shipped:**
+
+- **Fixed a real dead-tap bug.** `dashboard_screen.dart` still called
+  `Navigator.pushNamed(context, '/clients')` (today-attendance action + bonus
+  card), but `/clients` has no `AppRouter.onGenerateRoute` branch → route
+  generation failed. The selected tab is now a provider, so any screen can
+  switch tabs.
+  - New `lib/core/navigation/navigation_providers.dart`: `tabIndexProvider`
+    (`TabIndexNotifier.select`) + `ClientQuickFilter` enum / `clientQuickFilterProvider`.
+  - `MainShell` watches `tabIndexProvider` and `ref.listen`s to invalidate the
+    tab's providers on change (works for tab-bar taps *and* programmatic
+    switches).
+- **Unknown routes no longer blank/crash**: `AppRouter.onUnknownRoute` renders
+  `AppEmptyState` with the new `AppStrings.pageNotFound` (fa+en), wired via
+  `MaterialApp.onUnknownRoute`.
+- **Dashboard stat cards drill down**: `_HeroStat` is now tappable; total /
+  expired / frozen / queued set the matching `ClientQuickFilter` and switch to
+  the Clients tab. The low-session section header and bonus card do the same.
+  - New `DashboardService.getClientIdsByPlanStatus(status)` +
+    `planStatusClientIdsProvider` / `quickFilterClientIdsProvider`
+    (resolves the active filter to a `Set<int>?`, `null` = all).
+  - `ClientsScreen` watches the filter, narrows the list and shows a
+    dismissible `Chip` naming the active filter.
+- **Client card attendance shortcut**: new calendar `IconButton` on `ClientCard`
+  → `/attendance/<id>` (profile tap stays as-is until Phase 2).
+- **Fixed a latent Hero crash**: the three tab FABs (`clients`/`templates`/`tags`)
+  all used the default `heroTag`, so the IndexedStack had duplicate heroes and
+  any route push threw "multiple heroes that share the same tag". Each FAB now
+  has a unique `heroTag`. (This is why `clients_navigation_test` wrapped
+  `MainShell` in `HeroMode(enabled: false)`.)
+- New tests: `test/unit/quick_filter_provider_test.dart` (filter → client ids)
+  and `test/widget/navigation_ux_test.dart` (stat-card tab switch, "view clients"
+  tab switch, unknown-route page, client-card attendance shortcut).
+  **101 → 107 tests.**
+
+Remaining: Phase 2 (tap→profile + actions overflow/long-press, 4 tabs, Tags under
+Settings, localize Tags/Templates), Phase 3 (per-tab nested navigators), Phase 4
+(polish).
+
 ### 5e. Assign/remove tags on a client (DONE, analyze clean + 101 tests green)
 
 The data layer already supported per-client tags (`client_tags` join table +
@@ -585,7 +628,7 @@ In `app_database.dart`:
 
 ## 11. Phase 9 — verification checklist
 - `flutter analyze` → No issues found.
-- `flutter test` → all green (101 today; will grow with new tests —
+- `flutter test` → all green (107 today; will grow with new tests —
   add service unit tests for revenue/measurements/backup + a widget test that
   switches language in Settings and asserts an English label appears).
 - Smoke builds (as past commits did): `flutter build web --release` and

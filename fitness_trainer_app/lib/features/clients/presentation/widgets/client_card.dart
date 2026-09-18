@@ -12,6 +12,7 @@ import 'package:fitness_trainer_app/features/clients/domain/client.dart' as doma
 import 'package:fitness_trainer_app/features/plans/domain/client_plan.dart' as plandomain;
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
+import 'package:fitness_trainer_app/routing/routes.dart';
 
 class ClientCard extends ConsumerWidget {
   final int clientId;
@@ -119,6 +120,12 @@ class ClientCard extends ConsumerWidget {
                               Text(client.contact!, style: AppTypography.bodySmall),
                           ],
                         ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: s.attendanceLabel,
+                        icon: Icon(Icons.calendar_month_outlined, size: 20, color: t.onSurfaceVar),
+                        onPressed: () => Navigator.pushNamed(context, '${AppRoutes.attendance}/$clientId'),
                       ),
                     ],
                   ),

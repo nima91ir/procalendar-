@@ -3,10 +3,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_theme.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
+import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/clients_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/add_edit_client_screen.dart';
@@ -96,6 +99,7 @@ class ProCalendarApp extends ConsumerWidget {
       locale: Locale(ref.watch(languageProvider)),
       home: const MainShell(),
       onGenerateRoute: AppRouter.onGenerateRoute,
+      onUnknownRoute: AppRouter.onUnknownRoute,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -151,6 +155,21 @@ class AppRouter {
     if (addPlanClientId != null) return page(AddPlanScreen(clientId: addPlanClientId));
     return null;
   }
+
+  /// Instead of returning `null` (which throws "Could not find a generator for
+  /// route" and blanks the app), unknown routes render a friendly page.
+  static Route<dynamic> onUnknownRoute(RouteSettings settings) {
+    return MaterialPageRoute<dynamic>(
+      settings: settings,
+      builder: (context) => Scaffold(
+        appBar: AppBar(),
+        body: AppEmptyState(
+          icon: Icons.explore_off_outlined,
+          title: AppStrings.of(context).pageNotFound,
+        ),
+      ),
+    );
+  }
 }
 
 /// Wraps the five primary screens with a persistent bottom navigation bar.
@@ -165,8 +184,6 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
-  int _currentIndex = 0;
-
   static const _screens = [
     DashboardScreen(),
     ClientsScreen(),
@@ -174,12 +191,6 @@ class _MainShellState extends ConsumerState<MainShell> {
     TagsScreen(),
     SettingsScreen(),
   ];
-
-  void _onTap(int index) {
-    if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
-    _invalidateTabProviders(index);
-  }
 
   void _invalidateTabProviders(int index) {
     switch (index) {
@@ -210,14 +221,18 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = ref.watch(tabIndexProvider);
+    ref.listen<int>(tabIndexProvider, (previous, next) {
+      if (previous != next) _invalidateTabProviders(next);
+    });
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: currentIndex,
         children: _screens,
       ),
       bottomNavigationBar: BottomNavBar(
-        selectedIndex: _currentIndex,
-        onTap: _onTap,
+        selectedIndex: currentIndex,
+        onTap: (index) => ref.read(tabIndexProvider.notifier).select(index),
       ),
     );
   }

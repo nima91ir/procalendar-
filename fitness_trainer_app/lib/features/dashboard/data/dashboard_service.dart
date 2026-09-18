@@ -30,6 +30,14 @@ class DashboardService {
     return rows.length;
   }
 
+  /// Distinct client ids that currently have at least one plan in [status].
+  /// Used by the dashboard stat cards to drill into the client list.
+  Future<List<int>> getClientIdsByPlanStatus(String status) async {
+    final rows = await (db.select(db.clientPlans)..where((p) => p.status.equals(status))).get();
+    return {for (final p in rows) p.clientId}.toList();
+  }
+
+
   Future<List<Map<String, dynamic>>> getLowSessionPlans() async {
     final rows = await (db.select(db.clientPlans)..where((p) => p.status.equals('active'))).get();
     return rows.where((p) => p.remaining < 3).map((p) => {

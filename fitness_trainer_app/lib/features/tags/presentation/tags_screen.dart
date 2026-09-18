@@ -93,6 +93,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'tagsFab',
         onPressed: () => _showAddDialog(context),
         icon: const Icon(Icons.add),
         label: const Text('برچسب جدید'),

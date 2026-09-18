@@ -100,6 +100,7 @@ class TemplatesScreen extends ConsumerWidget {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'templatesFab',
         onPressed: () {
           Navigator.pushNamed(context, AppRoutes.addTemplate);
         },

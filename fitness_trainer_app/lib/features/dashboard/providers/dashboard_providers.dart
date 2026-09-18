@@ -1,5 +1,6 @@
 ﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
+import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/data/dashboard_service.dart';
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
@@ -57,4 +58,32 @@ final clientTagFilterProvider = FutureProvider.autoDispose<Map<int, List<int>>>(
     result[client.id!] = await tagsService.getClientTagIds(client.id!);
   }
   return result;
+});
+
+/// Client ids that own at least one plan in [status]
+/// ('expired' | 'frozen' | 'queued'), for the dashboard drill-downs.
+final planStatusClientIdsProvider = FutureProvider.autoDispose.family<List<int>, String>((ref, status) {
+  return ref.watch(dashboardServiceProvider).getClientIdsByPlanStatus(status);
+});
+
+/// Resolves the active [ClientQuickFilter] to the set of client ids the
+/// clients list should show, or `null` when no filtering applies (`all`).
+final quickFilterClientIdsProvider = FutureProvider.autoDispose<Set<int>?>((ref) async {
+  final filter = ref.watch(clientQuickFilterProvider);
+  switch (filter) {
+    case ClientQuickFilter.all:
+      return null;
+    case ClientQuickFilter.expired:
+      return (await ref.watch(planStatusClientIdsProvider('expired').future)).toSet();
+    case ClientQuickFilter.frozen:
+      return (await ref.watch(planStatusClientIdsProvider('frozen').future)).toSet();
+    case ClientQuickFilter.queued:
+      return (await ref.watch(planStatusClientIdsProvider('queued').future)).toSet();
+    case ClientQuickFilter.lowSession:
+      final rows = await ref.watch(lowSessionPlansProvider.future);
+      return {for (final row in rows) row['clientId'] as int};
+    case ClientQuickFilter.bonus:
+      final rows = await ref.watch(bonusSessionClientsProvider.future);
+      return {for (final row in rows) row['clientId'] as int};
+  }
 });

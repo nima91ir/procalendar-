@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
@@ -27,6 +28,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   String _num(int? value, String languageCode) =>
       localizeNumber(value?.toString() ?? '—', languageCode);
+
+  /// Applies a client-list quick filter and switches to the Clients tab.
+  void _drillDown(ClientQuickFilter filter) {
+    ref.read(clientQuickFilterProvider.notifier).set(filter);
+    ref.read(tabIndexProvider.notifier).select(1);
+  }
 
   Future<void> _mark(WidgetRef ref, BuildContext context, AppStrings s, String lang, int clientId, String status) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -98,24 +105,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         icon: Icons.people_outline,
                         label: s.totalClients,
                         value: _num(totalAsync.value, lang),
+                        onTap: () => _drillDown(ClientQuickFilter.all),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       _HeroStat(
                         icon: Icons.event_busy,
                         label: s.expiredPlans,
                         value: _num(expiredAsync.value, lang),
+                        onTap: () => _drillDown(ClientQuickFilter.expired),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       _HeroStat(
                         icon: Icons.lock_outline,
                         label: s.frozenPlans,
                         value: _num(frozenAsync.value, lang),
+                        onTap: () => _drillDown(ClientQuickFilter.frozen),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       _HeroStat(
                         icon: Icons.schedule,
                         label: s.queuedPlans,
                         value: _num(queuedAsync.value, lang),
+                        onTap: () => _drillDown(ClientQuickFilter.queued),
                       ),
                     ],
                   ),
@@ -126,7 +137,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             SectionHeader(
               title: s.todayAttendance,
               actionLabel: s.viewClients,
-              onAction: () => Navigator.pushNamed(context, AppRoutes.clients),
+              onAction: () => ref.read(tabIndexProvider.notifier).select(1),
             ),
             const SizedBox(height: AppSpacing.xs),
             tagsAsync.when(
@@ -217,7 +228,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const SizedBox(height: AppSpacing.xxl),
             if (lowSessionAsync.value != null && lowSessionAsync.value!.isNotEmpty) ...[
-              SectionHeader(title: s.lowSessionPlans),
+              SectionHeader(
+                title: s.lowSessionPlans,
+                actionLabel: s.viewClients,
+                onAction: () => _drillDown(ClientQuickFilter.lowSession),
+              ),
               const SizedBox(height: AppSpacing.xs),
               ...lowSessionAsync.value!.map((p) {
                 final clientId = p['clientId'] as int;
@@ -256,7 +271,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             if (bonusAsync.value != null && bonusAsync.value!.isNotEmpty) ...[
               AppCard(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                onTap: () => Navigator.pushNamed(context, AppRoutes.clients),
+                onTap: () => _drillDown(ClientQuickFilter.bonus),
                 child: Row(
                   children: [
                     Icon(Icons.card_giftcard, color: t.warning),
@@ -283,33 +298,38 @@ class _HeroStat extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
-  const _HeroStat({required this.icon, required this.label, required this.value});
+  const _HeroStat({required this.icon, required this.label, required this.value, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.14),
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 18, color: Colors.white),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Column(
+              children: [
+                Icon(icon, size: 18, color: Colors.white),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  label,
+                  style: AppTypography.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-            Text(
-              label,
-              style: AppTypography.caption,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+          ),
         ),
       ),
     );

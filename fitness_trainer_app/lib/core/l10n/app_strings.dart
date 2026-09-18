@@ -157,6 +157,7 @@ class AppStrings {
   final String tagsSection;
   final String addTag;
   final String noTagsDefined;
+  final String pageNotFound;
 
   const AppStrings({
     required this.isPersian,
@@ -289,6 +290,7 @@ class AppStrings {
     required this.tagsSection,
     required this.addTag,
     required this.noTagsDefined,
+    required this.pageNotFound,
   });
 
   String _digits(String value) => isPersian ? toPersian(value) : value;
@@ -447,6 +449,7 @@ class AppStrings {
     tagsSection: 'برچسب‌ها',
     addTag: 'افزودن برچسب',
     noTagsDefined: 'هنوز برچسبی ساخته نشده',
+    pageNotFound: 'صفحه مورد نظر پیدا نشد',
   );
 
 
@@ -584,5 +587,6 @@ class AppStrings {
     tagsSection: 'Tags',
     addTag: 'Add tag',
     noTagsDefined: 'No tags created yet',
+    pageNotFound: 'Page not found',
   );
 }

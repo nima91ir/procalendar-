@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
@@ -9,6 +10,7 @@ import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/clients/domain/client.dart' as domain;
+import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/widgets/client_card.dart';
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
@@ -56,6 +58,23 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
         });
     }
     return sorted;
+  }
+
+  String _quickFilterLabel(ClientQuickFilter filter, AppStrings s) {
+    switch (filter) {
+      case ClientQuickFilter.all:
+        return s.allLabel;
+      case ClientQuickFilter.expired:
+        return s.expiredPlans;
+      case ClientQuickFilter.frozen:
+        return s.frozenPlans;
+      case ClientQuickFilter.queued:
+        return s.queuedPlans;
+      case ClientQuickFilter.lowSession:
+        return s.lowSessionPlans;
+      case ClientQuickFilter.bonus:
+        return s.bonusSessions;
+    }
   }
 
   Future<void> _deleteClient(domain.Client client) async {
@@ -177,6 +196,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     final s = AppStrings.of(context);
     final tagsAsync = ref.watch(allTagsProvider);
     final clientsAsync = ref.watch(allClientsProvider);
+    final quickFilter = ref.watch(clientQuickFilterProvider);
+    final quickFilterIdsAsync = ref.watch(quickFilterClientIdsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -269,22 +290,44 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
               );
             },
           ),
+          if (quickFilter != ClientQuickFilter.all)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Chip(
+                  avatar: const Icon(Icons.filter_alt_outlined, size: 18),
+                  label: Text(_quickFilterLabel(quickFilter, s)),
+                  onDeleted: () => ref.read(clientQuickFilterProvider.notifier).set(ClientQuickFilter.all),
+                ),
+              ),
+            ),
           Expanded(
             child: clientsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => AppErrorState(message: error.toString()),
               data: (allClients) {
                 final query = _query.trim();
-                final filtered = query.isEmpty
+                final searched = query.isEmpty
                     ? allClients
                     : allClients
                         .where((c) => c.name.contains(query) || (c.contact ?? '').contains(query))
                         .toList();
+                final quickIds = quickFilterIdsAsync.value;
+                final filtered = (quickFilter == ClientQuickFilter.all || quickIds == null)
+                    ? searched
+                    : searched.where((c) => quickIds.contains(c.id)).toList();
                 final clients = _applySort(filtered);
                 if (clients.isEmpty) {
-                  return query.isEmpty
-                      ? AppEmptyState(icon: Icons.people_outline, title: s.emptyClientsTitle, subtitle: s.emptyClientsSubtitle)
-                      : AppEmptyState(icon: Icons.search_off, title: s.noResults, subtitle: s.noResultsSubtitle);
+                  return quickFilter != ClientQuickFilter.all
+                      ? AppEmptyState(
+                          icon: Icons.filter_alt_off_outlined,
+                          title: s.noResults,
+                          subtitle: _quickFilterLabel(quickFilter, s),
+                        )
+                      : query.isEmpty
+                          ? AppEmptyState(icon: Icons.people_outline, title: s.emptyClientsTitle, subtitle: s.emptyClientsSubtitle)
+                          : AppEmptyState(icon: Icons.search_off, title: s.noResults, subtitle: s.noResultsSubtitle);
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -334,6 +377,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'clientsFab',
         onPressed: () => Navigator.pushNamed(context, AppRoutes.addClient),
         icon: const Icon(Icons.add),
         label: Text(s.addClient),
