@@ -2454,24 +2454,22 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   ]);
 }
 
-typedef $$ClientsTableCreateCompanionBuilder =
-    ClientsCompanion Function({
-      Value<int> id,
-      required String name,
-      Value<String?> contact,
-      Value<String> note,
-      Value<int> bonusSessions,
-      Value<String> createdAt,
-    });
-typedef $$ClientsTableUpdateCompanionBuilder =
-    ClientsCompanion Function({
-      Value<int> id,
-      Value<String> name,
-      Value<String?> contact,
-      Value<String> note,
-      Value<int> bonusSessions,
-      Value<String> createdAt,
-    });
+typedef $$ClientsTableCreateCompanionBuilder = ClientsCompanion Function({
+  Value<int> id,
+  required String name,
+  Value<String?> contact,
+  Value<String> note,
+  Value<int> bonusSessions,
+  Value<String> createdAt,
+});
+typedef $$ClientsTableUpdateCompanionBuilder = ClientsCompanion Function({
+  Value<int> id,
+  Value<String> name,
+  Value<String?> contact,
+  Value<String> note,
+  Value<int> bonusSessions,
+  Value<String> createdAt,
+});
 
 final class $$ClientsTableReferences
     extends BaseReferences<_$AppDatabase, $ClientsTable, Client> {
@@ -2480,7 +2478,7 @@ final class $$ClientsTableReferences
   static MultiTypedResultKey<$ClientTagsTable, List<ClientTag>>
   _clientTagsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.clientTags,
-    aliasName: $_aliasNameGenerator(db.clients.id, db.clientTags.clientId),
+    aliasName: 'clients__id__client_tags__client_id',
   );
 
   $$ClientTagsTableProcessedTableManager get clientTagsRefs {
@@ -2498,7 +2496,7 @@ final class $$ClientsTableReferences
   static MultiTypedResultKey<$ClientPlansTable, List<ClientPlan>>
   _clientPlansRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.clientPlans,
-    aliasName: $_aliasNameGenerator(db.clients.id, db.clientPlans.clientId),
+    aliasName: 'clients__id__client_plans__client_id',
   );
 
   $$ClientPlansTableProcessedTableManager get clientPlansRefs {
@@ -2516,7 +2514,7 @@ final class $$ClientsTableReferences
   static MultiTypedResultKey<$AttendanceTable, List<AttendanceData>>
   _attendanceRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.attendance,
-    aliasName: $_aliasNameGenerator(db.clients.id, db.attendance.clientId),
+    aliasName: 'clients__id__attendance__client_id',
   );
 
   $$AttendanceTableProcessedTableManager get attendanceRefs {
@@ -2857,7 +2855,7 @@ class $$ClientsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$ClientsTable, Client>(table),
                   $$ClientsTableReferences(db, table, e),
                 ),
               )
@@ -2967,20 +2965,18 @@ typedef $$ClientsTableProcessedTableManager =
         bool attendanceRefs,
       })
     >;
-typedef $$TagsTableCreateCompanionBuilder =
-    TagsCompanion Function({
-      Value<int> id,
-      required String name,
-      Value<String> emoji,
-      Value<int> color,
-    });
-typedef $$TagsTableUpdateCompanionBuilder =
-    TagsCompanion Function({
-      Value<int> id,
-      Value<String> name,
-      Value<String> emoji,
-      Value<int> color,
-    });
+typedef $$TagsTableCreateCompanionBuilder = TagsCompanion Function({
+  Value<int> id,
+  required String name,
+  Value<String> emoji,
+  Value<int> color,
+});
+typedef $$TagsTableUpdateCompanionBuilder = TagsCompanion Function({
+  Value<int> id,
+  Value<String> name,
+  Value<String> emoji,
+  Value<int> color,
+});
 
 final class $$TagsTableReferences
     extends BaseReferences<_$AppDatabase, $TagsTable, Tag> {
@@ -2989,7 +2985,7 @@ final class $$TagsTableReferences
   static MultiTypedResultKey<$ClientTagsTable, List<ClientTag>>
   _clientTagsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.clientTags,
-    aliasName: $_aliasNameGenerator(db.tags.id, db.clientTags.tagId),
+    aliasName: 'tags__id__client_tags__tag_id',
   );
 
   $$ClientTagsTableProcessedTableManager get clientTagsRefs {
@@ -3161,14 +3157,12 @@ class $$TagsTableTableManager
               $$TagsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
               $$TagsTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<int> id = const Value.absent(),
-                Value<String> name = const Value.absent(),
-                Value<String> emoji = const Value.absent(),
-                Value<int> color = const Value.absent(),
-              }) =>
-                  TagsCompanion(id: id, name: name, emoji: emoji, color: color),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<String> emoji = const Value.absent(),
+            Value<int> color = const Value.absent(),
+          }) => TagsCompanion(id: id, name: name, emoji: emoji, color: color),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
@@ -3183,8 +3177,10 @@ class $$TagsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$TagsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$TagsTable, Tag>(table),
+                  $$TagsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback: ({clientTagsRefs = false}) {
@@ -3227,25 +3223,23 @@ typedef $$TagsTableProcessedTableManager =
       Tag,
       PrefetchHooks Function({bool clientTagsRefs})
     >;
-typedef $$ClientTagsTableCreateCompanionBuilder =
-    ClientTagsCompanion Function({
-      required int clientId,
-      required int tagId,
-      Value<int> rowid,
-    });
-typedef $$ClientTagsTableUpdateCompanionBuilder =
-    ClientTagsCompanion Function({
-      Value<int> clientId,
-      Value<int> tagId,
-      Value<int> rowid,
-    });
+typedef $$ClientTagsTableCreateCompanionBuilder = ClientTagsCompanion Function({
+  required int clientId,
+  required int tagId,
+  Value<int> rowid,
+});
+typedef $$ClientTagsTableUpdateCompanionBuilder = ClientTagsCompanion Function({
+  Value<int> clientId,
+  Value<int> tagId,
+  Value<int> rowid,
+});
 
 final class $$ClientTagsTableReferences
     extends BaseReferences<_$AppDatabase, $ClientTagsTable, ClientTag> {
   $$ClientTagsTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
-  static $ClientsTable _clientIdTable(_$AppDatabase db) => db.clients
-      .createAlias($_aliasNameGenerator(db.clientTags.clientId, db.clients.id));
+  static $ClientsTable _clientIdTable(_$AppDatabase db) =>
+      db.clients.createAlias('client_tags__client_id__clients__id');
 
   $$ClientsTableProcessedTableManager get clientId {
     final $_column = $_itemColumn<int>('client_id')!;
@@ -3261,9 +3255,8 @@ final class $$ClientTagsTableReferences
     );
   }
 
-  static $TagsTable _tagIdTable(_$AppDatabase db) => db.tags.createAlias(
-    $_aliasNameGenerator(db.clientTags.tagId, db.tags.id),
-  );
+  static $TagsTable _tagIdTable(_$AppDatabase db) =>
+      db.tags.createAlias('client_tags__tag_id__tags__id');
 
   $$TagsTableProcessedTableManager get tagId {
     final $_column = $_itemColumn<int>('tag_id')!;
@@ -3497,7 +3490,7 @@ class $$ClientTagsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$ClientTagsTable, ClientTag>(table),
                   $$ClientTagsTableReferences(db, table, e),
                 ),
               )
@@ -3523,30 +3516,26 @@ class $$ClientTagsTableTableManager
                     >
                   >(state) {
                     if (clientId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.clientId,
-                                referencedTable: $$ClientTagsTableReferences
-                                    ._clientIdTable(db),
-                                referencedColumn: $$ClientTagsTableReferences
-                                    ._clientIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.clientId,
+                        referencedTable: $$ClientTagsTableReferences
+                            ._clientIdTable(db),
+                        referencedColumn: $$ClientTagsTableReferences
+                            ._clientIdTable(db)
+                            .id,
+                      ) as T;
                     }
                     if (tagId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.tagId,
-                                referencedTable: $$ClientTagsTableReferences
-                                    ._tagIdTable(db),
-                                referencedColumn: $$ClientTagsTableReferences
-                                    ._tagIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.tagId,
+                        referencedTable: $$ClientTagsTableReferences
+                            ._tagIdTable(db),
+                        referencedColumn: $$ClientTagsTableReferences
+                            ._tagIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -3600,10 +3589,7 @@ final class $$PlanTemplatesTableReferences
   static MultiTypedResultKey<$ClientPlansTable, List<ClientPlan>>
   _clientPlansRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.clientPlans,
-    aliasName: $_aliasNameGenerator(
-      db.planTemplates.id,
-      db.clientPlans.templateId,
-    ),
+    aliasName: 'plan_templates__id__client_plans__template_id',
   );
 
   $$ClientPlansTableProcessedTableManager get clientPlansRefs {
@@ -3804,7 +3790,7 @@ class $$PlanTemplatesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$PlanTemplatesTable, PlanTemplate>(table),
                   $$PlanTemplatesTableReferences(db, table, e),
                 ),
               )
@@ -3889,9 +3875,7 @@ final class $$ClientPlansTableReferences
   $$ClientPlansTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static $ClientsTable _clientIdTable(_$AppDatabase db) =>
-      db.clients.createAlias(
-        $_aliasNameGenerator(db.clientPlans.clientId, db.clients.id),
-      );
+      db.clients.createAlias('client_plans__client_id__clients__id');
 
   $$ClientsTableProcessedTableManager get clientId {
     final $_column = $_itemColumn<int>('client_id')!;
@@ -3907,10 +3891,9 @@ final class $$ClientPlansTableReferences
     );
   }
 
-  static $PlanTemplatesTable _templateIdTable(_$AppDatabase db) =>
-      db.planTemplates.createAlias(
-        $_aliasNameGenerator(db.clientPlans.templateId, db.planTemplates.id),
-      );
+  static $PlanTemplatesTable _templateIdTable(_$AppDatabase db) => db
+      .planTemplates
+      .createAlias('client_plans__template_id__plan_templates__id');
 
   $$PlanTemplatesTableProcessedTableManager get templateId {
     final $_column = $_itemColumn<int>('template_id')!;
@@ -4278,7 +4261,7 @@ class $$ClientPlansTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$ClientPlansTable, ClientPlan>(table),
                   $$ClientPlansTableReferences(db, table, e),
                 ),
               )
@@ -4304,30 +4287,26 @@ class $$ClientPlansTableTableManager
                     >
                   >(state) {
                     if (clientId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.clientId,
-                                referencedTable: $$ClientPlansTableReferences
-                                    ._clientIdTable(db),
-                                referencedColumn: $$ClientPlansTableReferences
-                                    ._clientIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.clientId,
+                        referencedTable: $$ClientPlansTableReferences
+                            ._clientIdTable(db),
+                        referencedColumn: $$ClientPlansTableReferences
+                            ._clientIdTable(db)
+                            .id,
+                      ) as T;
                     }
                     if (templateId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.templateId,
-                                referencedTable: $$ClientPlansTableReferences
-                                    ._templateIdTable(db),
-                                referencedColumn: $$ClientPlansTableReferences
-                                    ._templateIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.templateId,
+                        referencedTable: $$ClientPlansTableReferences
+                            ._templateIdTable(db),
+                        referencedColumn: $$ClientPlansTableReferences
+                            ._templateIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -4355,31 +4334,29 @@ typedef $$ClientPlansTableProcessedTableManager =
       ClientPlan,
       PrefetchHooks Function({bool clientId, bool templateId})
     >;
-typedef $$AttendanceTableCreateCompanionBuilder =
-    AttendanceCompanion Function({
-      Value<int> id,
-      required int clientId,
-      Value<int?> planId,
-      required String date,
-      required String status,
-      Value<String> createdAt,
-    });
-typedef $$AttendanceTableUpdateCompanionBuilder =
-    AttendanceCompanion Function({
-      Value<int> id,
-      Value<int> clientId,
-      Value<int?> planId,
-      Value<String> date,
-      Value<String> status,
-      Value<String> createdAt,
-    });
+typedef $$AttendanceTableCreateCompanionBuilder = AttendanceCompanion Function({
+  Value<int> id,
+  required int clientId,
+  Value<int?> planId,
+  required String date,
+  required String status,
+  Value<String> createdAt,
+});
+typedef $$AttendanceTableUpdateCompanionBuilder = AttendanceCompanion Function({
+  Value<int> id,
+  Value<int> clientId,
+  Value<int?> planId,
+  Value<String> date,
+  Value<String> status,
+  Value<String> createdAt,
+});
 
 final class $$AttendanceTableReferences
     extends BaseReferences<_$AppDatabase, $AttendanceTable, AttendanceData> {
   $$AttendanceTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
-  static $ClientsTable _clientIdTable(_$AppDatabase db) => db.clients
-      .createAlias($_aliasNameGenerator(db.attendance.clientId, db.clients.id));
+  static $ClientsTable _clientIdTable(_$AppDatabase db) =>
+      db.clients.createAlias('attendance__client_id__clients__id');
 
   $$ClientsTableProcessedTableManager get clientId {
     final $_column = $_itemColumn<int>('client_id')!;
@@ -4621,7 +4598,7 @@ class $$AttendanceTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$AttendanceTable, AttendanceData>(table),
                   $$AttendanceTableReferences(db, table, e),
                 ),
               )
@@ -4647,17 +4624,15 @@ class $$AttendanceTableTableManager
                     >
                   >(state) {
                     if (clientId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.clientId,
-                                referencedTable: $$AttendanceTableReferences
-                                    ._clientIdTable(db),
-                                referencedColumn: $$AttendanceTableReferences
-                                    ._clientIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.clientId,
+                        referencedTable: $$AttendanceTableReferences
+                            ._clientIdTable(db),
+                        referencedColumn: $$AttendanceTableReferences
+                            ._clientIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -4783,12 +4758,11 @@ class $$AppSettingsTableTableManager
               $$AppSettingsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
               $$AppSettingsTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> key = const Value.absent(),
-                Value<String> value = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => AppSettingsCompanion(key: key, value: value, rowid: rowid),
+          updateCompanionCallback: ({
+            Value<String> key = const Value.absent(),
+            Value<String> value = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) => AppSettingsCompanion(key: key, value: value, rowid: rowid),
           createCompanionCallback:
               ({
                 required String key,
@@ -4800,7 +4774,16 @@ class $$AppSettingsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$AppSettingsTable, AppSetting>(table),
+                  BaseReferences<_$AppDatabase, $AppSettingsTable, AppSetting>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
