@@ -128,6 +128,7 @@ class AppDatabase extends _$AppDatabase {
     final rows = await (select(clientTags)..where((ct) => ct.clientId.equals(clientId))).get();
     return rows.map((r) => r.tagId).toList();
   }
+  Future<List<ClientTag>> getAllClientTags() => select(clientTags).get();
   Future<int> countClientsWithTag(int tagId) async {
     final rows = await (select(clientTags)..where((ct) => ct.tagId.equals(tagId))).get();
     return rows.length;
@@ -211,6 +212,7 @@ Future<List<AttendanceData>> getClientAttendance(int clientId) => (select(attend
   return deleteAttendance(row.id);
 }
   Stream<List<AttendanceData>> watchClientAttendance(int clientId) => (select(attendance)..where((a) => a.clientId.equals(clientId))..orderBy([(a) => OrderingTerm.desc(a.date)])).watch();
+  Future<List<AttendanceData>> getAllAttendance() => select(attendance).get();
 
   Future<int> getTotalClients() async => (await select(clients).get()).length;
   Future<int> getActivePlansCount() async => (await (select(clientPlans)..where((p) => p.status.equals('active'))).get()).length;
@@ -230,4 +232,6 @@ Future<List<AttendanceData>> getClientAttendance(int clientId) => (select(attend
     final rows = await (select(attendance)..where((a) => a.date.equals(date))).get();
     return {for (var r in rows) r.clientId: r.status};
   }
+
+  Future<List<AppSetting>> getAllSettings() => select(appSettings).get();
 }

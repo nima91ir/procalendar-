@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/dev/demo_data.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/core/platform/file_transfer.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
+import 'package:fitness_trainer_app/features/backup/data/backup_service.dart';
+import 'package:fitness_trainer_app/features/backup/providers/backup_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
@@ -76,6 +79,77 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) messenger.showSnackBar(SnackBar(content: Text('${AppStrings.of(context).errorPrefix}$e')));
     } finally {
       if (mounted) setState(() => _seeding = false);
+    }
+  }
+
+  Future<void> _exportJson() async {
+    final s = AppStrings.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final json = await ref.read(backupServiceProvider).exportJson();
+      final name = 'procalendar-backup-${BackupService.timestampSuffix()}.json';
+      final saved = await saveTextFile(name, json);
+      messenger.showSnackBar(SnackBar(content: Text(s.backupSaved(saved ?? name))));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(s.backupFailed('$e'))));
+    }
+  }
+
+  Future<void> _openCsvSheet() async {
+    final s = AppStrings.of(context);
+    final kind = await AppBottomSheet.show<_CsvKind>(
+      context,
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: AppSpacing.sm),
+          ListTile(
+            leading: const Icon(Icons.people_outline),
+            title: Text(s.csvClients),
+            onTap: () => Navigator.of(context).pop(_CsvKind.clients),
+          ),
+          ListTile(
+            leading: const Icon(Icons.calendar_today_outlined),
+            title: Text(s.csvPlans),
+            onTap: () => Navigator.of(context).pop(_CsvKind.plans),
+          ),
+          ListTile(
+            leading: const Icon(Icons.fact_check_outlined),
+            title: Text(s.csvAttendance),
+            onTap: () => Navigator.of(context).pop(_CsvKind.attendance),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+      ),
+    );
+    if (kind == null || !mounted) return;
+    await _exportCsv(kind);
+  }
+
+  Future<void> _exportCsv(_CsvKind kind) async {
+    final s = AppStrings.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final suffix = BackupService.timestampSuffix();
+    try {
+      final service = ref.read(backupServiceProvider);
+      final (contents, name) = switch (kind) {
+        _CsvKind.clients => (
+            await service.exportClientsCsv(),
+            'procalendar-clients-$suffix.csv',
+          ),
+        _CsvKind.plans => (
+            await service.exportPlansCsv(),
+            'procalendar-plans-$suffix.csv',
+          ),
+        _CsvKind.attendance => (
+            await service.exportAttendanceCsv(),
+            'procalendar-attendance-$suffix.csv',
+          ),
+      };
+      final saved = await saveTextFile(name, contents);
+      messenger.showSnackBar(SnackBar(content: Text(s.backupSaved(saved ?? name))));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(s.backupFailed('$e'))));
     }
   }
 
@@ -161,6 +235,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
+          const SizedBox(height: AppSpacing.xxl),
+          SectionHeader(title: s.backupSection),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(s.backupDescription, style: AppTypography.bodySmall),
+                const SizedBox(height: AppSpacing.md),
+                OutlinedButton.icon(
+                  onPressed: _exportJson,
+                  icon: const Icon(Icons.save_alt),
+                  label: Text(s.exportBackupJson),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, AppRoutes.importBackup),
+                  icon: const Icon(Icons.upload_file),
+                  label: Text(s.importBackupJson),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: _openCsvSheet,
+                  icon: const Icon(Icons.table_chart_outlined),
+                  label: Text(s.exportCsv),
+                ),
+              ],
+            ),
+          ),
           if (kDebugMode) ...[
             const SizedBox(height: AppSpacing.xxl),
             SectionHeader(title: s.devTools),
@@ -189,3 +291,5 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 }
+
+enum _CsvKind { clients, plans, attendance }

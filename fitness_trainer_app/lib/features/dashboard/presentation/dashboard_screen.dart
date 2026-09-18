@@ -24,7 +24,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  int? _selectedTagId;
+  final Set<int> _selectedTagIds = {};
 
   String _num(int? value, String languageCode) =>
       localizeNumber(value?.toString() ?? '—', languageCode);
@@ -156,21 +156,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
                           child: FilterChip(
                             label: Text(s.allLabel),
-                            selected: _selectedTagId == null,
-                            onSelected: (_) => setState(() => _selectedTagId = null),
+                            selected: _selectedTagIds.isEmpty,
+                            onSelected: (_) => setState(_selectedTagIds.clear),
                             selectedColor: t.primaryLight,
                             checkmarkColor: t.onSurface,
                           ),
                         );
                       }
                       final tag = tags[index - 1];
-                      final isSelected = _selectedTagId == tag.id;
+                      final isSelected = _selectedTagIds.contains(tag.id);
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
                         child: FilterChip(
                           label: Text(tag.emoji.isNotEmpty ? '${tag.emoji} ${tag.name}' : tag.name),
                           selected: isSelected,
-                          onSelected: (_) => setState(() => _selectedTagId = isSelected ? null : tag.id),
+                          onSelected: (_) => setState(() {
+                            if (isSelected) {
+                              _selectedTagIds.remove(tag.id);
+                            } else {
+                              _selectedTagIds.add(tag.id!);
+                            }
+                          }),
                           selectedColor: Color(tag.color),
                           checkmarkColor: Colors.white,
                         ),
@@ -196,10 +202,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   );
                 }
                 final tagIdsByClient = tagFilterAsync.value ?? const <int, List<int>>{};
-                final visible = _selectedTagId == null
+                // AND semantics: a client is shown only when it carries every
+                // selected tag, so combining tags narrows the list.
+                final visible = _selectedTagIds.isEmpty
                     ? clients
                     : clients
-                        .where((c) => (tagIdsByClient[c.id] ?? const <int>[]).contains(_selectedTagId))
+                        .where((c) =>
+                            _selectedTagIds.every((id) => (tagIdsByClient[c.id] ?? const <int>[]).contains(id)))
                         .toList();
                 if (visible.isEmpty) {
                   return AppEmptyState(
@@ -336,8 +345,10 @@ class _HeroStat extends StatelessWidget {
   }
 }
 
-/// One client, ready for today's attendance: quick-mark buttons when nothing
-/// is recorded yet, or a status count pill plus undo once records exist.
+/// One client, ready for today's attendance. The quick-mark buttons stay
+/// available even after records exist (a client can be marked more than once
+/// per day); once any records exist a per-status count pill plus undo appear
+/// on the first line so the coach can review or roll back.
 class _TodayRow extends StatelessWidget {
   final String name;
   final Map<String, int>? counts;
@@ -362,58 +373,79 @@ class _TodayRow extends StatelessWidget {
     final present = counts?['present'] ?? 0;
     final absent = counts?['absent'] ?? 0;
     final marked = present > 0 || absent > 0;
-    final primary = present > 0;
-    final count = primary ? present : absent;
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       onTap: onTap,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: t.primaryLight,
-            child: Text(
-              name.isEmpty ? '؟' : name[0],
-              style: AppTypography.bodySmall.copyWith(color: t.onSurface),
-            ),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: t.primaryLight,
+                child: Text(
+                  name.isEmpty ? '؟' : name[0],
+                  style: AppTypography.bodySmall.copyWith(color: t.onSurface),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  name,
+                  style: AppTypography.bodyLarge,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (marked) ...[
+                if (present > 0) ...[
+                  _TonePill(
+                    label: s.attendanceCount(s.present, present),
+                    bg: t.successSoft,
+                    fg: t.success,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                ],
+                if (absent > 0) ...[
+                  _TonePill(
+                    label: s.attendanceCount(s.absent, absent),
+                    bg: t.errorSoft,
+                    fg: t.error,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                ],
+                IconButton(
+                  onPressed: onUndo,
+                  tooltip: s.undoAttendance,
+                  icon: Icon(Icons.undo, size: 20, color: t.onSurfaceVar),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              name,
-              style: AppTypography.bodyLarge,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: _QuickButton(
+                  label: s.registerPresent,
+                  bg: t.successSoft,
+                  fg: t.success,
+                  onTap: onMarkPresent,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _QuickButton(
+                  label: s.registerAbsent,
+                  bg: t.errorSoft,
+                  fg: t.error,
+                  onTap: onMarkAbsent,
+                ),
+              ),
+            ],
           ),
-          if (!marked) ...[
-            _QuickButton(
-              label: s.registerPresent,
-              bg: t.successSoft,
-              fg: t.success,
-              onTap: onMarkPresent,
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            _QuickButton(
-              label: s.registerAbsent,
-              bg: t.errorSoft,
-              fg: t.error,
-              onTap: onMarkAbsent,
-            ),
-          ] else ...[
-            _TonePill(
-              label: s.attendanceCount(primary ? s.present : s.absent, count),
-              bg: primary ? t.successSoft : t.errorSoft,
-              fg: primary ? t.success : t.error,
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            IconButton(
-              onPressed: onUndo,
-              tooltip: s.undoAttendance,
-              icon: Icon(Icons.undo, size: 20, color: t.onSurfaceVar),
-            ),
-          ],
         ],
       ),
     );
@@ -443,11 +475,14 @@ class _QuickButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Text(
-            label,
-            style: AppTypography.bodySmall.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w600,
+          child: Center(
+            child: Text(
+              label,
+              style: AppTypography.bodySmall.copyWith(
+                color: fg,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
         ),

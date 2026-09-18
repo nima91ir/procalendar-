@@ -183,6 +183,33 @@ class AppStrings {
   final String manageTags;
   final String clientActionsTitle;
 
+  // Backup & export
+  final String backupSection;
+  final String backupDescription;
+  final String exportBackupJson;
+  final String importBackupJson;
+  final String exportCsv;
+  final String csvClients;
+  final String csvPlans;
+  final String csvAttendance;
+  final String backupSavedTemplate;
+  final String backupFailedTemplate;
+  final String importTitle;
+  final String importHint;
+  final String chooseFile;
+  final String pasteFromClipboard;
+  final String mergeData;
+  final String replaceData;
+  final String mergeHint;
+  final String replaceWarning;
+  final String importInvalid;
+  final String importSummaryTemplate;
+  final String importDoneTemplate;
+  final String replaceConfirmTitle;
+  final String replaceConfirmMessage;
+  final String importFailedTemplate;
+  final String noBackupContent;
+
   const AppStrings({
     required this.isPersian,
     required this.welcomeTemplate,
@@ -335,6 +362,31 @@ class AppStrings {
     required this.noTagsDefinedSubtitle,
     required this.manageTags,
     required this.clientActionsTitle,
+    required this.backupSection,
+    required this.backupDescription,
+    required this.exportBackupJson,
+    required this.importBackupJson,
+    required this.exportCsv,
+    required this.csvClients,
+    required this.csvPlans,
+    required this.csvAttendance,
+    required this.backupSavedTemplate,
+    required this.backupFailedTemplate,
+    required this.importTitle,
+    required this.importHint,
+    required this.chooseFile,
+    required this.pasteFromClipboard,
+    required this.mergeData,
+    required this.replaceData,
+    required this.mergeHint,
+    required this.replaceWarning,
+    required this.importInvalid,
+    required this.importSummaryTemplate,
+    required this.importDoneTemplate,
+    required this.replaceConfirmTitle,
+    required this.replaceConfirmMessage,
+    required this.importFailedTemplate,
+    required this.noBackupContent,
   });
 
   String _digits(String value) => isPersian ? toPersian(value) : value;
@@ -364,6 +416,14 @@ class AppStrings {
   String oneSessionPerDays(int days) => oneSessionPerDaysTemplate.replaceAll('{days}', _digits('$days'));
   String deleteTagMessage(String name) => deleteTagMessageTemplate.replaceAll('{name}', name);
   String tagClientCount(int count) => tagClientCountTemplate.replaceAll('{count}', _digits('$count'));
+  String backupSaved(String file) => backupSavedTemplate.replaceAll('{file}', file);
+  String backupFailed(String error) => backupFailedTemplate.replaceAll('{error}', error);
+  String importSummary(int clients, int plans, int attendance) => importSummaryTemplate
+      .replaceAll('{clients}', _digits('$clients'))
+      .replaceAll('{plans}', _digits('$plans'))
+      .replaceAll('{attendance}', _digits('$attendance'));
+  String importDone(int count) => importDoneTemplate.replaceAll('{count}', _digits('$count'));
+  String importFailed(String error) => importFailedTemplate.replaceAll('{error}', error);
 
   static AppStrings of(BuildContext context) {
     final code = Localizations.localeOf(context).languageCode;
@@ -521,6 +581,31 @@ class AppStrings {
     noTagsDefinedSubtitle: 'برای سازماندهی مشتریان برچسب ایجاد کنید',
     manageTags: 'مدیریت برچسب‌ها',
     clientActionsTitle: 'گزینه‌های مشتری',
+    backupSection: 'پشتیبان‌گیری و خروجی',
+    backupDescription: 'از داده‌ها فایل پشتیبان بسازید یا فایل CSV برای اکسل بگیرید. هنگام ورود، ابتدا داده‌ها ادغام می‌شوند و در صورت نیاز می‌توانید همه را جایگزین کنید.',
+    exportBackupJson: 'خروجی پشتیبان (JSON)',
+    importBackupJson: 'ورود پشتیبان (JSON)',
+    exportCsv: 'خروجی CSV',
+    csvClients: 'مشتریان',
+    csvPlans: 'برنامه‌ها',
+    csvAttendance: 'حضور و غیاب',
+    backupSavedTemplate: 'فایل ذخیره شد: {file}',
+    backupFailedTemplate: 'ذخیره فایل ناموفق بود: {error}',
+    importTitle: 'ورود پشتیبان',
+    importHint: 'محتوای فایل پشتیبان (JSON) را اینجا بچسبانید',
+    chooseFile: 'انتخاب فایل',
+    pasteFromClipboard: 'چسباندن از حافظه',
+    mergeData: 'ادغام با داده موجود',
+    replaceData: 'جایگزینی کامل',
+    mergeHint: 'موارد جدید اضافه می‌شوند و اطلاعات فعلی حفظ می‌گردد.',
+    replaceWarning: 'هشدار: همه مشتریان، برنامه‌ها و سوابق فعلی پاک و با فایل پشتیبان جایگزین می‌شوند.',
+    importInvalid: 'محتوای پشتیبان معتبر نیست',
+    importSummaryTemplate: 'این فایل شامل {clients} مشتری، {plans} برنامه و {attendance} رکورد حضور است.',
+    importDoneTemplate: 'ورود انجام شد: {count} مورد اضافه شد',
+    replaceConfirmTitle: 'جایگزینی اطلاعات',
+    replaceConfirmMessage: 'تمام اطلاعات فعلی حذف و با محتوای پشتیبان جایگزین می‌شود. ادامه می‌دهید؟',
+    importFailedTemplate: 'ورود ناموفق بود: {error}',
+    noBackupContent: 'ابتدا محتوای پشتیبان را وارد کنید',
   );
 
 
@@ -679,5 +764,30 @@ class AppStrings {
     noTagsDefinedSubtitle: 'Create tags to organize your clients',
     manageTags: 'Manage tags',
     clientActionsTitle: 'Client actions',
+    backupSection: 'Backup & export',
+    backupDescription: 'Create a backup file or export CSV for Excel. Imports merge first; you can replace everything if needed.',
+    exportBackupJson: 'Export backup (JSON)',
+    importBackupJson: 'Import backup (JSON)',
+    exportCsv: 'Export CSV',
+    csvClients: 'Clients',
+    csvPlans: 'Plans',
+    csvAttendance: 'Attendance',
+    backupSavedTemplate: 'File saved: {file}',
+    backupFailedTemplate: 'Could not save file: {error}',
+    importTitle: 'Import backup',
+    importHint: 'Paste the backup file contents (JSON) here',
+    chooseFile: 'Choose file',
+    pasteFromClipboard: 'Paste from clipboard',
+    mergeData: 'Merge with current data',
+    replaceData: 'Replace everything',
+    mergeHint: 'New rows are added; your current data is kept.',
+    replaceWarning: 'Warning: all current clients, plans and attendance are deleted and replaced by the backup.',
+    importInvalid: 'Not a valid backup file',
+    importSummaryTemplate: 'This file has {clients} clients, {plans} plans and {attendance} attendance records.',
+    importDoneTemplate: 'Import complete: {count} rows added',
+    replaceConfirmTitle: 'Replace data',
+    replaceConfirmMessage: 'All current data will be deleted and replaced by the backup. Continue?',
+    importFailedTemplate: 'Import failed: {error}',
+    noBackupContent: 'Enter the backup contents first',
   );
 }

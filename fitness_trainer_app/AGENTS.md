@@ -8,7 +8,7 @@ Long-form plan + per-file changelog lives in `../DEVELOPMENT_HANDOFF.md`
 - **flutter is NOT on PATH.** Prefix every command:
   `$env:PATH = "C:\flutter\bin;$env:PATH"; flutter ...`
 - Analyze: `flutter analyze` — leave it at "No issues found!".
-- Tests: `flutter test` — currently 118, keep them all green.
+- Tests: `flutter test` — currently 129, keep them all green.
 - After editing Drift tables/providers in `app_database.dart` or any
   `*.g.dart`-backed file:
   `dart run build_runner build --delete-conflicting-outputs`

@@ -11,6 +11,7 @@ import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
+import 'package:fitness_trainer_app/features/backup/presentation/import_backup_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/clients_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/add_edit_client_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/client_detail_screen.dart';
@@ -146,6 +147,7 @@ class AppRouter {
     if (name == AppRoutes.addClient) return page(const AddEditClientScreen());
     if (name == AppRoutes.addTemplate) return page(const AddEditTemplateScreen());
     if (name == AppRoutes.tags) return page(const TagsScreen());
+    if (name == AppRoutes.importBackup) return page(const ImportBackupScreen());
 
     final clientDetailId = _idFrom(name, AppRoutes.clientDetail);
     if (clientDetailId != null) return page(ClientDetailScreen(clientId: clientDetailId));

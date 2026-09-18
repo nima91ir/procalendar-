@@ -64,7 +64,7 @@ with CustomPainter charts, hand-rolled CSV/JSON, and built-in widgets.
 | 5 | Measurements & progress (readings, trend chart, deltas) | ⏳ |
 | 6 | Attendance statistics (per-client + global charts) | ⏳ |
 | 7 | Reminders (in-app alerts, dashboard badge, thresholds in settings) | ⏳ |
-| 8 | Backup & export (JSON backup/restore, CSV export) | ⏳ |
+| 8 | Backup & export (JSON backup/restore, CSV export) | ✅ data + web UI (§5j); iOS Files picker pending |
 | 9 | Polish & verification (analyze clean, all tests green, new tests, dark-mode + RTL/LTR pass, web/Windows smoke) | ⏳ |
 
 User decisions that shape everything:
@@ -200,6 +200,87 @@ Dart's Monday-based `DateTime.weekDay` (Mon=1…Sun=7). Two sites wrongly applie
   a plan freeze/expire/create until the provider was recreated.
 
 **110 → 118 tests.**
+
+### 5j. Backup & export (Phase 8 — data + UI done; iOS Files-picker pending)
+
+Web-first design: the phone runs the GitHub Pages **web app**, so `dart:io`/
+`path_provider` (used by `connection/native.dart`) do not exist there — a tiny
+conditional-import shim bridges the two worlds instead of pretending to be one
+platform:
+- `core/platform/file_transfer.dart` → `file_transfer_io.dart`
+  (documents dir, `isFilePickerSupported == false`) / `file_transfer_web.dart`
+  (`dart:html` Blob download + hidden `<input type=file>` + FileReader,
+  flagged `avoid_web_libraries_in_flutter`). On native there is no built-in file
+  picker, so import falls back to pasting the file contents.
+- `features/backup/data/backup_service.dart`: hand-rolled JSON (all 7 tables +
+  `app`/`format`/`schemaVersion`/`exportedAt`), `previewCounts()` validation,
+  and two restore modes:
+  - **merge** (`InsertMode.insertOrIgnore`, parents-first) — never overwrites;
+  - **replace** (delete children→parents, then insert with preserved ids).
+  CSV (hand-rolled, UTF-8 BOM so Excel renders Persian, RFC-4180 quoting) for
+  clients / plans / attendance with resolved names.
+- `features/backup/presentation/import_backup_screen.dart` at `/settings/
+  import-backup`: textarea + choose-file (web) + paste-from-clipboard, live
+  row-count preview, **Merge (primary) + Replace (destructive, confirm dialog
+  only)**; on success `invalidateAppData()` + reloads `trainerNameProvider`,
+  `themeModeProvider`, `languageProvider` (the backup can carry settings).
+- `settings_screen.dart`: new «پشتیبانگیری و خروجی» section after tags —
+  export JSON, import JSON, export CSV (bottom sheet: clients / plans /
+  attendance). File names `procalendar-backup-<ts>.json`,
+  `procalendar-clients-<ts>.csv`, … via `BackupService.timestampSuffix()`.
+- `app_database.dart`: added `getAllClientTags()`, `getAllAttendance()`,
+  `getAllSettings()` (plain methods — no schema change, no build_runner).
+- New `test/unit/backup_service_test.dart` (9 tests): export shape, preview
+  without writes, replace-restore, merge-adds-into-empty, merge-never
+  overwrites, malformed/newer-schema rejection, CSV quoting + BOM, plans CSV
+  names, timestamp format. (Sets
+  `driftRuntimeOptions.dontWarnAboutMultipleDatabases` — source + target DBs
+  are open at once on purpose.)
+- Left for native-only later (Phase 8 wherever it matters): iOS
+  `UIFileSharingEnabled` + `ITSAppUsesNonExemptEncryption` in
+  `ios/Runner/Info.plist` and a real save-dialog on desktop.
+
+**118 → 127 tests.**
+
+### 5k. Tag filtering + repeated daily attendance (DONE, analyze clean + 129 tests green)
+
+Two user-reported bugs, one shared root cause found while fixing them:
+
+- **Bug 1 — Clients-page tag chips did nothing.** `clients_screen.dart`
+  `_selectedTagId` was set by the chips but never used in list filtering.
+  Fixed by wiring the **already-existing** `clientTagFilterProvider`
+  (client id → tag ids) into the list and switching both tag UIs to
+  **multi-select AND**: a client is shown only when it carries *every*
+  selected tag, so combining tags narrows the list. The «همه» chip clears the
+  selection. Same change applied to the dashboard's «حضور امروز» tag row so
+  both screens behave identically. Empty state when a tag combo matches nobody
+  → `AppEmptyState` with `s.noClientsWithTag`.
+- **Bug 2 — dashboard could only mark attendance once per day.** The
+  `_TodayRow` replaced the quick present/absent buttons with a status pill +
+  undo as soon as one record existed, so a second record was impossible from
+  the dashboard (the data layer always allowed several per day). Restructured
+  `_TodayRow` into two lines: name + per-status `_TonePill`s + undo on line 1,
+  and the present/absent quick buttons **always visible** below. `_QuickButton`
+  label is now `Center`ed so the two buttons stretch evenly.
+- **Shared root cause found en route (real production bug):**
+  `invalidateAppData()` in `core/providers/app_refresh.dart` included
+  `attendanceProvider` — the attendance **notifier's own provider**. When
+  `AttendanceNotifier._invalidateFor` called `invalidateAppData()` after a
+  session change, invalidating itself threw `A provider cannot depend on
+  itself`; the `catch` in `addSession` swallowed it (state → `AsyncError`) and
+  **every later invalidation was skipped** — so the dashboard never refreshed
+  after marking attendance until a manual pull-to-refresh. Removed
+  `attendanceProvider` from `_appDataProviders` (its `state` is a transient
+  "last operation" status; no screen reads it for rendering). Proved with a
+  scratch spectator test before/after the fix.
+- New `test/widget/clients_tag_filter_test.dart`: single tag filters, **AND**
+  of two tags narrows to the client carrying both, «همه» resets (db-checked).
+- New `test/widget/dashboard_attendance_test.dart`: marks the same client
+  twice in one day (2 records for today), quick buttons + undo stay visible
+  after the first mark, undo leaves exactly one record. Tall test viewport so
+  the two-line rows sit above the fold.
+
+**127 → 129 tests.**
 
 ### 5b. Clients screen refresh (Phase 2b/8b — DONE, analyze clean + 96 tests green)
 
@@ -722,17 +803,19 @@ In `app_database.dart`:
 - **Reminders (7)**: computed list (expired/frozen>N/queued/≤2 sessions/
   inactive ≥ threshold/unpaid), Settings thresholds (`AppSettings` keys), a
   "یادآوریها" screen, badge on Nav `badgeCount`. No push notifications.
-- **Backup/export (8)**: JSON of all tables (schemaVersion + exportedAt) to
-  app documents dir (`path_provider` present), restore from in-app list (keep
-  last N), CSV export (clients/attendance/payments) — hand-rolled, no `csv`
-  package; Settings section "پشتیبانگیری". iOS: set
+- **Backup/export (8)**: DONE (data + web UI, see §5j). JSON of all tables
+  (`app`/`format`/`schemaVersion`/`exportedAt`) with **merge + replace**
+  restore; web download/upload via `dart:html`, native saves to the app
+  documents dir, clipboard-paste fallback for import; CSV export
+  (clients/plans/attendance) hand-rolled with BOM — no `csv` package; Settings
+  section «پشتیبانگیری». Remaining (native-only): iOS
   `UIFileSharingEnabled` + `ITSAppUsesNonExemptEncryption` in
   `ios/Runner/Info.plist`.
 
 ## 11. Phase 9 — verification checklist
 - `flutter analyze` → No issues found.
-- `flutter test` → all green (118 today; will grow with new tests —
-  add service unit tests for revenue/measurements/backup + a widget test that
+- `flutter test` → all green (129 today; will grow with new tests —
+  add service unit tests for revenue/measurements + a widget test that
   switches language in Settings and asserts an English label appears).
 - Smoke builds (as past commits did): `flutter build web --release` and
   `flutter build windows --release` (or at least `flutter build web`).

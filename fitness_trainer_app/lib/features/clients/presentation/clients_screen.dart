@@ -28,7 +28,7 @@ class ClientsScreen extends ConsumerStatefulWidget {
 class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   final _searchController = TextEditingController();
   String _query = '';
-  int? _selectedTagId;
+  final Set<int> _selectedTagIds = {};
   _SortMode _sort = _SortMode.name;
 
   @override
@@ -192,6 +192,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     final clientsAsync = ref.watch(allClientsProvider);
     final quickFilter = ref.watch(clientQuickFilterProvider);
     final quickFilterIdsAsync = ref.watch(quickFilterClientIdsProvider);
+    final tagFilterAsync = ref.watch(clientTagFilterProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -260,21 +261,27 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                         padding: const EdgeInsets.only(left: AppSpacing.sm, right: AppSpacing.sm),
                         child: FilterChip(
                           label: Text(s.allLabel),
-                          selected: _selectedTagId == null,
-                          onSelected: (_) => setState(() => _selectedTagId = null),
+                          selected: _selectedTagIds.isEmpty,
+                          onSelected: (_) => setState(_selectedTagIds.clear),
                           selectedColor: t.primaryLight,
                           checkmarkColor: t.onSurface,
                         ),
                       );
                     }
                     final tag = tags[index - 1];
-                    final isSelected = _selectedTagId == tag.id;
+                    final isSelected = _selectedTagIds.contains(tag.id);
                     return Padding(
                       padding: const EdgeInsets.only(left: AppSpacing.sm, right: AppSpacing.sm),
                       child: FilterChip(
                         label: Text(tag.emoji.isNotEmpty ? '${tag.emoji} ${tag.name}' : tag.name),
                         selected: isSelected,
-                        onSelected: (_) => setState(() => _selectedTagId = isSelected ? null : tag.id),
+                        onSelected: (_) => setState(() {
+                          if (isSelected) {
+                            _selectedTagIds.remove(tag.id);
+                          } else {
+                            _selectedTagIds.add(tag.id!);
+                          }
+                        }),
                         selectedColor: Color(tag.color),
                         checkmarkColor: Colors.white,
                       ),
@@ -308,20 +315,35 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                         .where((c) => c.name.contains(query) || (c.contact ?? '').contains(query))
                         .toList();
                 final quickIds = quickFilterIdsAsync.value;
-                final filtered = (quickFilter == ClientQuickFilter.all || quickIds == null)
+                final quickFiltered = (quickFilter == ClientQuickFilter.all || quickIds == null)
                     ? searched
                     : searched.where((c) => quickIds.contains(c.id)).toList();
-                final clients = _applySort(filtered);
+                // AND semantics: a client is shown only when it carries every
+                // selected tag, so combining tags narrows the list.
+                final tagFiltered = _selectedTagIds.isEmpty
+                    ? quickFiltered
+                    : quickFiltered.where((c) {
+                        final ids = tagFilterAsync.value?[c.id] ?? const <int>[];
+                        return _selectedTagIds.every(ids.contains);
+                      }).toList();
+                final clients = _applySort(tagFiltered);
                 if (clients.isEmpty) {
-                  return quickFilter != ClientQuickFilter.all
-                      ? AppEmptyState(
-                          icon: Icons.filter_alt_off_outlined,
-                          title: s.noResults,
-                          subtitle: _quickFilterLabel(quickFilter, s),
-                        )
-                      : query.isEmpty
-                          ? AppEmptyState(icon: Icons.people_outline, title: s.emptyClientsTitle, subtitle: s.emptyClientsSubtitle)
-                          : AppEmptyState(icon: Icons.search_off, title: s.noResults, subtitle: s.noResultsSubtitle);
+                  if (quickFilter != ClientQuickFilter.all) {
+                    return AppEmptyState(
+                      icon: Icons.filter_alt_off_outlined,
+                      title: s.noResults,
+                      subtitle: _quickFilterLabel(quickFilter, s),
+                    );
+                  }
+                  if (_selectedTagIds.isNotEmpty) {
+                    return AppEmptyState(
+                      icon: Icons.filter_alt_off_outlined,
+                      title: s.noClientsWithTag,
+                    );
+                  }
+                  return query.isEmpty
+                      ? AppEmptyState(icon: Icons.people_outline, title: s.emptyClientsTitle, subtitle: s.emptyClientsSubtitle)
+                      : AppEmptyState(icon: Icons.search_off, title: s.noResults, subtitle: s.noResultsSubtitle);
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
