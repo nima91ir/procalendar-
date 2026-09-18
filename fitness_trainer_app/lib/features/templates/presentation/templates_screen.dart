@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
@@ -13,16 +14,17 @@ class TemplatesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tones;
+    final s = AppStrings.of(context);
     final templatesAsync = ref.watch(allTemplatesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('قالب‌های برنامه')),
+      appBar: AppBar(title: Text(s.templatesTitle)),
       body: templatesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => AppErrorState(message: e.toString()),
         data: (templates) {
           if (templates.isEmpty) {
-            return const AppEmptyState(icon: Icons.fitness_center, title: 'قالبی تعریف نشده', subtitle: 'برای شروع اولین قالب را ایجاد کنید');
+            return AppEmptyState(icon: Icons.fitness_center, title: s.noTemplatesTitle, subtitle: s.noTemplatesSubtitle);
           }
           return ListView.builder(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -50,7 +52,7 @@ class TemplatesScreen extends ConsumerWidget {
                                   color: t.primaryLight,
                                   borderRadius: BorderRadius.circular(AppSpacing.xxl),
                                 ),
-                                child: Text('$usageCount مورد استفاده', style: AppTypography.labelMedium),
+                                child: Text(s.usedByCount(usageCount), style: AppTypography.labelMedium),
                               ),
                             IconButton(
                               onPressed: () {
@@ -63,11 +65,11 @@ class TemplatesScreen extends ConsumerWidget {
                                 final confirm = await showDialog<bool>(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
-                                    title: const Text('حذف قالب'),
-                                    content: Text('آیا از حذف "${template.name}" اطمینان دارید؟'),
+                                    title: Text(s.deleteTemplateTitle),
+                                    content: Text(s.deleteTemplateMessage(template.name)),
                                     actions: [
-                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('خیر')),
-                                      ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('بله')),
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(s.no)),
+                                      ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(s.yes)),
                                     ],
                                   ),
                                 );
@@ -83,11 +85,11 @@ class TemplatesScreen extends ConsumerWidget {
                         const SizedBox(height: AppSpacing.sm),
                         Row(
                           children: [
-                            AppPill(label: '${template.sessions} جلسه', color: t.primaryLight),
+                            AppPill(label: s.sessionsCount(template.sessions), color: t.primaryLight),
                             const SizedBox(width: AppSpacing.sm),
-                            AppPill(label: '${template.days} روز', color: t.surfaceVariant),
+                            AppPill(label: s.daysCount(template.days), color: t.surfaceVariant),
                             const SizedBox(width: AppSpacing.sm),
-                            AppPill(label: 'هر ${template.days ~/ template.sessions} روز یک جلسه', color: t.warningSoft),
+                            AppPill(label: s.oneSessionPerDays(template.days ~/ template.sessions), color: t.warningSoft),
                           ],
                         ),
                       ],
@@ -105,7 +107,7 @@ class TemplatesScreen extends ConsumerWidget {
           Navigator.pushNamed(context, AppRoutes.addTemplate);
         },
         icon: const Icon(Icons.add),
-        label: const Text('قالب جدید'),
+        label: Text(s.addTemplate),
       ),
     );
   }

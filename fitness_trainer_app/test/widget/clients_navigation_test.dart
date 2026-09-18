@@ -18,36 +18,47 @@ Future<void> settle(WidgetTester tester) async {
   }
 }
 
-void main() {
-  testWidgets('tapping a client in the list opens the client detail screen', (tester) async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    await ClientsService(ClientsRepository(db)).createClient('سارا محمدی');
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db)],
-        child: MaterialApp(
-          theme: AppTheme.light,
-          locale: const Locale('fa'),
-          supportedLocales: const [Locale('fa'), Locale('en')],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: const HeroMode(enabled: false, child: MainShell()),
-          onGenerateRoute: AppRouter.onGenerateRoute,
-        ),
+Future<void> pumpShell(WidgetTester tester, AppDatabase db) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [databaseProvider.overrideWithValue(db)],
+      child: MaterialApp(
+        theme: AppTheme.light,
+        locale: const Locale('fa'),
+        supportedLocales: const [Locale('fa'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: const MainShell(),
+        onGenerateRoute: AppRouter.onGenerateRoute,
       ),
-    );
-    await settle(tester);
+    ),
+  );
+  await settle(tester);
 
-    final bottomNav = find.byType(NavigationBar);
-    final clientsIcon = find.descendant(of: bottomNav, matching: find.byIcon(Icons.people_outline));
-    await tester.tap(clientsIcon);
-    await tester.pump();
-    await settle(tester);
+  final bottomNav = find.byType(NavigationBar);
+  final clientsIcon = find.descendant(of: bottomNav, matching: find.byIcon(Icons.people_outline));
+  await tester.tap(clientsIcon);
+  await tester.pump();
+  await settle(tester);
+}
+
+void main() {
+  late AppDatabase db;
+
+  setUp(() async {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    await ClientsService(ClientsRepository(db)).createClient('سارا محمدی');
+  });
+
+  tearDown(() async {
+    await db.close();
+  });
+
+  testWidgets('tapping a client in the list opens the client detail screen', (tester) async {
+    await pumpShell(tester, db);
 
     expect(find.text('مشتریان'), findsWidgets);
     expect(find.text('سارا محمدی'), findsOneWidget);
@@ -55,19 +66,22 @@ void main() {
     await tester.tap(find.text('سارا محمدی'));
     await settle(tester);
 
-    // Client bottom sheet with quick actions.
-    expect(find.text('مشاهده پروفایل'), findsOneWidget);
+    // Detail screen markers (the "برنامه‌ها" label also appears on the bottom
+    // navigation bar, which stays visible with nested navigators).
+    expect(find.text('اطلاعات تماس'), findsOneWidget);
+    expect(find.text('برنامه‌ها'), findsWidgets);
+  });
+
+  testWidgets('long-pressing a client opens the quick actions sheet', (tester) async {
+    await pumpShell(tester, db);
+
+    await tester.longPress(find.text('سارا محمدی'));
+    await settle(tester);
+
     expect(find.text('ثبت سریع امروز'), findsOneWidget);
     expect(find.text('حاضر'), findsOneWidget);
     expect(find.text('غایب'), findsOneWidget);
     expect(find.text('ویرایش مشتری'), findsOneWidget);
     expect(find.text('حذف مشتری'), findsOneWidget);
-
-    await tester.tap(find.text('مشاهده پروفایل'));
-    await settle(tester);
-
-    // Detail screen markers.
-    expect(find.text('اطلاعات تماس'), findsOneWidget);
-    expect(find.text('برنامه‌ها'), findsOneWidget);
   });
 }

@@ -11,6 +11,7 @@ import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_provi
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
+import 'package:fitness_trainer_app/routing/routes.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -144,6 +145,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onSelectionChanged: (selection) {
                 ref.read(languageProvider.notifier).setLanguage(selection.first);
               },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          SectionHeader(title: s.navTags),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Material(
+              type: MaterialType.transparency,
+              child: ListTile(
+                leading: const Icon(Icons.label_outline),
+                title: Text(s.manageTags),
+                trailing: const Icon(Icons.chevron_left),
+                onTap: () => Navigator.pushNamed(context, AppRoutes.tags),
+              ),
             ),
           ),
           if (kDebugMode) ...[

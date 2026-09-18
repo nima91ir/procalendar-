@@ -112,7 +112,6 @@ class AppStrings {
   final String sortName;
   final String sortNewest;
   final String sortBonus;
-  final String viewProfile;
   final String noResults;
   final String noResultsSubtitle;
 
@@ -158,6 +157,31 @@ class AppStrings {
   final String addTag;
   final String noTagsDefined;
   final String pageNotFound;
+
+  // Templates screen
+  final String templatesTitle;
+  final String noTemplatesTitle;
+  final String noTemplatesSubtitle;
+  final String addTemplate;
+  final String usedByCountTemplate;
+  final String deleteTemplateTitle;
+  final String deleteTemplateMessageTemplate;
+  final String sessionsCountTemplate;
+  final String daysCountTemplate;
+  final String oneSessionPerDaysTemplate;
+
+  // Tags screen
+  final String newTag;
+  final String editTagTitle;
+  final String deleteTagTitle;
+  final String deleteTagMessageTemplate;
+  final String tagNameLabel;
+  final String emojiOptionalLabel;
+  final String colorLabel;
+  final String tagClientCountTemplate;
+  final String noTagsDefinedSubtitle;
+  final String manageTags;
+  final String clientActionsTitle;
 
   const AppStrings({
     required this.isPersian,
@@ -250,7 +274,6 @@ class AppStrings {
     required this.sortName,
     required this.sortNewest,
     required this.sortBonus,
-    required this.viewProfile,
     required this.noResults,
     required this.noResultsSubtitle,
     required this.clientsTitle,
@@ -291,6 +314,27 @@ class AppStrings {
     required this.addTag,
     required this.noTagsDefined,
     required this.pageNotFound,
+    required this.templatesTitle,
+    required this.noTemplatesTitle,
+    required this.noTemplatesSubtitle,
+    required this.addTemplate,
+    required this.usedByCountTemplate,
+    required this.deleteTemplateTitle,
+    required this.deleteTemplateMessageTemplate,
+    required this.sessionsCountTemplate,
+    required this.daysCountTemplate,
+    required this.oneSessionPerDaysTemplate,
+    required this.newTag,
+    required this.editTagTitle,
+    required this.deleteTagTitle,
+    required this.deleteTagMessageTemplate,
+    required this.tagNameLabel,
+    required this.emojiOptionalLabel,
+    required this.colorLabel,
+    required this.tagClientCountTemplate,
+    required this.noTagsDefinedSubtitle,
+    required this.manageTags,
+    required this.clientActionsTitle,
   });
 
   String _digits(String value) => isPersian ? toPersian(value) : value;
@@ -313,6 +357,13 @@ class AppStrings {
   String clientDeleted(String name) => clientDeletedTemplate.replaceAll('{name}', name);
   String bonusSessionsCount(int count) =>
       bonusSessionCountTemplate.replaceAll('{count}', _digits('$count'));
+  String usedByCount(int count) => usedByCountTemplate.replaceAll('{count}', _digits('$count'));
+  String deleteTemplateMessage(String name) => deleteTemplateMessageTemplate.replaceAll('{name}', name);
+  String sessionsCount(int count) => sessionsCountTemplate.replaceAll('{count}', _digits('$count'));
+  String daysCount(int count) => daysCountTemplate.replaceAll('{count}', _digits('$count'));
+  String oneSessionPerDays(int days) => oneSessionPerDaysTemplate.replaceAll('{days}', _digits('$days'));
+  String deleteTagMessage(String name) => deleteTagMessageTemplate.replaceAll('{name}', name);
+  String tagClientCount(int count) => tagClientCountTemplate.replaceAll('{count}', _digits('$count'));
 
   static AppStrings of(BuildContext context) {
     final code = Localizations.localeOf(context).languageCode;
@@ -410,7 +461,6 @@ class AppStrings {
     sortName: 'نام',
     sortNewest: 'جدیدترین',
     sortBonus: 'جلسات اضافه',
-    viewProfile: 'مشاهده پروفایل',
     noResults: 'نتیجه‌ای یافت نشد',
     noResultsSubtitle: 'عبارت دیگری را جستجو کنید',
     clientsTitle: 'مشتریان',
@@ -450,6 +500,27 @@ class AppStrings {
     addTag: 'افزودن برچسب',
     noTagsDefined: 'هنوز برچسبی ساخته نشده',
     pageNotFound: 'صفحه مورد نظر پیدا نشد',
+    templatesTitle: 'قالب‌های برنامه',
+    noTemplatesTitle: 'قالبی تعریف نشده',
+    noTemplatesSubtitle: 'برای شروع اولین قالب را ایجاد کنید',
+    addTemplate: 'قالب جدید',
+    usedByCountTemplate: '{count} مورد استفاده',
+    deleteTemplateTitle: 'حذف قالب',
+    deleteTemplateMessageTemplate: 'آیا از حذف "{name}" اطمینان دارید؟',
+    sessionsCountTemplate: '{count} جلسه',
+    daysCountTemplate: '{count} روز',
+    oneSessionPerDaysTemplate: 'هر {days} روز یک جلسه',
+    newTag: 'برچسب جدید',
+    editTagTitle: 'ویرایش برچسب',
+    deleteTagTitle: 'حذف برچسب',
+    deleteTagMessageTemplate: 'آیا از حذف "{name}" اطمینان دارید؟',
+    tagNameLabel: 'نام برچسب',
+    emojiOptionalLabel: 'ایموجی (اختیاری)',
+    colorLabel: 'رنگ: ',
+    tagClientCountTemplate: '{count} مشتری',
+    noTagsDefinedSubtitle: 'برای سازماندهی مشتریان برچسب ایجاد کنید',
+    manageTags: 'مدیریت برچسب‌ها',
+    clientActionsTitle: 'گزینه‌های مشتری',
   );
 
 
@@ -545,7 +616,6 @@ class AppStrings {
     sortName: 'Name',
     sortNewest: 'Newest',
     sortBonus: 'Bonus sessions',
-    viewProfile: 'View profile',
     noResults: 'No results found',
     noResultsSubtitle: 'Try a different search term',
     clientsTitle: 'Clients',
@@ -588,5 +658,26 @@ class AppStrings {
     addTag: 'Add tag',
     noTagsDefined: 'No tags created yet',
     pageNotFound: 'Page not found',
+    templatesTitle: 'Program templates',
+    noTemplatesTitle: 'No templates yet',
+    noTemplatesSubtitle: 'Create your first template to get started',
+    addTemplate: 'New template',
+    usedByCountTemplate: 'Used {count} times',
+    deleteTemplateTitle: 'Delete template',
+    deleteTemplateMessageTemplate: 'Delete "{name}"?',
+    sessionsCountTemplate: '{count} sessions',
+    daysCountTemplate: '{count} days',
+    oneSessionPerDaysTemplate: 'One session every {days} days',
+    newTag: 'New tag',
+    editTagTitle: 'Edit tag',
+    deleteTagTitle: 'Delete tag',
+    deleteTagMessageTemplate: 'Delete "{name}"?',
+    tagNameLabel: 'Tag name',
+    emojiOptionalLabel: 'Emoji (optional)',
+    colorLabel: 'Color: ',
+    tagClientCountTemplate: '{count} clients',
+    noTagsDefinedSubtitle: 'Create tags to organize your clients',
+    manageTags: 'Manage tags',
+    clientActionsTitle: 'Client actions',
   );
 }

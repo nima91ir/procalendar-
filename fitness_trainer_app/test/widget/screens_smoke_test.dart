@@ -100,14 +100,12 @@ void main() {
         '/dashboard': 'تقویم حرفه‌ای',
         '/clients': 'مشتریان',
         '/templates': 'قالب‌های برنامه',
-        '/tags': 'برچسب‌ها',
         '/settings': 'تنظیمات',
       };
 
       const tabIcons = <String, IconData>{
         '/clients': Icons.people_outline,
         '/templates': Icons.calendar_today_outlined,
-        '/tags': Icons.label_outline,
         '/settings': Icons.settings_outlined,
       };
 
@@ -134,6 +132,7 @@ void main() {
       final subRoutes = <String, String>{
         '/clients/add': 'افزودن مشتری',
         '/templates/add': 'قالب جدید',
+        '/tags': 'برچسب‌ها',
       };
 
       subRoutes.forEach((route, expectedText) {

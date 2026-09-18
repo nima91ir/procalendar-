@@ -17,11 +17,15 @@ import 'package:fitness_trainer_app/routing/routes.dart';
 class ClientCard extends ConsumerWidget {
   final int clientId;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onShowActions;
 
   const ClientCard({
     super.key,
     required this.clientId,
     this.onTap,
+    this.onLongPress,
+    this.onShowActions,
   });
 
   Widget _buildPlaceholder(BuildContext context) {
@@ -82,6 +86,7 @@ class ClientCard extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -127,6 +132,13 @@ class ClientCard extends ConsumerWidget {
                         icon: Icon(Icons.calendar_month_outlined, size: 20, color: t.onSurfaceVar),
                         onPressed: () => Navigator.pushNamed(context, '${AppRoutes.attendance}/$clientId'),
                       ),
+                      if (onShowActions != null)
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: s.clientActionsTitle,
+                          icon: Icon(Icons.more_vert, size: 20, color: t.onSurfaceVar),
+                          onPressed: onShowActions,
+                        ),
                     ],
                   ),
                   if (plan != null) ...[

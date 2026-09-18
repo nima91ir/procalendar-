@@ -18,7 +18,6 @@ import 'package:fitness_trainer_app/features/clients/providers/clients_providers
 import 'package:fitness_trainer_app/features/templates/presentation/templates_screen.dart';
 import 'package:fitness_trainer_app/features/templates/presentation/add_edit_template_screen.dart';
 import 'package:fitness_trainer_app/features/tags/presentation/tags_screen.dart';
-import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/presentation/settings_screen.dart';
@@ -131,13 +130,22 @@ class AppRouter {
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     final name = settings.name;
-    MaterialPageRoute<dynamic> page(Widget child) => MaterialPageRoute(
-      settings: settings,
-      builder: (_) => child,
-    );
+    MaterialPageRoute<dynamic> page(Widget child) =>
+        MaterialPageRoute(
+          settings: settings,
+          builder: (_) => child,
+        );
+
+    // Tab roots. `MainShell` gives each tab its own nested `Navigator`, so the
+    // router is also the generator for the four primary screens.
+    if (name == AppRoutes.dashboard) return page(const DashboardScreen());
+    if (name == AppRoutes.clients) return page(const ClientsScreen());
+    if (name == AppRoutes.templates) return page(const TemplatesScreen());
+    if (name == AppRoutes.settings) return page(const SettingsScreen());
 
     if (name == AppRoutes.addClient) return page(const AddEditClientScreen());
     if (name == AppRoutes.addTemplate) return page(const AddEditTemplateScreen());
+    if (name == AppRoutes.tags) return page(const TagsScreen());
 
     final clientDetailId = _idFrom(name, AppRoutes.clientDetail);
     if (clientDetailId != null) return page(ClientDetailScreen(clientId: clientDetailId));
@@ -172,10 +180,16 @@ class AppRouter {
   }
 }
 
-/// Wraps the five primary screens with a persistent bottom navigation bar.
+/// Wraps the four primary screens with a persistent bottom navigation bar.
 ///
-/// Tab switching is handled by an `IndexedStack` so each tab's state is
-/// preserved and there is no duplicate-route history.
+/// Each tab has its own nested [Navigator], so every tab keeps its own back
+/// stack (a detail screen opened in one tab stays when you switch away and
+/// back). The `IndexedStack` preserves each tab's state. A nested navigator
+/// does not receive platform back events itself — the root navigator's first
+/// route just bubbles them (which would exit the app) — so this widget
+/// registers a [WidgetsBindingObserver] and forwards back presses to the
+/// active tab's navigator, falling back to app exit when it has nothing left
+/// to pop.
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
@@ -183,14 +197,41 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends ConsumerState<MainShell> {
-  static const _screens = [
-    DashboardScreen(),
-    ClientsScreen(),
-    TemplatesScreen(),
-    TagsScreen(),
-    SettingsScreen(),
+class _MainShellState extends ConsumerState<MainShell>
+    with WidgetsBindingObserver {
+  static const _tabRoutes = [
+    AppRoutes.dashboard,
+    AppRoutes.clients,
+    AppRoutes.templates,
+    AppRoutes.settings,
   ];
+
+  final _tabNavigators =
+      List.generate(_tabRoutes.length, (_) => GlobalKey<NavigatorState>());
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Platform back button. [WidgetsApp.didPopRoute] runs first and pops the
+  /// root navigator; its first route (this shell) bubbles, so it returns
+  /// false and we get the event. Pop the active tab's stack instead, and only
+  /// return false (letting the system close the app) when it is empty.
+  @override
+  Future<bool> didPopRoute() async {
+    final index = ref.read(tabIndexProvider);
+    final navigator = _tabNavigators[index].currentState;
+    if (navigator == null || !navigator.canPop()) return false;
+    return navigator.maybePop();
+  }
 
   void _invalidateTabProviders(int index) {
     switch (index) {
@@ -212,9 +253,6 @@ class _MainShellState extends ConsumerState<MainShell> {
         ref.invalidate(allTemplatesProvider);
         break;
       case 3:
-        ref.invalidate(allTagsProvider);
-        break;
-      case 4:
         break;
     }
   }
@@ -225,10 +263,19 @@ class _MainShellState extends ConsumerState<MainShell> {
     ref.listen<int>(tabIndexProvider, (previous, next) {
       if (previous != next) _invalidateTabProviders(next);
     });
+
     return Scaffold(
       body: IndexedStack(
         index: currentIndex,
-        children: _screens,
+        children: [
+          for (var i = 0; i < _tabRoutes.length; i++)
+            Navigator(
+              key: _tabNavigators[i],
+              initialRoute: _tabRoutes[i],
+              onGenerateRoute: AppRouter.onGenerateRoute,
+              onUnknownRoute: AppRouter.onUnknownRoute,
+            ),
+        ],
       ),
       bottomNavigationBar: BottomNavBar(
         selectedIndex: currentIndex,

@@ -1,5 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -126,5 +127,74 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('وضعیت جلسات'), findsOneWidget);
+  });
+
+  testWidgets('settings manage-tags row opens the tags screen', (tester) async {
+    await tester.pumpWidget(_harness(db, home: const MainShell()));
+    await settle(tester);
+
+    final settingsIcon = find.descendant(
+      of: find.byType(NavigationBar),
+      matching: find.byIcon(Icons.settings_outlined),
+    );
+    await tester.tap(settingsIcon);
+    await tester.pump();
+    await settle(tester);
+
+    final row = find.text('مدیریت برچسب‌ها');
+    await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+    await tester.tap(row);
+    await settle(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('برچسب‌ها'), findsOneWidget);
+  });
+
+  testWidgets('pushed screens keep the bottom bar and system back pops the tab stack', (tester) async {
+    final pops = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemNavigator.pop') pops.add(call);
+        return null;
+      },
+    );
+
+    await tester.pumpWidget(_harness(db, home: const MainShell()));
+    await settle(tester);
+
+    final clientsIcon = find.descendant(
+      of: find.byType(NavigationBar),
+      matching: find.byIcon(Icons.people_outline),
+    );
+    await tester.tap(clientsIcon);
+    await tester.pump();
+    await settle(tester);
+
+    await tester.tap(find.text('سارا محمدی'));
+    await settle(tester);
+
+    // A pushed route lives inside the tab's own back stack, so the bottom
+    // bar stays visible.
+    expect(find.text('اطلاعات تماس'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+
+    // First system back pops the nested detail screen; the app stays alive.
+    final handled = await tester.binding.handlePopRoute();
+    await settle(tester);
+
+    expect(handled, isTrue);
+    expect(find.text('اطلاعات تماس'), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(pops, isEmpty);
+    expect(tester.takeException(), isNull);
+
+    // Second back has no nested routes left, so the shell reports it as
+    // unhandled and the system pops the app.
+    final handled2 = await tester.binding.handlePopRoute();
+    await settle(tester);
+
+    expect(handled2, isFalse);
+    expect(pops, hasLength(1));
   });
 }

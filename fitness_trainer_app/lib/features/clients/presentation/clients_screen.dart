@@ -96,7 +96,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     }
   }
 
-  void _openClientSheet(domain.Client client) {
+  /// Bottom-sheet quick actions for a client, opened by long-press or the
+  /// card's ⋮ button. Tapping the card itself opens the client profile.
+  void _showClientActions(domain.Client client) {
     final s = AppStrings.of(context);
     final t = context.tones;
     final clientId = client.id!;
@@ -108,14 +110,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xs),
             child: Text(client.name, style: Theme.of(context).textTheme.titleLarge),
-          ),
-          ListTile(
-            leading: const Icon(Icons.person_outline),
-            title: Text(s.viewProfile),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '${AppRoutes.clientDetail}/$clientId');
-            },
           ),
           ListTile(
             leading: const Icon(Icons.calendar_month_outlined),
@@ -366,7 +360,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                         },
                         child: ClientCard(
                           clientId: client.id!,
-                          onTap: () => _openClientSheet(client),
+                          onTap: () => Navigator.pushNamed(context, '${AppRoutes.clientDetail}/${client.id}'),
+                          onLongPress: () => _showClientActions(client),
+                          onShowActions: () => _showClientActions(client),
                         ),
                       );
                     },

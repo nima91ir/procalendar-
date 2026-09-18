@@ -45,11 +45,6 @@ class BottomNavBar extends ConsumerWidget {
           label: s.navTemplates,
         ),
         NavigationDestination(
-          icon: const Icon(Icons.label_outline),
-          selectedIcon: const Icon(Icons.label),
-          label: s.navTags,
-        ),
-        NavigationDestination(
           icon: const Icon(Icons.settings_outlined),
           selectedIcon: const Icon(Icons.settings),
           label: s.navSettings,

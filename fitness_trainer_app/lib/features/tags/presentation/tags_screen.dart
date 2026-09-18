@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
@@ -31,16 +32,17 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
+    final s = AppStrings.of(context);
     final tagsAsync = ref.watch(allTagsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('برچسب‌ها')),
+      appBar: AppBar(title: Text(s.navTags)),
       body: tagsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => AppErrorState(message: e.toString()),
         data: (tags) {
           if (tags.isEmpty) {
-            return const AppEmptyState(icon: Icons.label_outline, title: 'برچسبی تعریف نشده', subtitle: 'برای سازماندهی مشتریان برچسب ایجاد کنید');
+            return AppEmptyState(icon: Icons.label_outline, title: s.noTagsDefined, subtitle: s.noTagsDefinedSubtitle);
           }
           return ListView.builder(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -56,7 +58,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                         child: Text(tag.emoji.isNotEmpty ? tag.emoji : tag.name[0], style: const TextStyle(color: Colors.white)),
                       ),
                       title: Text(tag.name, style: AppTypography.bodyLarge),
-                      subtitle: Text('${countAsync.value ?? 0} مشتری', style: AppTypography.bodySmall),
+                      subtitle: Text(s.tagClientCount(countAsync.value ?? 0), style: AppTypography.bodySmall),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -69,11 +71,11 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                               final confirm = await showDialog<bool>(
                                 context: context,
                                 builder: (ctx) => AlertDialog(
-                                  title: const Text('حذف برچسب'),
-                                  content: Text('آیا از حذف "${tag.name}" اطمینان دارید؟'),
+                                  title: Text(s.deleteTagTitle),
+                                  content: Text(s.deleteTagMessage(tag.name)),
                                   actions: [
-                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('خیر')),
-                                    ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('بله')),
+                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(s.no)),
+                                    ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(s.yes)),
                                   ],
                                 ),
                               );
@@ -96,12 +98,13 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
         heroTag: 'tagsFab',
         onPressed: () => _showAddDialog(context),
         icon: const Icon(Icons.add),
-        label: const Text('برچسب جدید'),
+        label: Text(s.newTag),
       ),
     );
   }
 
   void _showAddDialog(BuildContext context) {
+    final s = AppStrings.of(context);
     _nameController.clear();
     _emojiController.clear();
     _selectedColor = _colorOptions.first;
@@ -109,24 +112,24 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('برچسب جدید'),
+          title: Text(s.newTag),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'نام برچسب'),
+                decoration: InputDecoration(labelText: s.tagNameLabel),
                 autofocus: true,
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _emojiController,
-                decoration: const InputDecoration(labelText: 'ایموجی (اختیاری)'),
+                decoration: InputDecoration(labelText: s.emojiOptionalLabel),
               ),
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  const Text('رنگ: '),
+                  Text(s.colorLabel),
                   const SizedBox(width: AppSpacing.sm),
                   ..._colorOptions.map((color) {
                     return GestureDetector(
@@ -152,7 +155,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('لغو')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(s.cancel)),
             ElevatedButton(
               onPressed: () async {
                 if (_nameController.text.trim().isEmpty) return;
@@ -160,7 +163,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                 ref.invalidate(allTagsProvider);
                 if (ctx.mounted) Navigator.pop(ctx);
               },
-              child: const Text('افزودن'),
+              child: Text(s.addTag),
             ),
           ],
         ),
@@ -169,6 +172,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
   }
 
   void _showEditDialog(BuildContext context, dynamic tag) {
+    final s = AppStrings.of(context);
     _nameController.text = tag.name;
     _emojiController.text = tag.emoji;
     _selectedColor = tag.color;
@@ -176,23 +180,23 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('ویرایش برچسب'),
+          title: Text(s.editTagTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'نام برچسب'),
+                decoration: InputDecoration(labelText: s.tagNameLabel),
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _emojiController,
-                decoration: const InputDecoration(labelText: 'ایموجی (اختیاری)'),
+                decoration: InputDecoration(labelText: s.emojiOptionalLabel),
               ),
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  const Text('رنگ: '),
+                  Text(s.colorLabel),
                   const SizedBox(width: AppSpacing.sm),
                   ..._colorOptions.map((color) {
                     return GestureDetector(
@@ -218,7 +222,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('لغو')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(s.cancel)),
             ElevatedButton(
               onPressed: () async {
                 if (_nameController.text.trim().isEmpty) return;
@@ -226,7 +230,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                 ref.invalidate(allTagsProvider);
                 if (ctx.mounted) Navigator.pop(ctx);
               },
-              child: const Text('ذخیره'),
+              child: Text(s.save),
             ),
           ],
         ),

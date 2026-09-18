@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
 
 void main() {
-  testWidgets('BottomNavBar renders all five items', (WidgetTester tester) async {
+  testWidgets('BottomNavBar renders all four items', (WidgetTester tester) async {
     int selectedIndex = 0;
     await tester.pumpWidget(
       MaterialApp(
@@ -29,8 +29,8 @@ void main() {
     expect(find.text('داشبورد'), findsOneWidget);
     expect(find.text('مشتریان'), findsOneWidget);
     expect(find.text('برنامه‌ها'), findsOneWidget);
-    expect(find.text('برچسب‌ها'), findsOneWidget);
     expect(find.text('تنظیمات'), findsOneWidget);
+    expect(find.text('برچسب‌ها'), findsNothing);
 
     await tester.tap(find.text('مشتریان'));
     expect(selectedIndex, 1);
