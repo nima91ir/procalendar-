@@ -50,6 +50,7 @@ class ClientPlans extends Table {
 class Attendance extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get clientId => integer().references(Clients, #id, onDelete: KeyAction.cascade)();
+  IntColumn get planId => integer().nullable()();
   TextColumn get date => text()();
   TextColumn get status => text()();
   TextColumn get createdAt => text().withDefault(const Constant(''))();
@@ -82,7 +83,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -93,6 +94,9 @@ class AppDatabase extends _$AppDatabase {
       onUpgrade: (Migrator m, int from, int to) async {
         if (from < 2) {
           await m.addColumn(clientPlans, clientPlans.queueOrder);
+        }
+        if (from < 3) {
+          await m.addColumn(attendance, attendance.planId);
         }
       },
     );
@@ -181,11 +185,31 @@ class AppDatabase extends _$AppDatabase {
         ClientPlansCompanion(queueOrder: const Value(null)),
       );
 
-  Future<List<AttendanceData>> getClientAttendance(int clientId) => (select(attendance)..where((a) => a.clientId.equals(clientId))..orderBy([(a) => OrderingTerm.desc(a.date)])).get();
-  Future<AttendanceData?> getAttendance(int clientId, String date) => (select(attendance)..where((a) => a.clientId.equals(clientId) & a.date.equals(date))).getSingleOrNull();
+Future<List<AttendanceData>> getClientAttendance(int clientId) => (select(attendance)..where((a) => a.clientId.equals(clientId))..orderBy([(a) => OrderingTerm.desc(a.date)])).get();
+  Future<AttendanceData?> getAttendance(int clientId, String date) async {
+    return (select(attendance)
+          ..where((a) => a.clientId.equals(clientId) & a.date.equals(date))
+          ..orderBy([(a) => OrderingTerm.desc(a.id)])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+  Future<AttendanceData?> getPlanAttendanceForDate(int planId, String date) async {
+    return (select(attendance)
+          ..where((a) => a.planId.equals(planId) & a.date.equals(date))
+          ..orderBy([(a) => OrderingTerm.desc(a.id)])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+  Future<List<AttendanceData>> getPlanAttendance(int planId) => (select(attendance)..where((a) => a.planId.equals(planId))..orderBy([(a) => OrderingTerm.desc(a.date)])).get();
   Future<int> insertAttendance(AttendanceCompanion insert) => into(attendance).insert(insert);
   Future<bool> updateAttendance(AttendanceCompanion insert) => update(attendance).replace(insert);
   Future<int> deleteAttendance(int id) => (delete(attendance)..where((a) => a.id.equals(id))).go();
+  Future<int> addAttendance(AttendanceCompanion insert) => into(attendance).insert(insert);
+  Future<int> removeOneAttendance(int clientId, String date) async {
+  final row = await (select(attendance)..where((a) => a.clientId.equals(clientId) & a.date.equals(date))..orderBy([(a) => OrderingTerm.desc(a.id)])..limit(1)).getSingleOrNull();
+  if (row == null) return 0;
+  return deleteAttendance(row.id);
+}
   Stream<List<AttendanceData>> watchClientAttendance(int clientId) => (select(attendance)..where((a) => a.clientId.equals(clientId))..orderBy([(a) => OrderingTerm.desc(a.date)])).watch();
 
   Future<int> getTotalClients() async => (await select(clients).get()).length;

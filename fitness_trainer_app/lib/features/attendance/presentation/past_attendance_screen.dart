@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shamsi_date/shamsi_date.dart';
-import 'package:fitness_trainer_app/core/theme/app_colors.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
+import 'package:fitness_trainer_app/core/utils/date_format.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
@@ -12,15 +14,18 @@ import 'package:fitness_trainer_app/features/attendance/presentation/widgets/att
 import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
+import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
 
 /// Attendance history + marking screen for a single client.
 ///
-/// Marking a day consumes a session from the active plan (or a bonus session
-/// when the plan has none left) and undo gives it back, so this screen is
-/// also where the plan/session bookkeeping can be verified.
+/// A client can have several attendance records per day (past or today).
+/// Adding a record consumes a session from the active plan (or a bonus
+/// session when the plan has none left); deleting a record refunds it, so
+/// this screen is also where the plan/session bookkeeping can be verified.
 class PastAttendanceScreen extends ConsumerStatefulWidget {
   final int clientId;
-  const PastAttendanceScreen({super.key, required this.clientId});
+  final int? planId;
+  const PastAttendanceScreen({super.key, required this.clientId, this.planId});
 
   @override
   ConsumerState<PastAttendanceScreen> createState() => _PastAttendanceScreenState();
@@ -54,31 +59,43 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
     });
   }
 
-  /// Applies a status change for [date]; an empty status means "undo".
-  Future<void> _apply(String date, String status) async {
-    final notifier = ref.read(attendanceProvider.notifier);
-    final messenger = ScaffoldMessenger.of(context);
-    if (status.isEmpty) {
-      await notifier.undoAttendance(widget.clientId, date);
-    } else {
-      await notifier.markAttendance(widget.clientId, date, status);
-    }
-    if (!mounted) return;
-    final label = status.isEmpty ? 'ثبت حذف شد' : status == 'present' ? 'حضور ثبت شد' : 'غیبت ثبت شد';
-    messenger.showSnackBar(SnackBar(content: Text('$label · ${formatJalaliLong(date)}')));
+  String _localizedDate(String date, AppStrings s, String lang) => formatDateLong(date, lang);
+
+  void _openDaySheet(String date) {
+    final s = AppStrings.of(context);
+    final lang = ref.read(languageProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _DayAttendanceSheet(
+        clientId: widget.clientId,
+        planId: widget.planId,
+        date: date,
+        dateLabel: _localizedDate(date, s, lang),
+        s: s,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final attendanceMapAsync = ref.watch(clientAttendanceMapProvider(widget.clientId));
-    final recordsAsync = ref.watch(clientAttendanceProvider(widget.clientId));
+    final t = context.tones;
+    final s = AppStrings.of(context);
+    final lang = ref.watch(languageProvider);
+    final attendanceMapAsync = widget.planId != null
+        ? ref.watch(planAttendanceMapProvider(widget.planId!))
+        : ref.watch(clientAttendanceMapProvider(widget.clientId));
+    final recordsAsync = widget.planId != null
+        ? ref.watch(planAttendanceProvider(widget.planId!))
+        : ref.watch(clientAttendanceProvider(widget.clientId));
     final plansAsync = ref.watch(clientPlansProvider(widget.clientId));
     final clientsAsync = ref.watch(allClientsProvider);
     final busy = ref.watch(attendanceProvider).isLoading;
 
     ref.listen(attendanceProvider, (previous, next) {
       next.whenOrNull(error: (error, _) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطا: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${s.errorPrefix}$error')));
       });
     });
 
@@ -87,14 +104,18 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
     final activePlan = plans?.where((p) => p.isActive).firstOrNull;
     final queuedCount = plans?.where((p) => p.isQueued).length ?? 0;
     final bonusSessions = client?.bonusSessions ?? 0;
-    final attendanceMap = attendanceMapAsync.value ?? const <String, String>{};
+    final attendanceMap = attendanceMapAsync.value ?? const <String, List<String>>{};
     final records = recordsAsync.value ?? const <AttendanceRecord>[];
 
     final today = jalaliToday();
+    final groupedRecords = <String, List<AttendanceRecord>>{};
+    for (final record in records) {
+      groupedRecords.putIfAbsent(record.date, () => []).add(record);
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(client?.name ?? 'حضور و غیاب'),
+        title: Text(client?.name ?? s.appTitle),
         bottom: busy
             ? const PreferredSize(
                 preferredSize: Size.fromHeight(3),
@@ -106,37 +127,51 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
           _SessionSummaryCard(
+            s: s,
             activePlanRemaining: activePlan?.remaining,
             activePlanSessions: activePlan?.sessions,
             bonusSessions: bonusSessions,
             queuedCount: queuedCount,
-            recordedDays: records.length,
+            recordedCount: records.length,
           ),
           const SizedBox(height: AppSpacing.lg),
-          SectionHeader(title: 'ثبت سریع امروز'),
+          SectionHeader(title: s.quickAddToday),
           Row(
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _apply(today, 'present'),
-                  icon: const Icon(Icons.check),
-                  label: const Text('حاضر'),
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await ref.read(attendanceProvider.notifier).addSession(
+                          widget.clientId,
+                          today,
+                          status: 'present',
+                          planId: widget.planId,
+                        );
+                    if (!mounted) return;
+                    messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.present, _localizedDate(today, s, lang)))));
+                  },
+                  icon: const Icon(Icons.add),
+                  label: Text('${s.present} +'),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _apply(today, 'absent'),
-                  icon: const Icon(Icons.close),
-                  label: const Text('غایب'),
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await ref.read(attendanceProvider.notifier).addSession(
+                          widget.clientId,
+                          today,
+                          status: 'absent',
+                          planId: widget.planId,
+                        );
+                    if (!mounted) return;
+                    messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.absent, _localizedDate(today, s, lang)))));
+                  },
+                  icon: const Icon(Icons.add),
+                  label: Text('${s.absent} +'),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              IconButton(
-                onPressed: () => _apply(today, ''),
-                icon: const Icon(Icons.undo),
-                tooltip: 'لغو ثبت امروز',
-                color: AppColors.error,
               ),
             ],
           ),
@@ -145,45 +180,79 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
             year: _year,
             month: _month,
             attendanceMap: attendanceMap,
-            onDayChanged: _apply,
+            onDayTapped: _openDaySheet,
             onPreviousMonth: () => _shiftMonth(-1),
             onNextMonth: () => _shiftMonth(1),
             todayKey: jalaliToday(),
           ),
           const SizedBox(height: AppSpacing.xxl),
-          SectionHeader(title: 'سوابق ثبت شده'),
+          SectionHeader(title: s.attendanceHistory),
           if (records.isEmpty)
-            const AppEmptyState(
+            AppEmptyState(
               icon: Icons.history,
-              title: 'هنوز سابقه‌ای ثبت نشده',
-              subtitle: 'روی روزهای تقویم بزنید تا وضعیت ثبت شود',
+              title: s.noHistoryYet,
+              subtitle: s.noHistorySubtitle,
             )
           else
-            ...records.map((record) {
-              final isPresent = record.isPresent;
-              return Card(
-                margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: ListTile(
-                  leading: Icon(
-                    isPresent ? Icons.check_circle : Icons.cancel,
-                    color: isPresent ? AppColors.present : AppColors.absent,
+            ...groupedRecords.entries.map((entry) {
+              final dateRecords = entry.value;
+              final date = entry.key;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    child: Row(
+                      children: [
+                        Text(formatDateLong(date, lang), style: AppTypography.bodyMedium),
+                        const SizedBox(width: AppSpacing.sm),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: t.primaryLight,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          child: Text(
+                            toPersian(dateRecords.length.toString()),
+                            style: AppTypography.labelMedium.copyWith(color: t.onSurface),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  title: Text(formatJalaliLong(record.date)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppPill(
-                        label: isPresent ? 'حاضر' : 'غایب',
-                        color: isPresent ? AppColors.successSoft : AppColors.errorSoft,
+                  ...dateRecords.map((record) {
+                    final isPresent = record.isPresent;
+                    return AppCard(
+                      margin: const EdgeInsets.only(bottom: AppSpacing.sm, right: AppSpacing.lg),
+                      child: ListTile(
+                        leading: Icon(
+                          isPresent ? Icons.check_circle : Icons.cancel,
+                          color: isPresent ? t.present : t.absent,
+                        ),
+                        title: Text(isPresent ? s.present : s.absent),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AppPill(
+                              label: isPresent ? s.present : s.absent,
+                              color: isPresent ? t.successSoft : t.errorSoft,
+                            ),
+                            IconButton(
+                              onPressed: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                await ref.read(attendanceProvider.notifier).removeSession(widget.clientId, record.date);
+                                if (!mounted) return;
+                                messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(_localizedDate(record.date, s, lang)))));
+                              },
+                              icon: Icon(Icons.delete_outline, color: t.error),
+                              tooltip: s.deleteSession,
+                            ),
+                          ],
+                        ),
                       ),
-                      IconButton(
-                        onPressed: () => _apply(record.date, ''),
-                        icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                        tooltip: 'حذف و بازگشت جلسه',
-                      ),
-                    ],
-                  ),
-                ),
+                    );
+                  }),
+                ],
               );
             }),
         ],
@@ -191,56 +260,165 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
     );
   }
 }
+
+/// Bottom sheet for a single day: shows that day's records and lets the user
+/// add another present/absent record or delete an existing one.
+class _DayAttendanceSheet extends ConsumerWidget {
+  final int clientId;
+  final int? planId;
+  final String date;
+  final String dateLabel;
+  final AppStrings s;
+
+  const _DayAttendanceSheet({
+    required this.clientId,
+    required this.planId,
+    required this.date,
+    required this.dateLabel,
+    required this.s,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tones;
+    final recordsAsync = planId != null
+        ? ref.watch(planAttendanceProvider(planId!))
+        : ref.watch(clientAttendanceProvider(clientId));
+    final records = recordsAsync.value ?? const <AttendanceRecord>[];
+    final dayRecords = records.where((r) => r.date == date).toList();
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(dateLabel, style: AppTypography.headlineMedium, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await ref.read(attendanceProvider.notifier).addSession(
+                            clientId,
+                            date,
+                            status: 'present',
+                            planId: planId,
+                          );
+                      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.present, dateLabel))));
+                    },
+                    icon: const Icon(Icons.add),
+                    label: Text('${s.present} +'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await ref.read(attendanceProvider.notifier).addSession(
+                            clientId,
+                            date,
+                            status: 'absent',
+                            planId: planId,
+                          );
+                      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.absent, dateLabel))));
+                    },
+                    icon: const Icon(Icons.add),
+                    label: Text('${s.absent} +'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (dayRecords.isEmpty)
+              AppEmptyState(icon: Icons.event_busy, title: s.noHistoryYet)
+            else
+              ...dayRecords.map((record) {
+                final isPresent = record.isPresent;
+                return AppCard(
+                  margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: ListTile(
+                    leading: Icon(
+                      isPresent ? Icons.check_circle : Icons.cancel,
+                      color: isPresent ? t.present : t.absent,
+                    ),
+                    title: Text(isPresent ? s.present : s.absent),
+                    trailing: IconButton(
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await ref.read(attendanceProvider.notifier).removeSession(clientId, record.date);
+                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(dateLabel))));
+                      },
+                      icon: Icon(Icons.delete_outline, color: t.error),
+                      tooltip: s.deleteSession,
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Shows the plan/bonus session position so the effect of marking attendance
-/// (and undoing it) is visible immediately.
+/// (and removing it) is visible immediately.
 class _SessionSummaryCard extends StatelessWidget {
+  final AppStrings s;
   final int? activePlanRemaining;
   final int? activePlanSessions;
   final int bonusSessions;
   final int queuedCount;
-  final int recordedDays;
+  final int recordedCount;
 
   const _SessionSummaryCard({
+    required this.s,
     required this.activePlanRemaining,
     required this.activePlanSessions,
     required this.bonusSessions,
     required this.queuedCount,
-    required this.recordedDays,
+    required this.recordedCount,
   });
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     final hasPlan = activePlanRemaining != null;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('وضعیت جلسات', style: AppTypography.headlineMedium),
+          Text(s.sessionStatusTitle, style: AppTypography.headlineMedium),
           const SizedBox(height: AppSpacing.md),
           _SummaryRow(
-            label: 'جلسات باقی‌مانده برنامه فعال',
+            label: s.activePlanRemainingLabel,
             value: hasPlan
                 ? '${toPersian(activePlanRemaining!.toString())} از ${toPersian(activePlanSessions.toString())}'
-                : 'برنامه فعالی نیست',
-            color: hasPlan ? AppColors.success : AppColors.onSurfaceVar,
+                : s.noActivePlanLabel,
+            color: hasPlan ? t.success : t.onSurfaceVar,
           ),
           const SizedBox(height: AppSpacing.sm),
           _SummaryRow(
-            label: 'جلسات اضافه (هدیه)',
+            label: s.bonusSessions,
             value: toPersian(bonusSessions.toString()),
-            color: bonusSessions > 0 ? AppColors.warning : AppColors.onSurfaceVar,
+            color: bonusSessions > 0 ? t.warning : t.onSurfaceVar,
           ),
           const SizedBox(height: AppSpacing.sm),
           _SummaryRow(
-            label: 'برنامه‌های در صف',
+            label: s.queuedPlansLabel,
             value: toPersian(queuedCount.toString()),
-            color: queuedCount > 0 ? AppColors.queued : AppColors.onSurfaceVar,
+            color: queuedCount > 0 ? t.queued : t.onSurfaceVar,
           ),
           const SizedBox(height: AppSpacing.sm),
           _SummaryRow(
-            label: 'روزهای ثبت شده',
-            value: toPersian(recordedDays.toString()),
-            color: AppColors.primary,
+            label: s.recordedSessionsLabel,
+            value: toPersian(recordedCount.toString()),
+            color: t.primary,
           ),
         ],
       ),
@@ -266,4 +444,3 @@ class _SummaryRow extends StatelessWidget {
     );
   }
 }
-

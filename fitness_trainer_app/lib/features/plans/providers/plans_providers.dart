@@ -20,6 +20,10 @@ final clientPlansProvider = FutureProvider.autoDispose.family<List<domain.Client
   return ref.watch(plansServiceProvider).getClientPlans(clientId);
 });
 
+final activePlanProvider = FutureProvider.autoDispose.family<domain.ClientPlan?, int>((ref, clientId) {
+  return ref.watch(plansServiceProvider).getActivePlan(clientId);
+});
+
 class PlansNotifier extends Notifier<List<domain.ClientPlan>> {
   @override
   List<domain.ClientPlan> build() => [];

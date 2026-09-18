@@ -29,6 +29,9 @@ class SettingsService {
   Future<String?> getThemePreference() => repository.getSetting('theme');
   Future<void> setThemePreference(String theme) => repository.setSetting('theme', theme);
 
+  Future<String?> getLanguagePreference() => repository.getSetting('language');
+  Future<void> setLanguagePreference(String code) => repository.setSetting('language', code);
+
   Future<Map<String, String>> getAllSettings() async {
     final rows = await db.select(db.appSettings).get();
     return {for (var r in rows) r.key: r.value};

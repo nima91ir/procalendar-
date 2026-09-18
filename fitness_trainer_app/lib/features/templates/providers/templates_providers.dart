@@ -56,3 +56,7 @@ class TemplatesNotifier extends Notifier<List<domain.PlanTemplate>> {
     state = state.where((t) => t.id != id).toList();
   }
 }
+
+final templateUsageCountProvider = FutureProvider.autoDispose.family<int, int>((ref, templateId) {
+  return ref.watch(templatesServiceProvider).countPlansUsingTemplate(templateId);
+});

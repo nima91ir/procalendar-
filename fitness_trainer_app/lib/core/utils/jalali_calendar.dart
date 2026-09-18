@@ -44,5 +44,5 @@ String formatJalaliLong(String date) {
   final dayNames = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
   final dayName = dayNames[j.weekDay % 7];
   final monthName = monthNames[j.month - 1];
-  return '$dayName، ${j.day} $monthName ${j.year}';
+  return '$dayName ${toPersian(j.day.toString())} $monthName ${toPersian(j.year.toString())}';
 }

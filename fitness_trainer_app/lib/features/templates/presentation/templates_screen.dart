@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fitness_trainer_app/core/theme/app_colors.dart';
+import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
@@ -12,6 +12,7 @@ class TemplatesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tones;
     final templatesAsync = ref.watch(allTemplatesProvider);
 
     return Scaffold(
@@ -46,7 +47,7 @@ class TemplatesScreen extends ConsumerWidget {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primaryLight,
+                                  color: t.primaryLight,
                                   borderRadius: BorderRadius.circular(AppSpacing.xxl),
                                 ),
                                 child: Text('$usageCount مورد استفاده', style: AppTypography.labelMedium),
@@ -75,18 +76,18 @@ class TemplatesScreen extends ConsumerWidget {
                                   ref.invalidate(allTemplatesProvider);
                                 }
                               },
-                              icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                              icon: Icon(Icons.delete_outline, color: t.error),
                             ),
                           ],
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Row(
                           children: [
-                            AppPill(label: '${template.sessions} جلسه', color: AppColors.primaryLight),
+                            AppPill(label: '${template.sessions} جلسه', color: t.primaryLight),
                             const SizedBox(width: AppSpacing.sm),
-                            AppPill(label: '${template.days} روز', color: AppColors.surfaceVariant),
+                            AppPill(label: '${template.days} روز', color: t.surfaceVariant),
                             const SizedBox(width: AppSpacing.sm),
-                            AppPill(label: 'هر ${template.days ~/ template.sessions} روز یک جلسه', color: AppColors.warningSoft),
+                            AppPill(label: 'هر ${template.days ~/ template.sessions} روز یک جلسه', color: t.warningSoft),
                           ],
                         ),
                       ],

@@ -1827,6 +1827,15 @@ class $AttendanceTable extends Attendance
       'REFERENCES clients (id) ON DELETE CASCADE',
     ),
   );
+  static const VerificationMeta _planIdMeta = const VerificationMeta('planId');
+  @override
+  late final GeneratedColumn<int> planId = GeneratedColumn<int>(
+    'plan_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _dateMeta = const VerificationMeta('date');
   @override
   late final GeneratedColumn<String> date = GeneratedColumn<String>(
@@ -1858,7 +1867,14 @@ class $AttendanceTable extends Attendance
     defaultValue: const Constant(''),
   );
   @override
-  List<GeneratedColumn> get $columns => [id, clientId, date, status, createdAt];
+  List<GeneratedColumn> get $columns => [
+    id,
+    clientId,
+    planId,
+    date,
+    status,
+    createdAt,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1881,6 +1897,12 @@ class $AttendanceTable extends Attendance
       );
     } else if (isInserting) {
       context.missing(_clientIdMeta);
+    }
+    if (data.containsKey('plan_id')) {
+      context.handle(
+        _planIdMeta,
+        planId.isAcceptableOrUnknown(data['plan_id']!, _planIdMeta),
+      );
     }
     if (data.containsKey('date')) {
       context.handle(
@@ -1921,6 +1943,10 @@ class $AttendanceTable extends Attendance
         DriftSqlType.int,
         data['${effectivePrefix}client_id'],
       )!,
+      planId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}plan_id'],
+      ),
       date: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}date'],
@@ -1945,12 +1971,14 @@ class $AttendanceTable extends Attendance
 class AttendanceData extends DataClass implements Insertable<AttendanceData> {
   final int id;
   final int clientId;
+  final int? planId;
   final String date;
   final String status;
   final String createdAt;
   const AttendanceData({
     required this.id,
     required this.clientId,
+    this.planId,
     required this.date,
     required this.status,
     required this.createdAt,
@@ -1960,6 +1988,9 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['client_id'] = Variable<int>(clientId);
+    if (!nullToAbsent || planId != null) {
+      map['plan_id'] = Variable<int>(planId);
+    }
     map['date'] = Variable<String>(date);
     map['status'] = Variable<String>(status);
     map['created_at'] = Variable<String>(createdAt);
@@ -1970,6 +2001,9 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
     return AttendanceCompanion(
       id: Value(id),
       clientId: Value(clientId),
+      planId: planId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(planId),
       date: Value(date),
       status: Value(status),
       createdAt: Value(createdAt),
@@ -1984,6 +2018,7 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
     return AttendanceData(
       id: serializer.fromJson<int>(json['id']),
       clientId: serializer.fromJson<int>(json['clientId']),
+      planId: serializer.fromJson<int?>(json['planId']),
       date: serializer.fromJson<String>(json['date']),
       status: serializer.fromJson<String>(json['status']),
       createdAt: serializer.fromJson<String>(json['createdAt']),
@@ -1995,6 +2030,7 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'clientId': serializer.toJson<int>(clientId),
+      'planId': serializer.toJson<int?>(planId),
       'date': serializer.toJson<String>(date),
       'status': serializer.toJson<String>(status),
       'createdAt': serializer.toJson<String>(createdAt),
@@ -2004,12 +2040,14 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
   AttendanceData copyWith({
     int? id,
     int? clientId,
+    Value<int?> planId = const Value.absent(),
     String? date,
     String? status,
     String? createdAt,
   }) => AttendanceData(
     id: id ?? this.id,
     clientId: clientId ?? this.clientId,
+    planId: planId.present ? planId.value : this.planId,
     date: date ?? this.date,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
@@ -2018,6 +2056,7 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
     return AttendanceData(
       id: data.id.present ? data.id.value : this.id,
       clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      planId: data.planId.present ? data.planId.value : this.planId,
       date: data.date.present ? data.date.value : this.date,
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -2029,6 +2068,7 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
     return (StringBuffer('AttendanceData(')
           ..write('id: $id, ')
           ..write('clientId: $clientId, ')
+          ..write('planId: $planId, ')
           ..write('date: $date, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt')
@@ -2037,13 +2077,15 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
   }
 
   @override
-  int get hashCode => Object.hash(id, clientId, date, status, createdAt);
+  int get hashCode =>
+      Object.hash(id, clientId, planId, date, status, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is AttendanceData &&
           other.id == this.id &&
           other.clientId == this.clientId &&
+          other.planId == this.planId &&
           other.date == this.date &&
           other.status == this.status &&
           other.createdAt == this.createdAt);
@@ -2052,12 +2094,14 @@ class AttendanceData extends DataClass implements Insertable<AttendanceData> {
 class AttendanceCompanion extends UpdateCompanion<AttendanceData> {
   final Value<int> id;
   final Value<int> clientId;
+  final Value<int?> planId;
   final Value<String> date;
   final Value<String> status;
   final Value<String> createdAt;
   const AttendanceCompanion({
     this.id = const Value.absent(),
     this.clientId = const Value.absent(),
+    this.planId = const Value.absent(),
     this.date = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2065,6 +2109,7 @@ class AttendanceCompanion extends UpdateCompanion<AttendanceData> {
   AttendanceCompanion.insert({
     this.id = const Value.absent(),
     required int clientId,
+    this.planId = const Value.absent(),
     required String date,
     required String status,
     this.createdAt = const Value.absent(),
@@ -2074,6 +2119,7 @@ class AttendanceCompanion extends UpdateCompanion<AttendanceData> {
   static Insertable<AttendanceData> custom({
     Expression<int>? id,
     Expression<int>? clientId,
+    Expression<int>? planId,
     Expression<String>? date,
     Expression<String>? status,
     Expression<String>? createdAt,
@@ -2081,6 +2127,7 @@ class AttendanceCompanion extends UpdateCompanion<AttendanceData> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (clientId != null) 'client_id': clientId,
+      if (planId != null) 'plan_id': planId,
       if (date != null) 'date': date,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
@@ -2090,6 +2137,7 @@ class AttendanceCompanion extends UpdateCompanion<AttendanceData> {
   AttendanceCompanion copyWith({
     Value<int>? id,
     Value<int>? clientId,
+    Value<int?>? planId,
     Value<String>? date,
     Value<String>? status,
     Value<String>? createdAt,
@@ -2097,6 +2145,7 @@ class AttendanceCompanion extends UpdateCompanion<AttendanceData> {
     return AttendanceCompanion(
       id: id ?? this.id,
       clientId: clientId ?? this.clientId,
+      planId: planId ?? this.planId,
       date: date ?? this.date,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -2111,6 +2160,9 @@ class AttendanceCompanion extends UpdateCompanion<AttendanceData> {
     }
     if (clientId.present) {
       map['client_id'] = Variable<int>(clientId.value);
+    }
+    if (planId.present) {
+      map['plan_id'] = Variable<int>(planId.value);
     }
     if (date.present) {
       map['date'] = Variable<String>(date.value);
@@ -2129,6 +2181,7 @@ class AttendanceCompanion extends UpdateCompanion<AttendanceData> {
     return (StringBuffer('AttendanceCompanion(')
           ..write('id: $id, ')
           ..write('clientId: $clientId, ')
+          ..write('planId: $planId, ')
           ..write('date: $date, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt')
@@ -4306,6 +4359,7 @@ typedef $$AttendanceTableCreateCompanionBuilder =
     AttendanceCompanion Function({
       Value<int> id,
       required int clientId,
+      Value<int?> planId,
       required String date,
       required String status,
       Value<String> createdAt,
@@ -4314,6 +4368,7 @@ typedef $$AttendanceTableUpdateCompanionBuilder =
     AttendanceCompanion Function({
       Value<int> id,
       Value<int> clientId,
+      Value<int?> planId,
       Value<String> date,
       Value<String> status,
       Value<String> createdAt,
@@ -4352,6 +4407,11 @@ class $$AttendanceTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get planId => $composableBuilder(
+    column: $table.planId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4408,6 +4468,11 @@ class $$AttendanceTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get planId => $composableBuilder(
+    column: $table.planId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get date => $composableBuilder(
     column: $table.date,
     builder: (column) => ColumnOrderings(column),
@@ -4458,6 +4523,9 @@ class $$AttendanceTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get planId =>
+      $composableBuilder(column: $table.planId, builder: (column) => column);
 
   GeneratedColumn<String> get date =>
       $composableBuilder(column: $table.date, builder: (column) => column);
@@ -4522,12 +4590,14 @@ class $$AttendanceTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int> clientId = const Value.absent(),
+                Value<int?> planId = const Value.absent(),
                 Value<String> date = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String> createdAt = const Value.absent(),
               }) => AttendanceCompanion(
                 id: id,
                 clientId: clientId,
+                planId: planId,
                 date: date,
                 status: status,
                 createdAt: createdAt,
@@ -4536,12 +4606,14 @@ class $$AttendanceTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required int clientId,
+                Value<int?> planId = const Value.absent(),
                 required String date,
                 required String status,
                 Value<String> createdAt = const Value.absent(),
               }) => AttendanceCompanion.insert(
                 id: id,
                 clientId: clientId,
+                planId: planId,
                 date: date,
                 status: status,
                 createdAt: createdAt,

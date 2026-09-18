@@ -1,4 +1,4 @@
-import 'package:fitness_trainer_app/core/database/app_database.dart';
+﻿import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 
 class DashboardService {
@@ -48,24 +48,15 @@ class DashboardService {
     }).toList();
   }
 
-  Future<Map<int, String>> getTodayAttendance() async {
+/// Today's attendance counts per client and status — a client may have
+  /// several records on the same day.
+  Future<Map<int, Map<String, int>>> getTodayAttendance() async {
     final date = jalaliToday();
     final rows = await (db.select(db.attendance)..where((a) => a.date.equals(date))).get();
-    return {for (var r in rows) r.clientId: r.status};
-  }
-
-  /// `jalali date -> status` for every recorded day. The dashboard calendar
-  /// needs this to place a dot on the *right* day (it used to key off client
-  /// ids, which dotted every day of the month).
-  Future<Map<String, String>> getAttendanceByDate() async {
-    final rows = await db.select(db.attendance).get();
-    final result = <String, String>{};
+    final result = <int, Map<String, int>>{};
     for (final row in rows) {
-      final current = result[row.date];
-      // Present wins over absent when a day has several records.
-      if (current == null || row.status == 'present') {
-        result[row.date] = row.status;
-      }
+      final counts = result.putIfAbsent(row.clientId, () => <String, int>{});
+      counts[row.status] = (counts[row.status] ?? 0) + 1;
     }
     return result;
   }

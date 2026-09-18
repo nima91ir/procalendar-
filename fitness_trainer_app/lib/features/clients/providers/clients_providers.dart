@@ -20,6 +20,12 @@ final allClientsProvider = FutureProvider.autoDispose<List<domain.Client>>((ref)
   return ref.watch(clientsServiceProvider).getAllClients();
 });
 
+final clientProvider = FutureProvider.autoDispose.family<domain.Client, int>((ref, clientId) async {
+  final client = await ref.watch(clientsServiceProvider).getClient(clientId);
+  if (client == null) throw Exception('Client not found');
+  return client;
+});
+
 class ClientsNotifier extends Notifier<List<domain.Client>> {
   @override
   List<domain.Client> build() {

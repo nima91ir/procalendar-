@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
 
@@ -7,6 +8,13 @@ void main() {
     int selectedIndex = 0;
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('fa'),
+        supportedLocales: const [Locale('fa'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         home: Scaffold(
           bottomNavigationBar: BottomNavBar(
             selectedIndex: selectedIndex,

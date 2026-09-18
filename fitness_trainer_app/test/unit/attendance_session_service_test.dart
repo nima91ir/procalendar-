@@ -49,9 +49,9 @@ void main() {
       await db.close();
     });
 
-    test('marking attendance consumes one session from the active plan', () async {
+    test('adding attendance consumes one session from the active plan', () async {
       final planId = await plansService.assignPlan(clientId, 1, 5, 30);
-      await sessionService.markAttendance(clientId, '1405/06/21', 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       final plan = await db.getPlan(planId);
       expect(plan!.remaining, 4);
       expect(plan.status, 'active');
@@ -59,24 +59,26 @@ void main() {
 
     test('absent also consumes a session', () async {
       final planId = await plansService.assignPlan(clientId, 1, 5, 30);
-      await sessionService.markAttendance(clientId, '1405/06/21', 'absent');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'absent');
       expect((await db.getPlan(planId))!.remaining, 4);
     });
 
-    test('re-marking the same day does not consume twice', () async {
+    test('a second record for the same day consumes a second session', () async {
       final planId = await plansService.assignPlan(clientId, 1, 5, 30);
-      await sessionService.markAttendance(clientId, '1405/06/21', 'present');
-      await sessionService.markAttendance(clientId, '1405/06/21', 'absent');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'absent');
       final plan = await db.getPlan(planId);
-      expect(plan!.remaining, 4);
+      expect(plan!.remaining, 3);
+      final count = await db.select(db.attendance).get();
+      expect(count.length, 2);
       expect((await db.getAttendance(clientId, '1405/06/21'))!.status, 'absent');
     });
 
     test('last session expires the plan and promotes the queued plan', () async {
       final firstId = await plansService.assignPlan(clientId, 1, 2, 30);
       final queuedId = await plansService.assignPlan(clientId, 1, 5, 30);
-      await sessionService.markAttendance(clientId, '1405/06/20', 'present');
-      await sessionService.markAttendance(clientId, '1405/06/21', 'present');
+      await sessionService.addSession(clientId, '1405/06/20', status: 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       expect((await db.getPlan(firstId))!.status, 'expired');
       final promoted = await db.getPlan(queuedId);
       expect(promoted!.status, 'active');
@@ -85,7 +87,7 @@ void main() {
 
     test('consuming a session keeps the plan start date (row-clobber regression)', () async {
       final planId = await plansService.assignPlan(clientId, 1, 5, 30);
-      await sessionService.markAttendance(clientId, '1405/06/21', 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       final plan = await db.getPlan(planId);
       expect(plan!.startDate, jalaliToday());
       expect(plan.sessions, 5);
@@ -94,20 +96,20 @@ void main() {
 
     test('bonus session is consumed when the client has no plan', () async {
       await clientsService.updateClient(clientId, 'Client', bonusSessions: 2);
-      await sessionService.markAttendance(clientId, '1405/06/21', 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       expect((await db.getClient(clientId))!.bonusSessions, 1);
     });
 
     test('bonus session is consumed when the active plan is exhausted', () async {
       await plansService.assignPlan(clientId, 1, 1, 30);
       await clientsService.updateClient(clientId, 'Client', bonusSessions: 3);
-      await sessionService.markAttendance(clientId, '1405/06/20', 'present');
-      await sessionService.markAttendance(clientId, '1405/06/21', 'present');
+      await sessionService.addSession(clientId, '1405/06/20', status: 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       expect((await db.getClient(clientId))!.bonusSessions, 2);
     });
   });
 
-  group('Undoing attendance returns the session', () {
+  group('Removing attendance returns the session', () {
     late AppDatabase db;
     late PlansService plansService;
     late ClientsService clientsService;
@@ -133,26 +135,36 @@ void main() {
       await db.close();
     });
 
-    test('undo returns the session to the active plan', () async {
+    test('removeSession returns the session to the active plan', () async {
       final planId = await plansService.assignPlan(clientId, 1, 5, 30);
-      await sessionService.markAttendance(clientId, '1405/06/21', 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       expect((await db.getPlan(planId))!.remaining, 4);
-      final undone = await sessionService.undoAttendance(clientId, '1405/06/21');
-      expect(undone, isTrue);
+      await sessionService.removeSession(clientId, '1405/06/21');
       expect((await db.getPlan(planId))!.remaining, 5);
       expect(await db.getAttendance(clientId, '1405/06/21'), isNull);
     });
 
-    test('undo is a no-op when there is no record for that day', () async {
-      final undone = await sessionService.undoAttendance(clientId, '1405/06/21');
-      expect(undone, isFalse);
+    test('removeSession only removes the latest record of the day', () async {
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'absent');
+      await sessionService.removeSession(clientId, '1405/06/21');
+      final remaining = await db.select(db.attendance).get();
+      expect(remaining.length, 1);
+      expect(remaining.first.status, 'present');
+      expect((await db.getPlan(planId))!.remaining, 4);
     });
 
-    test('undo returns a bonus session when the client has no plan', () async {
+    test('removeSession is a no-op when there is no record for that day', () async {
+      await sessionService.removeSession(clientId, '1405/06/21');
+      expect(await db.getAttendance(clientId, '1405/06/21'), isNull);
+    });
+
+    test('removeSession returns a bonus session when the client has no plan', () async {
       await clientsService.updateClient(clientId, 'Client', bonusSessions: 2);
-      await sessionService.markAttendance(clientId, '1405/06/21', 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       expect((await db.getClient(clientId))!.bonusSessions, 1);
-      await sessionService.undoAttendance(clientId, '1405/06/21');
+      await sessionService.removeSession(clientId, '1405/06/21');
       expect((await db.getClient(clientId))!.bonusSessions, 2);
     });
   });

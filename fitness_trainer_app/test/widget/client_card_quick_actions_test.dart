@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
-import 'package:fitness_trainer_app/features/attendance/presentation/past_attendance_screen.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_repository.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_service.dart';
+import 'package:fitness_trainer_app/features/clients/presentation/widgets/client_card.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_repository.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_service.dart';
 import 'package:fitness_trainer_app/features/templates/data/templates_repository.dart';
@@ -22,7 +22,7 @@ Future<void> settle(WidgetTester tester) async {
 }
 
 void main() {
-  group('Attendance marking screen', () {
+  group('ClientCard quick actions', () {
     late AppDatabase db;
     late int clientId;
     late int planId;
@@ -31,7 +31,8 @@ void main() {
       db = AppDatabase.forTesting(NativeDatabase.memory());
       final templateId = await TemplatesService(TemplatesRepository(db)).createTemplate('T', 5, 30);
       final plansService = PlansService(PlansRepository(db), db);
-      clientId = await ClientsService(ClientsRepository(db)).createClient('سارا');
+      final clientsService = ClientsService(ClientsRepository(db));
+      clientId = await clientsService.createClient('سارا', bonusSessions: 2);
       planId = await plansService.assignPlan(clientId, templateId, 5, 30);
     });
 
@@ -39,7 +40,7 @@ void main() {
       await db.close();
     });
 
-    Future<void> pumpScreen(WidgetTester tester) async {
+    Future<void> pumpCard(WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [databaseProvider.overrideWithValue(db)],
@@ -51,50 +52,46 @@ void main() {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            home: PastAttendanceScreen(clientId: clientId),
+            home: Scaffold(
+              body: ListView(children: [ClientCard(clientId: clientId)]),
+            ),
           ),
         ),
       );
       await settle(tester);
     }
 
-    testWidgets('shows the session summary and the calendar', (tester) async {
-      await pumpScreen(tester);
-      expect(find.text('وضعیت جلسات'), findsOneWidget);
-      // 5 of 5 sessions available, rendered with Persian digits.
+    testWidgets('shows bonus count and active plan remaining', (tester) async {
+      await pumpCard(tester);
+      expect(find.text('۲ جلسه اضافه'), findsOneWidget);
       expect(find.text('۵ از ۵'), findsOneWidget);
-      expect(find.byType(GridView), findsNothing);
+      expect(find.byTooltip('متوقف'), findsOneWidget);
     });
 
-    testWidgets('tapping "حاضر" consumes one session from the active plan', (tester) async {
-      await pumpScreen(tester);
-      await tester.tap(find.widgetWithText(ElevatedButton, 'حاضر +'));
+    testWidgets('and - change bonus sessions and persist', (tester) async {
+      await pumpCard(tester);
+      await tester.tap(find.byTooltip('جلسه هدیه اضافه شد'));
       await settle(tester);
+      expect((await db.getClient(clientId))!.bonusSessions, 3);
+      expect(find.text('۳ جلسه اضافه'), findsOneWidget);
 
-      expect((await db.getPlan(planId))!.remaining, 4);
-      expect(find.text('۴ از ۵'), findsOneWidget);
+      await tester.tap(find.byTooltip('جلسه هدیه حذف شد'));
+      await settle(tester);
+      expect((await db.getClient(clientId))!.bonusSessions, 2);
+      expect(find.text('۲ جلسه اضافه'), findsOneWidget);
     });
 
-    testWidgets('undo gives the session back', (tester) async {
-      await pumpScreen(tester);
-      await tester.tap(find.widgetWithText(ElevatedButton, 'حاضر +'));
+    testWidgets('freeze toggle freezes and activates the plan', (tester) async {
+      await pumpCard(tester);
+      await tester.tap(find.byTooltip('متوقف'));
       await settle(tester);
-      expect((await db.getPlan(planId))!.remaining, 4);
+      expect((await db.getPlan(planId))!.status, 'frozen');
+      expect(find.byTooltip('فعال‌سازی'), findsOneWidget);
 
-      // Let the confirmation SnackBar time out so it can't block the tap.
-      await tester.pump(const Duration(seconds: 4));
-      await tester.pump(const Duration(seconds: 1));
-
-      // The record card is below the calendar, so scroll it into view first.
-      await tester.scrollUntilVisible(
-        find.widgetWithIcon(IconButton, Icons.delete_outline),
-        200,
-      );
-      await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+      await tester.tap(find.byTooltip('فعال‌سازی'));
       await settle(tester);
-
-      expect((await db.getPlan(planId))!.remaining, 5);
-      expect((await db.select(db.attendance).get()), isEmpty);
+      expect((await db.getPlan(planId))!.status, 'active');
+      expect(find.byTooltip('متوقف'), findsOneWidget);
     });
   });
 }

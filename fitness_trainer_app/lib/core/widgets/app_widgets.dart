@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_tones.dart';
 import '../theme/app_typography.dart';
 import '../theme/app_tokens.dart';
 
@@ -19,27 +20,43 @@ class AppCard extends StatelessWidget {
     this.accentColor,
   });
 
-  @override
+@override
   Widget build(BuildContext context) {
+    final t = context.tones;
     final effectivePadding = padding ?? const EdgeInsets.all(AppSpacing.lg);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: margin,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.outlineVariant),
-        ),
-        child: Padding(
-          padding: effectivePadding,
-          child: child,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: t.primaryLight,
+        highlightColor: t.primaryLight,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          margin: margin,
+          decoration: BoxDecoration(
+            color: t.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: t.outlineVariant),
+            boxShadow: isDark
+                ? null
+                : [
+                    BoxShadow(
+                      color: const Color(0xFF1F2A1E).withValues(alpha: 0.06),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+          ),
+          child: Padding(
+            padding: effectivePadding,
+            child: child,
+          ),
         ),
       ),
     );
   }
 }
-
 class SectionHeader extends StatelessWidget {
   final String title;
   final String? actionLabel;
@@ -83,9 +100,10 @@ class AppPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isSelected ? (color ?? AppColors.primary) : AppColors.surfaceVariant;
-    final fg = isSelected ? Colors.white : AppColors.onSurface;
-    final border = isSelected ? BorderSide.none : const BorderSide(color: AppColors.outline);
+    final t = context.tones;
+    final bg = isSelected ? (color ?? t.primary) : t.surfaceVariant;
+    final fg = isSelected ? t.onPrimary : t.onSurface;
+    final border = isSelected ? BorderSide.none : BorderSide(color: t.outline);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
@@ -112,13 +130,29 @@ class AppEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxxl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 64, color: AppColors.outline),
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    t.primaryLight.withValues(alpha: 0.55),
+                    t.surfaceVariant,
+                  ],
+                ),
+              ),
+              child: Icon(icon, size: 44, color: t.primaryDark),
+            ),
             const SizedBox(height: AppSpacing.lg),
             Text(title, style: AppTypography.headlineMedium, textAlign: TextAlign.center),
             if (subtitle != null) ...[
@@ -144,6 +178,7 @@ class AppErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxxl),
@@ -151,7 +186,7 @@ class AppErrorState extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: AppColors.error),
+              Icon(Icons.error_outline, size: 64, color: t.error),
               const SizedBox(height: AppSpacing.lg),
               Text(message, style: AppTypography.headlineMedium, textAlign: TextAlign.center),
               if (onRetry != null) ...[
@@ -226,19 +261,23 @@ class AppConfirmDialog extends StatelessWidget {
 
 class AppBottomSheet {
   static Future<T?> show<T>(BuildContext context, Widget child) {
+    final t = context.tones;
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
+      builder: (ctx) => Material(
+        color: t.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
         ),
-        child: SingleChildScrollView(child: child),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          child: SingleChildScrollView(child: child),
+        ),
       ),
     );
   }
@@ -258,14 +297,60 @@ class MiniTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     return RawChip(
       label: Text(label, style: AppTypography.labelMedium),
-      backgroundColor: color ?? AppColors.primaryLight,
-      labelStyle: TextStyle(color: AppColors.onSurface),
+      backgroundColor: color ?? t.primaryLight,
+      labelStyle: TextStyle(color: t.onSurface),
       onDeleted: onRemove,
-      deleteIconColor: AppColors.onSurfaceVar,
+      deleteIconColor: t.onSurfaceVar,
       side: BorderSide.none,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+    );
+  }
+}
+
+/// Gradient hero surface used at the top of primary screens.
+///
+/// Ensures on-gradient text contrast by deriving the foreground color from the
+/// gradient's relative luminance instead of hardcoding it.
+class AppHeroHeader extends StatelessWidget {
+  final Widget child;
+  final List<Color>? gradient;
+  final EdgeInsetsGeometry padding;
+
+  const AppHeroHeader({
+    super.key,
+    required this.child,
+    this.gradient,
+    this.padding = const EdgeInsets.all(AppSpacing.lg),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = gradient ?? AppColors.gradientPrimary;
+    final luminance = colors.last.computeLuminance();
+    final onGradient = luminance > 0.5 ? AppColors.onSurface : Colors.white;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.last.withValues(alpha: 0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: onGradient),
+        child: Padding(padding: padding, child: child),
+      ),
     );
   }
 }

@@ -73,17 +73,17 @@ class DemoDataService {
     // Attendance (this consumes plan sessions / bonus sessions).
     // Sara: 7 records of 8 -> 1 session left (low-session alert).
     for (final day in [1, 3, 5, 8, 10, 12]) {
-      await attendanceSessionService.markAttendance(saraId, _daysAgo(day), 'present');
+      await attendanceSessionService.addSession(saraId, _daysAgo(day), status: 'present');
     }
-    await attendanceSessionService.markAttendance(saraId, _daysAgo(2), 'absent');
+    await attendanceSessionService.addSession(saraId, _daysAgo(2), status: 'absent');
     // Reza: 22 of 24 -> 2 sessions left (low-session alert).
     for (var day = 1; day <= 22; day++) {
-      await attendanceSessionService.markAttendance(rezaId, _daysAgo(day), 'present');
+      await attendanceSessionService.addSession(rezaId, _daysAgo(day), status: 'present');
     }
     // Mina: one session.
-    await attendanceSessionService.markAttendance(minaId, _daysAgo(4), 'present');
+    await attendanceSessionService.addSession(minaId, _daysAgo(4), status: 'present');
     // Ali: no plan, so one bonus session is consumed (2 left).
-    await attendanceSessionService.markAttendance(aliId, _daysAgo(1), 'present');
+    await attendanceSessionService.addSession(aliId, _daysAgo(1), status: 'present');
 
     return 'داده نمونه اضافه شد: ۴ مشتری، ۳ قالب، ۳ برچسب و ۳۱ رکورد حضور';
   }

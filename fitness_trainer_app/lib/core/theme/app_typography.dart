@@ -59,4 +59,16 @@ class AppTypography {
     fontSize: 12,
     fontWeight: FontWeight.w700,
   );
+
+  static const titleLarge = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+  );
+
+  static const caption = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+  );
 }

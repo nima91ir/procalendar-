@@ -70,6 +70,23 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
         ),
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        elevation: 0,
+        indicatorColor: AppColors.primaryLight,
+        backgroundColor: AppColors.surface,
+        labelTextStyle: WidgetStatePropertyAll(
+          TextStyle(fontFamily: fontFamily, fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.onSurfaceVar),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: AppColors.primary),
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+      ),
+      dividerTheme: const DividerThemeData(color: AppColors.outlineVariant),
     );
     return base;
   }
@@ -137,6 +154,23 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
         ),
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        elevation: 0,
+        indicatorColor: const Color(0xFF4A5A4A),
+        backgroundColor: const Color(0xFF1F2A1E),
+        labelTextStyle: WidgetStatePropertyAll(
+          TextStyle(fontFamily: fontFamily, fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFC5D0C0)),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: AppColors.primary),
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+      ),
+      dividerTheme: const DividerThemeData(color: Color(0xFF3A4A39)),
     );
     return base;
   }

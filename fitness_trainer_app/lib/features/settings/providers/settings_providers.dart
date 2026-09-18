@@ -54,3 +54,33 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
     }
   }
 }
+
+/// Selected language code ('fa' or 'en'), persisted in `app_settings`.
+///
+/// `MaterialApp.locale` is driven from this provider so switching language
+/// rebuilds the whole widget tree (and flips RTL/LTR automatically).
+final languageProvider = NotifierProvider<LanguageNotifier, String>(LanguageNotifier.new);
+
+class LanguageNotifier extends Notifier<String> {
+  @override
+  String build() {
+    _load();
+    return 'fa';
+  }
+
+  Future<void> _load() async {
+    try {
+      final stored = await ref.read(settingsServiceProvider).getLanguagePreference();
+      if (stored == 'fa' || stored == 'en') {
+        state = stored!;
+      }
+    } catch (_) {
+      // Database not ready; keep 'fa'.
+    }
+  }
+
+  Future<void> setLanguage(String code) async {
+    state = code;
+    await ref.read(settingsServiceProvider).setLanguagePreference(code);
+  }
+}

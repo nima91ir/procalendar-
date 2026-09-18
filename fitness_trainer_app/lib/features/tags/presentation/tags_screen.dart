@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fitness_trainer_app/core/theme/app_colors.dart';
+import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
@@ -30,6 +30,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     final tagsAsync = ref.watch(allTagsProvider);
 
     return Scaffold(
@@ -46,11 +47,8 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
             itemCount: tags.length,
             itemBuilder: (context, index) {
               final tag = tags[index];
-              return FutureBuilder<int>(
-                future: ref.read(tagsServiceProvider).countClientsWithTag(tag.id!),
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  return Card(
+        final countAsync = ref.watch(tagUsageCountProvider(tag.id!));
+                  return AppCard(
                     margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: ListTile(
                       leading: CircleAvatar(
@@ -58,7 +56,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                         child: Text(tag.emoji.isNotEmpty ? tag.emoji : tag.name[0], style: const TextStyle(color: Colors.white)),
                       ),
                       title: Text(tag.name, style: AppTypography.bodyLarge),
-                      subtitle: Text('$count مشتری', style: AppTypography.bodySmall),
+                      subtitle: Text('${countAsync.value ?? 0} مشتری', style: AppTypography.bodySmall),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -84,14 +82,12 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                                 ref.invalidate(allTagsProvider);
                               }
                             },
-                            icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                            icon: Icon(Icons.delete_outline, color: t.error),
                           ),
                         ],
                       ),
                     ),
                   );
-                },
-              );
             },
           );
         },
@@ -142,7 +138,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                           color: Color(color),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: _selectedColor == color ? AppColors.onSurface : Colors.transparent,
+                            color: _selectedColor == color ? AppTones.of(context).onSurface : Colors.transparent,
                             width: 2,
                           ),
                         ),
@@ -208,7 +204,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                           color: Color(color),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: _selectedColor == color ? AppColors.onSurface : Colors.transparent,
+                            color: _selectedColor == color ? AppTones.of(context).onSurface : Colors.transparent,
                             width: 2,
                           ),
                         ),
@@ -237,3 +233,4 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
     );
   }
 }
+

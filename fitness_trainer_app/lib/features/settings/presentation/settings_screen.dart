@@ -1,7 +1,8 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/dev/demo_data.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
@@ -41,11 +42,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _isLoading = true);
     try {
       await ref.read(settingsServiceProvider).setTrainerName(_nameController.text.trim());
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ذخیره شد')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.of(context).saved)));
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطا: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStrings.of(context).errorPrefix}$e')));
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -64,11 +69,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(lowSessionPlansProvider);
       ref.invalidate(bonusSessionClientsProvider);
       ref.invalidate(todayAttendanceProvider);
-      ref.invalidate(attendanceByDateProvider);
       ref.invalidate(clientNamesProvider);
       messenger.showSnackBar(SnackBar(content: Text(summary)));
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text('خطا در درج داده نمونه: $e')));
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('${AppStrings.of(context).errorPrefix}$e')));
     } finally {
       if (mounted) setState(() => _seeding = false);
     }
@@ -76,20 +80,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     final themeMode = ref.watch(themeModeProvider);
+    final language = ref.watch(languageProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('تنظیمات')),
+      appBar: AppBar(title: Text(s.settingsTitle)),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          SectionHeader(title: 'اطلاعات مربی'),
+          SectionHeader(title: s.trainerInfo),
           AppCard(
             child: Column(
               children: [
                 TextField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'نام مربی'),
+                  decoration: InputDecoration(labelText: s.trainerNameLabel),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _isLoading
@@ -97,25 +103,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     : ElevatedButton.icon(
                         onPressed: _saveTrainerName,
                         icon: const Icon(Icons.save),
-                        label: const Text('ذخیره نام'),
+                        label: Text(s.saveName),
                       ),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.xxl),
-          SectionHeader(title: 'ظاهر برنامه'),
+          SectionHeader(title: s.appearance),
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('پوسته برنامه', style: AppTypography.bodySmall),
+                Text(s.themeLabel, style: AppTypography.bodySmall),
                 const SizedBox(height: AppSpacing.md),
                 SegmentedButton<ThemeMode>(
                   showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: ThemeMode.system, label: Text('سیستم'), icon: Icon(Icons.brightness_auto)),
-                    ButtonSegment(value: ThemeMode.light, label: Text('روشن'), icon: Icon(Icons.light_mode_outlined)),
-                    ButtonSegment(value: ThemeMode.dark, label: Text('تیره'), icon: Icon(Icons.dark_mode_outlined)),
+                  segments: [
+                    ButtonSegment(value: ThemeMode.system, label: Text(s.themeSystem), icon: const Icon(Icons.brightness_auto)),
+                    ButtonSegment(value: ThemeMode.light, label: Text(s.themeLight), icon: const Icon(Icons.light_mode_outlined)),
+                    ButtonSegment(value: ThemeMode.dark, label: Text(s.themeDark), icon: const Icon(Icons.dark_mode_outlined)),
                   ],
                   selected: {themeMode},
                   onSelectionChanged: (selection) {
@@ -125,15 +131,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.xxl),
+          SectionHeader(title: s.languageLabel),
+          AppCard(
+            child: SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(value: 'fa', label: Text(s.languageFa)),
+                ButtonSegment(value: 'en', label: Text(s.languageEn)),
+              ],
+              selected: {language},
+              onSelectionChanged: (selection) {
+                ref.read(languageProvider.notifier).setLanguage(selection.first);
+              },
+            ),
+          ),
           if (kDebugMode) ...[
             const SizedBox(height: AppSpacing.xxl),
-            SectionHeader(title: 'ابزار توسعه'),
+            SectionHeader(title: s.devTools),
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'چند مشتری، قالب، برچسب و دو هفته حضور و غیاب نمونه اضافه می‌کند تا داشبورد، برنامه‌ها و مصرف جلسات قابل بررسی باشد.',
+                    s.devToolsDescription,
                     style: AppTypography.bodySmall,
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -142,7 +163,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       : OutlinedButton.icon(
                           onPressed: _seedDemoData,
                           icon: const Icon(Icons.science_outlined),
-                          label: const Text('درج داده نمونه'),
+                          label: Text(s.seedDemoData),
                         ),
                 ],
               ),

@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:shamsi_date/shamsi_date.dart';
 import 'package:fitness_trainer_app/features/plans/domain/client_plan.dart' as domain;
 import 'package:fitness_trainer_app/features/plans/data/plans_repository.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
@@ -125,5 +126,22 @@ class PlansService {
         remaining: Value(remaining),
       ),
     );
+  }
+
+  /// Calculates remaining days for an active/frozen plan based on its
+  /// [startDate] and [days] fields vs today. Returns `null` for queued plans
+  /// or plans without a start date.
+  int? getRemainingDays(domain.ClientPlan plan) {
+    if (plan.startDate == null || plan.startDate!.isEmpty) return null;
+    if (plan.status != 'active' && plan.status != 'frozen') return null;
+    final parts = plan.startDate!.split('/');
+    if (parts.length != 3) return null;
+    final start = Jalali(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    final end = start.addDays(plan.days);
+    final today = Jalali.fromDateTime(DateTime.now());
+    final endDateTime = DateTime(end.year, end.month, end.day);
+    final todayDateTime = DateTime(today.year, today.month, today.day);
+    final diff = endDateTime.difference(todayDateTime).inDays;
+    return diff > 0 ? diff : 0;
   }
 }

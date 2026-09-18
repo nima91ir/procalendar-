@@ -1,8 +1,14 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/widgets/form_card_screen.dart';
+import 'package:fitness_trainer_app/core/widgets/styled_text_field.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
+import 'package:fitness_trainer_app/features/tags/domain/tag.dart' as domain;
+import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
+import 'package:fitness_trainer_app/features/tags/presentation/widgets/client_tag_picker.dart';
 
 class AddEditClientScreen extends ConsumerStatefulWidget {
   final int? clientId;
@@ -18,6 +24,8 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
   final _noteController = TextEditingController();
   final _bonusController = TextEditingController();
   bool _isLoading = false;
+  final Set<int> _selectedTagIds = {};
+  Set<int> _originalTagIds = {};
 
   @override
   void initState() {
@@ -29,12 +37,28 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
 
   Future<void> _loadClient() async {
     final client = await ref.read(clientsServiceProvider).getClient(widget.clientId!);
+    final tagIds = await ref.read(tagsServiceProvider).getClientTagIds(widget.clientId!);
     if (client != null && mounted) {
       setState(() {
         _nameController.text = client.name;
         _contactController.text = client.contact ?? '';
         _noteController.text = client.note;
         _bonusController.text = client.bonusSessions.toString();
+        _originalTagIds = tagIds.toSet();
+        _selectedTagIds
+          ..clear()
+          ..addAll(tagIds);
+      });
+    }
+  }
+
+  Future<void> _pickTags() async {
+    final selected = await showClientTagPicker(context, ref, _selectedTagIds);
+    if (selected != null && mounted) {
+      setState(() {
+        _selectedTagIds
+          ..clear()
+          ..addAll(selected);
       });
     }
   }
@@ -47,13 +71,17 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
     setState(() => _isLoading = true);
     try {
       final bonus = int.tryParse(_bonusController.text) ?? 0;
+      final tagsService = ref.read(tagsServiceProvider);
       if (widget.clientId == null) {
-        await ref.read(clientsServiceProvider).createClient(
+        final newId = await ref.read(clientsServiceProvider).createClient(
           _nameController.text.trim(),
           contact: _contactController.text.trim(),
           note: _noteController.text.trim(),
           bonusSessions: bonus,
         );
+        for (final tagId in _selectedTagIds) {
+          await tagsService.assignTagToClient(newId, tagId);
+        }
       } else {
         await ref.read(clientsServiceProvider).updateClient(
           widget.clientId!,
@@ -62,10 +90,14 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
           note: _noteController.text.trim(),
           bonusSessions: bonus,
         );
+        for (final tagId in _selectedTagIds.difference(_originalTagIds)) {
+          await tagsService.assignTagToClient(widget.clientId!, tagId);
+        }
+        for (final tagId in _originalTagIds.difference(_selectedTagIds)) {
+          await tagsService.removeTagFromClient(widget.clientId!, tagId);
+        }
       }
       if (mounted) {
-        // Refresh every data provider (client lists, dashboard aggregates, ...)
-        // so the new/updated client is visible everywhere immediately.
         ref.invalidateAppData();
         if (Navigator.canPop(context)) Navigator.pop(context, true);
       }
@@ -78,46 +110,60 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.clientId == null ? 'افزودن مشتری' : 'ویرایش مشتری'),
-        actions: [
-          if (_isLoading)
-            const Center(child: Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))))
-          else
-            TextButton(onPressed: _save, child: const Text('ذخیره')),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              children: [
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'نام *'),
-                  textInputAction: TextInputAction.next,
+    final s = AppStrings.of(context);
+    final tags = ref.watch(allTagsProvider).value ?? const <domain.Tag>[];
+    return FormCardScreen(
+      title: widget.clientId == null ? 'افزودن مشتری' : 'ویرایش مشتری',
+      onSave: _save,
+      isLoading: _isLoading,
+      children: [
+        StyledTextField(
+          label: 'نام *',
+          controller: _nameController,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        StyledTextField(
+          label: 'شماره تماس',
+          controller: _contactController,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        StyledTextField(
+          label: 'یادداشت',
+          controller: _noteController,
+          maxLines: 3,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        StyledTextField(
+          label: 'جلسات اضافه',
+          controller: _bonusController,
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(s.tagsSection, style: Theme.of(context).textTheme.titleSmall),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final tag in tags)
+              if (_selectedTagIds.contains(tag.id))
+                Chip(
+                  label: Text(tag.emoji.isNotEmpty ? '${tag.emoji} ${tag.name}' : tag.name),
+                  onDeleted: () => setState(() => _selectedTagIds.remove(tag.id)),
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                TextField(
-                  controller: _contactController,
-                  decoration: const InputDecoration(labelText: 'شماره تماس'),
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                TextField(
-                  controller: _noteController,
-                  decoration: const InputDecoration(labelText: 'یادداشت'),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                TextField(
-                  controller: _bonusController,
-                  decoration: const InputDecoration(labelText: 'جلسات اضافه'),
-                  keyboardType: TextInputType.number,
-                ),
-              ],
+            ActionChip(
+              avatar: const Icon(Icons.add, size: 18),
+              label: Text(s.addTag),
+              onPressed: _pickTags,
             ),
+          ],
+        ),
+      ],
     );
   }
 }

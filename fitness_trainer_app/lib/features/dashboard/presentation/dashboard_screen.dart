@@ -1,257 +1,462 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shamsi_date/shamsi_date.dart';
-import 'package:fitness_trainer_app/core/theme/app_colors.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
+import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/utils/date_format.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
+import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
+import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
+import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/routing/routes.dart';
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final today = jalaliToday();
-    final formattedToday = formatJalaliLong(today);
-    final trainerNameAsync = ref.watch(trainerNameProvider);
-    final totalClientsAsync = ref.watch(totalClientsProvider);
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  int? _selectedTagId;
+
+  String _num(int? value, String languageCode) =>
+      localizeNumber(value?.toString() ?? '—', languageCode);
+
+  Future<void> _mark(WidgetRef ref, BuildContext context, AppStrings s, String lang, int clientId, String status) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await ref.read(attendanceProvider.notifier).addSession(clientId, jalaliToday(), status: status);
+    if (!context.mounted) return;
+    final label = status == 'present' ? s.present : s.absent;
+    messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(label, formatDateLong(jalaliToday(), lang)))));
+  }
+
+  Future<void> _undo(WidgetRef ref, BuildContext context, AppStrings s, String lang, int clientId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await ref.read(attendanceProvider.notifier).removeSession(clientId, jalaliToday());
+    if (!context.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(formatDateLong(jalaliToday(), lang)))));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tones;
+    final s = AppStrings.of(context);
+    final lang = ref.watch(languageProvider);
+    final formattedToday = formatDateLong(jalaliToday(), lang);
+    final trainerName = ref.watch(trainerNameProvider).value;
+    final totalAsync = ref.watch(totalClientsProvider);
     final expiredAsync = ref.watch(expiredPlansCountProvider);
     final frozenAsync = ref.watch(frozenPlansCountProvider);
     final queuedAsync = ref.watch(queuedPlansProvider);
     final lowSessionAsync = ref.watch(lowSessionPlansProvider);
     final bonusAsync = ref.watch(bonusSessionClientsProvider);
     final todayAttendanceAsync = ref.watch(todayAttendanceProvider);
-    final attendanceByDateAsync = ref.watch(attendanceByDateProvider);
     final clientNamesAsync = ref.watch(clientNamesProvider);
+    final allClientsAsync = ref.watch(allClientsProvider);
+    final tagsAsync = ref.watch(allTagsProvider);
+    final tagFilterAsync = ref.watch(clientTagFilterProvider);
+
     final clientNames = clientNamesAsync.value ?? const <int, String>{};
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          children: [
-            Text('تقویم حرفه‌ای', style: AppTypography.headlineLarge),
-            Text(formattedToday, style: AppTypography.bodySmall),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: Text(s.dashboardTitle)),
       body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(totalClientsProvider);
-          ref.invalidate(expiredPlansCountProvider);
-          ref.invalidate(frozenPlansCountProvider);
-          ref.invalidate(queuedPlansProvider);
-          ref.invalidate(lowSessionPlansProvider);
-          ref.invalidate(bonusSessionClientsProvider);
-          ref.invalidate(todayAttendanceProvider);
-          ref.invalidate(attendanceByDateProvider);
-          ref.invalidate(clientNamesProvider);
-        },
+        onRefresh: () async => ref.invalidateAppData(),
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            if (trainerNameAsync.value != null && trainerNameAsync.value!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                child: Text('خوش آمدید، ${trainerNameAsync.value}', style: AppTypography.headlineMedium),
+            AppHeroHeader(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.waving_hand_outlined, size: 22),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          (trainerName != null && trainerName.isNotEmpty)
+                              ? s.welcomeWith(trainerName)
+                              : s.appTitle,
+                          style: AppTypography.titleLarge,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(formattedToday, style: AppTypography.caption),
+                  const SizedBox(height: AppSpacing.lg),
+                  Row(
+                    children: [
+                      _HeroStat(
+                        icon: Icons.people_outline,
+                        label: s.totalClients,
+                        value: _num(totalAsync.value, lang),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      _HeroStat(
+                        icon: Icons.event_busy,
+                        label: s.expiredPlans,
+                        value: _num(expiredAsync.value, lang),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      _HeroStat(
+                        icon: Icons.lock_outline,
+                        label: s.frozenPlans,
+                        value: _num(frozenAsync.value, lang),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      _HeroStat(
+                        icon: Icons.schedule,
+                        label: s.queuedPlans,
+                        value: _num(queuedAsync.value, lang),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            _buildStatsRow(context, totalClientsAsync, expiredAsync, frozenAsync, queuedAsync),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            SectionHeader(
+              title: s.todayAttendance,
+              actionLabel: s.viewClients,
+              onAction: () => Navigator.pushNamed(context, AppRoutes.clients),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            tagsAsync.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
+              data: (tags) {
+                if (tags.isEmpty) return const SizedBox.shrink();
+                return SizedBox(
+                  height: 44,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: tags.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                          child: FilterChip(
+                            label: Text(s.allLabel),
+                            selected: _selectedTagId == null,
+                            onSelected: (_) => setState(() => _selectedTagId = null),
+                            selectedColor: t.primaryLight,
+                            checkmarkColor: t.onSurface,
+                          ),
+                        );
+                      }
+                      final tag = tags[index - 1];
+                      final isSelected = _selectedTagId == tag.id;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                        child: FilterChip(
+                          label: Text(tag.emoji.isNotEmpty ? '${tag.emoji} ${tag.name}' : tag.name),
+                          selected: isSelected,
+                          onSelected: (_) => setState(() => _selectedTagId = isSelected ? null : tag.id),
+                          selectedColor: Color(tag.color),
+                          checkmarkColor: Colors.white,
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            allClientsAsync.when(
+              loading: () => const SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (error, _) => AppErrorState(message: '$error'),
+              data: (clients) {
+                if (clients.isEmpty) {
+                  return AppEmptyState(
+                    icon: Icons.person_add_alt_1_outlined,
+                    title: s.noClientsTitle,
+                    subtitle: s.noClientsSubtitle,
+                  );
+                }
+                final tagIdsByClient = tagFilterAsync.value ?? const <int, List<int>>{};
+                final visible = _selectedTagId == null
+                    ? clients
+                    : clients
+                        .where((c) => (tagIdsByClient[c.id] ?? const <int>[]).contains(_selectedTagId))
+                        .toList();
+                if (visible.isEmpty) {
+                  return AppEmptyState(
+                    icon: Icons.filter_alt_off_outlined,
+                    title: s.noClientsWithTag,
+                  );
+                }
+                final statuses = todayAttendanceAsync.value ?? const <int, Map<String, int>>{};
+                return Column(
+                  children: [
+                    for (final client in visible)
+                      _TodayRow(
+                        name: client.name,
+                        counts: statuses[client.id],
+                        onTap: () => Navigator.pushNamed(
+                          context,
+                          '${AppRoutes.clientDetail}/${client.id}',
+                        ),
+                        onMarkPresent: () => _mark(ref, context, s, lang, client.id!, 'present'),
+                        onMarkAbsent: () => _mark(ref, context, s, lang, client.id!, 'absent'),
+                        onUndo: () => _undo(ref, context, s, lang, client.id!),
+                      ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: AppSpacing.xxl),
             if (lowSessionAsync.value != null && lowSessionAsync.value!.isNotEmpty) ...[
-              SectionHeader(
-                title: 'برنامه‌های با جلسات کم',
-                actionLabel: 'مشاهده مشتریان',
-                onAction: () => Navigator.pushNamed(context, AppRoutes.clients),
-              ),
+              SectionHeader(title: s.lowSessionPlans),
+              const SizedBox(height: AppSpacing.xs),
               ...lowSessionAsync.value!.map((p) {
                 final clientId = p['clientId'] as int;
-                return ListTile(
-                  leading: const Icon(Icons.timelapse, color: AppColors.warning),
-                  title: Text(clientNames[clientId] ?? 'مشتری #$clientId'),
-                  trailing: Text('${p['remaining']} جلسه باقی', style: const TextStyle(color: AppColors.warning)),
-                  onTap: () => Navigator.pushNamed(context, '${AppRoutes.clientDetail}/$clientId'),
+                final remaining = p['remaining'] as int;
+                return AppCard(
+                  margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '${AppRoutes.clientDetail}/$clientId',
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.timelapse, color: t.warning, size: 20),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          clientNames[clientId] ?? s.noClientsTitle,
+                          style: AppTypography.bodyLarge,
+                        ),
+                      ),
+                      _TonePill(
+                        label: '${_num(remaining, lang)} ${s.sessionsLeft}',
+                        bg: t.warningSoft,
+                        fg: t.warning,
+                      ),
+                    ],
+                  ),
                 );
               }),
               const SizedBox(height: AppSpacing.xxl),
             ],
             if (bonusAsync.value != null && bonusAsync.value!.isNotEmpty) ...[
-              Container(
+              AppCard(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.warningSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
+                onTap: () => Navigator.pushNamed(context, AppRoutes.clients),
                 child: Row(
                   children: [
-                    const Icon(Icons.card_giftcard, color: AppColors.warning),
+                    Icon(Icons.card_giftcard, color: t.warning),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
-                      child: Text('${bonusAsync.value!.length} مشتری دارای جلسات اضافه', style: AppTypography.bodyLarge),
+                      child: Text(
+                        s.bonusClients(bonusAsync.value!.length),
+                        style: AppTypography.bodyLarge,
+                      ),
                     ),
+                    Icon(Icons.chevron_left, color: t.onSurfaceVar, size: 20),
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.xxl),
             ],
-            SectionHeader(title: 'تقویم حضور و غیاب'),
-            const SizedBox(height: AppSpacing.md),
-            _buildMiniCalendar(context, attendanceByDateAsync.value ?? const <String, String>{}),
-            const SizedBox(height: AppSpacing.xxl),
-            SectionHeader(title: 'حضور امروز'),
-            const SizedBox(height: AppSpacing.md),
-            todayAttendanceAsync.value != null && todayAttendanceAsync.value!.isNotEmpty
-                ? ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: todayAttendanceAsync.value!.length,
-                    itemBuilder: (context, index) {
-                      final entry = todayAttendanceAsync.value!.entries.elementAt(index);
-                      final clientId = entry.key;
-                      return ListTile(
-                        leading: Icon(
-                          entry.value == 'present' ? Icons.check_circle : Icons.cancel,
-                          color: entry.value == 'present' ? AppColors.present : AppColors.absent,
-                        ),
-                        title: Text(clientNames[clientId] ?? 'مشتری #$clientId'),
-                        trailing: AppPill(
-                          label: entry.value == 'present' ? 'حاضر' : 'غایب',
-                          color: entry.value == 'present' ? AppColors.successSoft : AppColors.errorSoft,
-                        ),
-                        onTap: () => Navigator.pushNamed(context, '${AppRoutes.clientDetail}/$clientId'),
-                      );
-                    },
-                  )
-                : const AppEmptyState(icon: Icons.event_busy, title: 'هنوز ثبت نشده', subtitle: 'برای مشتریان مورد نظر حضور را ثبت کنید'),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildStatsRow(BuildContext context, AsyncValue<int> total, AsyncValue<int> expired, AsyncValue<int> frozen, AsyncValue<int> queued) {
-    return Row(
-      children: [
-        Expanded(child: _StatCard(title: 'کل مشتریان', value: total.value?.toString() ?? '—', color: AppColors.primary, icon: Icons.people)),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(child: _StatCard(title: 'منقضی شده', value: expired.value?.toString() ?? '—', color: AppColors.error, icon: Icons.event_busy)),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(child: _StatCard(title: 'قفل شده', value: frozen.value?.toString() ?? '—', color: AppColors.frozen, icon: Icons.lock)),
-      ],
+class _HeroStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _HeroStat({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 18, color: Colors.white),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
+            ),
+            Text(
+              label,
+              style: AppTypography.caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
 
-  Widget _buildMiniCalendar(BuildContext context, Map<String, String> attendanceMap) {
-    final now = DateTime.now();
-    final j = Jalali.fromDateTime(now);
-    final daysInMonth = j.monthLength;
-    final firstDayWeekDay = j.weekDay % 7;
-    const monthNames = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+/// One client, ready for today's attendance: quick-mark buttons when nothing
+/// is recorded yet, or a status count pill plus undo once records exist.
+class _TodayRow extends StatelessWidget {
+  final String name;
+  final Map<String, int>? counts;
+  final VoidCallback onTap;
+  final VoidCallback onMarkPresent;
+  final VoidCallback onMarkAbsent;
+  final VoidCallback onUndo;
+
+  const _TodayRow({
+    required this.name,
+    required this.counts,
+    required this.onTap,
+    required this.onMarkPresent,
+    required this.onMarkAbsent,
+    required this.onUndo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tones;
+    final s = AppStrings.of(context);
+    final present = counts?['present'] ?? 0;
+    final absent = counts?['absent'] ?? 0;
+    final marked = present > 0 || absent > 0;
+    final primary = present > 0;
+    final count = primary ? present : absent;
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      onTap: onTap,
+      child: Row(
         children: [
-          Text('${monthNames[j.month - 1]} ${j.year}', style: AppTypography.headlineMedium),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
-                .map((d) => Expanded(child: Center(child: Text(d, style: AppTypography.labelMedium))))
-                .toList(),
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: t.primaryLight,
+            child: Text(
+              name.isEmpty ? '؟' : name[0],
+              style: AppTypography.bodySmall.copyWith(color: t.onSurface),
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          ...List.generate((daysInMonth + firstDayWeekDay) ~/ 7 + 1, (week) {
-            return Row(
-              children: List.generate(7, (dayOfWeek) {
-                final dayIndex = week * 7 + dayOfWeek - firstDayWeekDay + 1;
-                if (dayIndex < 1 || dayIndex > daysInMonth) return const Expanded(child: SizedBox());
-                // Dots must be per-day: previously this checked whether *any*
-                // status existed in a client-id keyed map, so every day in the
-                // month got a dot as soon as one client was marked today.
-                final dateKey = '${j.year}/${j.month.toString().padLeft(2, '0')}/${dayIndex.toString().padLeft(2, '0')}';
-                final status = attendanceMap[dateKey];
-                final isToday = dayIndex == j.day;
-                return Expanded(
-                  child: Center(
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        // Today is highlighted in orange (unrelated to the
-                        // sage/green attendance colouring) on every calendar.
-                        color: isToday ? AppColors.todaySoft : AppColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        border: isToday ? Border.all(color: AppColors.today, width: 2) : null,
-                      ),
-                      child: Stack(
-                        children: [
-                          Center(child: Text('$dayIndex', style: AppTypography.bodySmall.copyWith(color: isToday ? AppColors.todayInk : AppColors.onSurfaceVar, fontWeight: isToday ? FontWeight.w800 : null))),
-                          if (status != null)
-                            Positioned(
-                              bottom: 3,
-                              left: 0,
-                              right: 0,
-                              // `Center` is required: with left+right set the
-                              // 6px container was being stretched into a bar
-                              // across the whole cell.
-                              child: Center(
-                                child: Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: status == 'present' ? AppColors.present : AppColors.absent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            );
-          }),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              name,
+              style: AppTypography.bodyLarge,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (!marked) ...[
+            _QuickButton(
+              label: s.registerPresent,
+              bg: t.successSoft,
+              fg: t.success,
+              onTap: onMarkPresent,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            _QuickButton(
+              label: s.registerAbsent,
+              bg: t.errorSoft,
+              fg: t.error,
+              onTap: onMarkAbsent,
+            ),
+          ] else ...[
+            _TonePill(
+              label: s.attendanceCount(primary ? s.present : s.absent, count),
+              bg: primary ? t.successSoft : t.errorSoft,
+              fg: primary ? t.success : t.error,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            IconButton(
+              onPressed: onUndo,
+              tooltip: s.undoAttendance,
+              icon: Icon(Icons.undo, size: 20, color: t.onSurfaceVar),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final Color color;
-  final IconData icon;
+class _QuickButton extends StatelessWidget {
+  final String label;
+  final Color bg;
+  final Color fg;
+  final VoidCallback onTap;
 
-  const _StatCard({required this.title, required this.value, required this.color, required this.icon});
+  const _QuickButton({
+    required this.label,
+    required this.bg,
+    required this.fg,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TonePill extends StatelessWidget {
+  final String label;
+  final Color bg;
+  final Color fg;
+
+  const _TonePill({required this.label, required this.bg, required this.fg});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.outlineVariant),
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: AppSpacing.sm),
-          Text(value, style: AppTypography.displayLarge.copyWith(color: color, fontSize: 20)),
-          const SizedBox(height: AppSpacing.xs),
-          Text(title, style: AppTypography.bodySmall, textAlign: TextAlign.center),
-        ],
+      child: Text(
+        label,
+        style: AppTypography.bodySmall.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

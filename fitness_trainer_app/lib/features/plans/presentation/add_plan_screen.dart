@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
-import 'package:fitness_trainer_app/core/theme/app_colors.dart';
+import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
@@ -34,6 +34,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     final templatesAsync = ref.watch(allTemplatesProvider);
 
     return Scaffold(
@@ -54,7 +55,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
               return AppCard(
                 margin: const EdgeInsets.only(bottom: AppSpacing.md),
                 onTap: () => setState(() => _selectedTemplateId = template.id),
-                accentColor: isSelected ? AppColors.primary : null,
+                accentColor: isSelected ? t.primary : null,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -64,15 +65,15 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                           child: Text(template.name, style: AppTypography.headlineMedium),
                         ),
                         if (isSelected)
-                          const Icon(Icons.check_circle, color: AppColors.primary),
+                          Icon(Icons.check_circle, color: t.primary),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        AppPill(label: '${toPersian(template.sessions.toString())} جلسه', color: AppColors.primaryLight),
+                        AppPill(label: '${toPersian(template.sessions.toString())} جلسه', color: t.primaryLight),
                         const SizedBox(width: AppSpacing.sm),
-                        AppPill(label: '${toPersian(template.days.toString())} روز', color: AppColors.surfaceVariant),
+                        AppPill(label: '${toPersian(template.days.toString())} روز', color: t.surfaceVariant),
                       ],
                     ),
                     if (isSelected) ...[
@@ -84,7 +85,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       Row(
                         children: [
-                          const Icon(Icons.event_available, size: 16, color: AppColors.onSurfaceVar),
+                          Icon(Icons.event_available, size: 16, color: t.onSurfaceVar),
                           const SizedBox(width: AppSpacing.xs),
                           Expanded(
                             child: Text(
@@ -137,8 +138,8 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                     child: AttendanceCalendar(
                       year: year,
                       month: month,
-                      attendanceMap: const {},
-                      onDayChanged: (_, _) {},
+attendanceMap: const <String, List<String>>{},
+            onDayTapped: (_) {},
                       onPreviousMonth: () => setSheetState(() {
                         month--;
                         if (month < 1) {
@@ -200,6 +201,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
     final plans = await ref.read(clientPlansProvider(widget.clientId).future);
     if (!mounted) return;
     final hasCurrent = plans.any((p) => p.isActive || p.isFrozen);
+    final t = context.tones;
     final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -218,7 +220,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
               if (hasCurrent) ...[
                 Text(
                   'این مشتری برنامه فعال دارد؛ برنامه جدید «در صف» ثبت می‌شود و تاریخ شروع آن هنگام فعال شدن به‌روز می‌شود.',
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.warning),
+                  style: AppTypography.bodySmall.copyWith(color: t.warning),
                 ),
                 const SizedBox(height: AppSpacing.xs),
               ],
@@ -271,19 +273,20 @@ class _StartDateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     return InkWell(
       onTap: onChange,
       borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
+          color: t.surfaceVariant,
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(color: AppColors.outlineVariant),
+          border: Border.all(color: t.outlineVariant),
         ),
         child: Row(
           children: [
-            const Icon(Icons.event, color: AppColors.today, size: 20),
+            Icon(Icons.event, color: t.today, size: 20),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Column(
@@ -298,7 +301,7 @@ class _StartDateTile extends StatelessWidget {
                 ],
               ),
             ),
-            Text('تغییر', style: AppTypography.labelMedium.copyWith(color: AppColors.primary)),
+            Text('تغییر', style: AppTypography.labelMedium.copyWith(color: t.primary)),
           ],
         ),
       ),
@@ -314,12 +317,13 @@ class _ConfirmRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVar)),
+          Text(label, style: AppTypography.bodySmall.copyWith(color: t.onSurfaceVar)),
           Text(value, style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700)),
         ],
       ),

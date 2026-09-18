@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_service.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_repository.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_service.dart';
@@ -49,24 +50,26 @@ void main() {
       expect(record.status, 'present');
     });
 
-    test('markAttendance updates existing record status', () async {
-      final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
-      await attendanceService.markAttendance(clientId, '1405/06/21', 'present');
-      final updated = await attendanceService.markAttendance(clientId, '1405/06/21', 'absent');
-      expect(updated, isNotNull);
-      expect(updated!.status, 'absent');
-      final fromDb = await db.getAttendance(clientId, '1405/06/21');
-      expect(fromDb!.status, 'absent');
-    });
-
-    test('attendance is unique per client and date', () async {
+    test('markAttendance inserts another record for the same day (multi allowed)', () async {
       final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
       await attendanceService.markAttendance(clientId, '1405/06/21', 'present');
       final second = await attendanceService.markAttendance(clientId, '1405/06/21', 'absent');
       expect(second, isNotNull);
+      expect(second!.status, 'absent');
+      final fromDb = await db.getAttendance(clientId, '1405/06/21');
+      expect(fromDb, isNotNull);
+      expect(fromDb!.id, second.id, reason: 'getAttendance returns the latest record');
       final count = await db.select(db.attendance).get();
-      expect(count.length, 1);
-      expect(count.first.status, 'absent');
+      expect(count.length, 2);
+    });
+
+    test('getAttendance returns the latest record for a client/day', () async {
+      final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
+      await attendanceService.markAttendance(clientId, '1405/06/21', 'present');
+      await attendanceService.markAttendance(clientId, '1405/06/21', 'present');
+      await attendanceService.markAttendance(clientId, '1405/06/21', 'absent');
+      final fromDb = await db.getAttendance(clientId, '1405/06/21');
+      expect(fromDb!.status, 'absent');
     });
   });
 
@@ -346,10 +349,13 @@ void main() {
   group('Dashboard Service', () {
     late AppDatabase db;
     late DashboardService dashboardService;
+    late AttendanceService attendanceService;
 
     setUp(() async {
       db = await createTestDb();
       dashboardService = DashboardService(db);
+      final attendanceRepository = AttendanceRepository(db);
+      attendanceService = AttendanceService(attendanceRepository, db);
     });
 
     tearDown(() async {
@@ -359,6 +365,20 @@ void main() {
     test('getTodayAttendance returns empty map when no attendance', () async {
       final result = await dashboardService.getTodayAttendance();
       expect(result, isEmpty);
+    });
+
+    test('getTodayAttendance counts multiple records per client and status', () async {
+      final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
+      final otherId = await db.insertClient(ClientsCompanion.insert(name: 'Other Client'));
+      final today = jalaliToday();
+      await attendanceService.markAttendance(clientId, today, 'present');
+      await attendanceService.markAttendance(clientId, today, 'present');
+      await attendanceService.markAttendance(clientId, today, 'absent');
+      await attendanceService.markAttendance(otherId, today, 'absent');
+      final result = await dashboardService.getTodayAttendance();
+      expect(result[clientId], {'present': 2, 'absent': 1});
+      expect(result[otherId], {'absent': 1});
+      expect(result.length, 2);
     });
   });
 }

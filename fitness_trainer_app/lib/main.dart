@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
-import 'package:fitness_trainer_app/core/theme/app_colors.dart';
+import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_theme.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
@@ -11,14 +11,19 @@ import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/clients_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/add_edit_client_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/client_detail_screen.dart';
+import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/templates/presentation/templates_screen.dart';
 import 'package:fitness_trainer_app/features/templates/presentation/add_edit_template_screen.dart';
 import 'package:fitness_trainer_app/features/tags/presentation/tags_screen.dart';
+import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/presentation/settings_screen.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
+import 'package:fitness_trainer_app/routing/routes.dart';
 import 'package:fitness_trainer_app/features/plans/presentation/add_plan_screen.dart';
 import 'package:fitness_trainer_app/features/attendance/presentation/past_attendance_screen.dart';
+import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +49,7 @@ class StartupErrorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     return MaterialApp(
       title: 'تقویم حرفه‌ای',
       debugShowCheckedModeBanner: false,
@@ -57,11 +63,11 @@ class StartupErrorApp extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.storage_rounded, size: 64, color: AppColors.error),
+                  Icon(Icons.storage_rounded, size: 64, color: t.error),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
                     'راه‌اندازی بانک اطلاعاتی ناموفق بود',
-                    style: AppTypography.headlineMedium.copyWith(color: AppColors.onSurface),
+                    style: AppTypography.headlineMedium.copyWith(color: t.onSurface),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -86,13 +92,9 @@ class ProCalendarApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      // Now driven by the (persisted) choice in Settings instead of being
-      // hardcoded to ThemeMode.system.
       themeMode: ref.watch(themeModeProvider),
-      // Force the Persian locale so the whole app lays out RTL even on
-      // English/other system locales (previously it rendered LTR).
-      locale: const Locale('fa', 'IR'),
-      initialRoute: '/dashboard',
+      locale: Locale(ref.watch(languageProvider)),
+      home: const MainShell(),
       onGenerateRoute: AppRouter.onGenerateRoute,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -125,92 +127,99 @@ class AppRouter {
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     final name = settings.name;
-    MaterialPageRoute<dynamic> page(Widget child, {required int tab}) => MaterialPageRoute(
+    MaterialPageRoute<dynamic> page(Widget child) => MaterialPageRoute(
       settings: settings,
-      // Every screen lives inside the shell so the nav bar is always visible;
-      // `tab` pins the highlight for that screen. Sub-screens keep their
-      // section highlighted and never move the selection on their own.
-      builder: (_) => MainShell(tabIndex: tab, child: child),
+      builder: (_) => child,
     );
 
-    if (name == AppRoutes.dashboard || name == '/') return page(const DashboardScreen(), tab: 0);
-    if (name == AppRoutes.clients) return page(const ClientsScreen(), tab: 1);
-    if (name == AppRoutes.templates) return page(const TemplatesScreen(), tab: 2);
-    if (name == AppRoutes.tags) return page(const TagsScreen(), tab: 3);
-    if (name == AppRoutes.settings) return page(const SettingsScreen(), tab: 4);
-    if (name == AppRoutes.addClient) return page(const AddEditClientScreen(), tab: 1);
-    if (name == AppRoutes.addTemplate) return page(const AddEditTemplateScreen(), tab: 2);
+    if (name == AppRoutes.addClient) return page(const AddEditClientScreen());
+    if (name == AppRoutes.addTemplate) return page(const AddEditTemplateScreen());
 
     final clientDetailId = _idFrom(name, AppRoutes.clientDetail);
-    if (clientDetailId != null) return page(ClientDetailScreen(clientId: clientDetailId), tab: 1);
+    if (clientDetailId != null) return page(ClientDetailScreen(clientId: clientDetailId));
     final editClientId = _idFrom(name, AppRoutes.editClient);
-    if (editClientId != null) return page(AddEditClientScreen(clientId: editClientId), tab: 1);
+    if (editClientId != null) return page(AddEditClientScreen(clientId: editClientId));
     final editTemplateId = _idFrom(name, AppRoutes.editTemplate);
-    if (editTemplateId != null) return page(AddEditTemplateScreen(templateId: editTemplateId), tab: 2);
+    if (editTemplateId != null) return page(AddEditTemplateScreen(templateId: editTemplateId));
     final attendanceClientId = _idFrom(name, AppRoutes.attendance);
-    if (attendanceClientId != null) return page(PastAttendanceScreen(clientId: attendanceClientId), tab: 1);
+    if (attendanceClientId != null) {
+      final segments = (name ?? '').split('/');
+      final planId = segments.length > 3 ? int.tryParse(segments[3]) : null;
+      return page(PastAttendanceScreen(clientId: attendanceClientId, planId: planId));
+    }
     final addPlanClientId = _idFrom(name, AppRoutes.addPlan);
-    if (addPlanClientId != null) return page(AddPlanScreen(clientId: addPlanClientId), tab: 1);
+    if (addPlanClientId != null) return page(AddPlanScreen(clientId: addPlanClientId));
     return null;
   }
 }
 
-/// Wraps every screen with the persistent bottom navigation bar.
+/// Wraps the five primary screens with a persistent bottom navigation bar.
 ///
-/// The bar is always visible (dashboard, tabs *and* sub-screens like client
-/// detail or attendance). `tabIndex` is passed per route, so the highlight
-/// reflects *which screen you are on* and does not change by itself — tapping
-/// another section pushes that screen (back preserves where you were).
-class MainShell extends StatelessWidget {
-  final Widget child;
+/// Tab switching is handled by an `IndexedStack` so each tab's state is
+/// preserved and there is no duplicate-route history.
+class MainShell extends ConsumerStatefulWidget {
+  const MainShell({super.key});
 
-  /// Index of the nav item highlighted for the wrapped screen
-  /// (0 dashboard, 1 clients, 2 templates, 3 tags, 4 settings).
-  final int tabIndex;
+  @override
+  ConsumerState<MainShell> createState() => _MainShellState();
+}
 
-  const MainShell({super.key, required this.child, required this.tabIndex});
+class _MainShellState extends ConsumerState<MainShell> {
+  int _currentIndex = 0;
 
-  static const _routes = [
-    AppRoutes.dashboard,
-    AppRoutes.clients,
-    AppRoutes.templates,
-    AppRoutes.tags,
-    AppRoutes.settings,
+  static const _screens = [
+    DashboardScreen(),
+    ClientsScreen(),
+    TemplatesScreen(),
+    TagsScreen(),
+    SettingsScreen(),
   ];
 
-  void _onTap(BuildContext context, int index) {
-    if (index == tabIndex) return;
-    // Switching sections *replaces* the stack instead of stacking routes on
-    // top of each other. dashboard -> plans -> clients never accumulates
-    // history, so there is no step-by-step back to walk through and tab
-    // roots never show a back arrow. Sub-screens (client detail, forms,
-    // attendance) are still pushed normally, so back returns from them.
-    Navigator.pushNamedAndRemoveUntil(context, _routes[index], (route) => route.isFirst);
+  void _onTap(int index) {
+    if (index == _currentIndex) return;
+    setState(() => _currentIndex = index);
+    _invalidateTabProviders(index);
+  }
+
+  void _invalidateTabProviders(int index) {
+    switch (index) {
+      case 0:
+        ref.invalidate(totalClientsProvider);
+        ref.invalidate(expiredPlansCountProvider);
+        ref.invalidate(frozenPlansCountProvider);
+        ref.invalidate(queuedPlansProvider);
+        ref.invalidate(lowSessionPlansProvider);
+        ref.invalidate(bonusSessionClientsProvider);
+        ref.invalidate(todayAttendanceProvider);
+        ref.invalidate(clientNamesProvider);
+        break;
+      case 1:
+        ref.invalidate(allClientsProvider);
+        ref.invalidate(clientsProvider);
+        break;
+      case 2:
+        ref.invalidate(allTemplatesProvider);
+        break;
+      case 3:
+        ref.invalidate(allTagsProvider);
+        break;
+      case 4:
+        break;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: child,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
       bottomNavigationBar: BottomNavBar(
-        selectedIndex: tabIndex,
-        onTap: (index) => _onTap(context, index),
+        selectedIndex: _currentIndex,
+        onTap: _onTap,
       ),
     );
   }
 }
 
-class AppRoutes {
-  static const dashboard = '/dashboard';
-  static const clients = '/clients';
-  static const clientDetail = '/clients/detail';
-  static const addClient = '/clients/add';
-  static const editClient = '/clients/edit';
-  static const templates = '/templates';
-  static const addTemplate = '/templates/add';
-  static const editTemplate = '/templates/edit';
-  static const tags = '/tags';
-  static const settings = '/settings';
-  static const attendance = '/attendance';
-  static const addPlan = '/add-plan';
-}

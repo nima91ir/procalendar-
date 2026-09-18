@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/widgets/form_card_screen.dart';
+import 'package:fitness_trainer_app/core/widgets/styled_text_field.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
 
 class AddEditTemplateScreen extends ConsumerStatefulWidget {
@@ -64,41 +66,30 @@ class _AddEditTemplateScreenState extends ConsumerState<AddEditTemplateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.templateId == null ? 'قالب جدید' : 'ویرایش قالب'),
-        actions: [
-          if (_isLoading)
-            const Center(child: Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))))
-          else
-            TextButton(onPressed: _save, child: const Text('ذخیره')),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              children: [
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'نام قالب *'),
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                TextField(
-                  controller: _sessionsController,
-                  decoration: const InputDecoration(labelText: 'تعداد جلسات *'),
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                TextField(
-                  controller: _daysController,
-                  decoration: const InputDecoration(labelText: 'تعداد روزها *'),
-                  keyboardType: TextInputType.number,
-                ),
-              ],
-            ),
+    return FormCardScreen(
+      title: widget.templateId == null ? 'قالب جدید' : 'ویرایش قالب',
+      onSave: _save,
+      isLoading: _isLoading,
+      children: [
+        StyledTextField(
+          label: 'نام قالب *',
+          controller: _nameController,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        StyledTextField(
+          label: 'تعداد جلسات *',
+          controller: _sessionsController,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        StyledTextField(
+          label: 'تعداد روزها *',
+          controller: _daysController,
+          keyboardType: TextInputType.number,
+        ),
+      ],
     );
   }
 }

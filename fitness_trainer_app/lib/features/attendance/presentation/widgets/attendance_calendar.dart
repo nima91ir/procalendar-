@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shamsi_date/shamsi_date.dart';
-import 'package:fitness_trainer_app/core/theme/app_colors.dart';
+import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
@@ -8,22 +8,23 @@ import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
 
 /// Interactive Jalali month grid used to mark attendance.
 ///
-/// [attendanceMap] is keyed by a Jalali `yyyy/MM/dd` string. Tapping a day
-/// cycles the status `unmarked -> present -> absent -> unmarked` and reports
-/// the *new* status through [onDayChanged]; an empty string means "unmarked",
-/// i.e. the caller should delete the record.
+/// [attendanceMap] maps a Jalali `yyyy/MM/dd` key to the list of recorded
+/// statuses for that day — a client can have more than one record per day.
+/// Tapping a day reports the `yyyy/MM/dd` key through [onDayTapped] so the
+/// caller can open a day sheet (add/delete records) instead of cycling a
+/// single status.
 class AttendanceCalendar extends StatelessWidget {
   final int year;
   final int month;
-  final Map<String, String> attendanceMap;
-  final void Function(String date, String status) onDayChanged;
+  final Map<String, List<String>> attendanceMap;
+  final void Function(String date) onDayTapped;
   final VoidCallback? onPreviousMonth;
   final VoidCallback? onNextMonth;
   final String? todayKey;
 
   /// When non-null, the calendar acts as a **date picker**: tapping a day
-  /// reports the `yyyy/MM/dd` key through [onDaySelected] instead of cycling
-  /// attendance status, and [selectionKey] is drawn as the picked day.
+  /// reports the `yyyy/MM/dd` key through [onDaySelected] instead of opening
+  /// the attendance sheet, and [selectionKey] is drawn as the picked day.
   final void Function(String dateKey)? onDaySelected;
   final String? selectionKey;
 
@@ -32,7 +33,7 @@ class AttendanceCalendar extends StatelessWidget {
     required this.year,
     required this.month,
     required this.attendanceMap,
-    required this.onDayChanged,
+    required this.onDayTapped,
     this.onPreviousMonth,
     this.onNextMonth,
     this.todayKey,
@@ -44,15 +45,9 @@ class AttendanceCalendar extends StatelessWidget {
   static String dateKey(int year, int month, int day) =>
       '$year/${month.toString().padLeft(2, '0')}/${day.toString().padLeft(2, '0')}';
 
-  /// Next status in the tap cycle. Returns '' for "unmarked".
-  static String nextStatus(String? current) {
-    if (current == null || current.isEmpty) return 'present';
-    if (current == 'present') return 'absent';
-    return '';
-  }
-
   @override
   Widget build(BuildContext context) {
+    final t = context.tones;
     final firstOfMonth = Jalali(year, month, 1);
     final daysInMonth = firstOfMonth.monthLength;
     final firstDayWeekDay = firstOfMonth.weekDay % 7;
@@ -61,9 +56,9 @@ class AttendanceCalendar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: t.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: t.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,11 +99,11 @@ class AttendanceCalendar extends StatelessWidget {
                   return const Expanded(child: SizedBox(height: 48));
                 }
                 final key = AttendanceCalendar.dateKey(year, month, dayIndex);
-                final status = attendanceMap[key];
+                final statuses = attendanceMap[key] ?? const <String>[];
                 return Expanded(
                   child: _DayCell(
                     day: dayIndex,
-                    status: status,
+                    statuses: statuses,
                     isToday: key == todayKey,
                     isPicked: onDaySelected != null && key == selectionKey,
                     onTap: () {
@@ -116,7 +111,7 @@ class AttendanceCalendar extends StatelessWidget {
                       if (pick != null) {
                         pick(key);
                       } else {
-                        onDayChanged(key, AttendanceCalendar.nextStatus(status));
+                        onDayTapped(key);
                       }
                     },
                   ),
@@ -130,11 +125,11 @@ class AttendanceCalendar extends StatelessWidget {
           if (onDaySelected == null)
             Row(
               children: [
-                const _LegendDot(color: AppColors.today, label: 'امروز'),
+                _LegendDot(color: t.today, label: 'امروز'),
                 const SizedBox(width: AppSpacing.md),
-                const _LegendDot(color: AppColors.present, label: 'حاضر'),
+                _LegendDot(color: t.present, label: 'حاضر'),
                 const SizedBox(width: AppSpacing.md),
-                const _LegendDot(color: AppColors.absent, label: 'غایب'),
+                _LegendDot(color: t.absent, label: 'غایب'),
               ],
             ),
         ],
@@ -145,14 +140,14 @@ class AttendanceCalendar extends StatelessWidget {
 
 class _DayCell extends StatelessWidget {
   final int day;
-  final String? status;
+  final List<String> statuses;
   final bool isToday;
   final bool isPicked;
   final VoidCallback onTap;
 
   const _DayCell({
     required this.day,
-    required this.status,
+    required this.statuses,
     required this.isToday,
     required this.isPicked,
     required this.onTap,
@@ -160,25 +155,29 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isPresent = status == 'present';
-    final isAbsent = status == 'absent';
+    final t = context.tones;
+    final presentCount = statuses.where((s) => s == 'present').length;
+    final absentCount = statuses.length - presentCount;
+    final isPresent = presentCount > 0;
+    final isAbsent = !isPresent && absentCount > 0;
     final selected = isPresent || isAbsent;
+    final count = statuses.length;
     final color = isPresent
-        ? AppColors.present
+        ? t.present
         : isAbsent
-            ? AppColors.absent
+            ? t.absent
             : isPicked
-                ? AppColors.primaryLight
-                : AppColors.surfaceVariant;
+                ? t.primaryLight
+                : t.surfaceVariant;
     // Today always shows in orange: filled when unmarked, and an orange ring
     // around the present/absent colour when attendance is already recorded.
     final borderColor = isPicked
-        ? AppColors.primary
+        ? t.primary
         : isToday
-            ? AppColors.today
+            ? t.today
             : selected
                 ? color
-                : AppColors.outlineVariant;
+                : t.outlineVariant;
     final ringWidth = isToday || isPicked ? 2.0 : 1.0;
 
     return Padding(
@@ -202,17 +201,22 @@ class _DayCell extends StatelessWidget {
                   color: selected
                       ? Colors.white
                       : isToday
-                          ? AppColors.todayInk
-                          : AppColors.onSurface,
+                          ? t.todayInk
+                          : t.onSurface,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (isPresent)
+              if (selected && count > 1)
+                Text(
+                  '×${toPersian(count.toString())}',
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                )
+              else if (isPresent)
                 const Icon(Icons.check, size: 12, color: Colors.white)
               else if (isAbsent)
                 const Icon(Icons.close, size: 12, color: Colors.white)
               else if (isToday)
-                const Icon(Icons.circle, size: 6, color: AppColors.today)
+                Icon(Icons.circle, size: 6, color: t.today)
               else
                 const SizedBox(height: 12),
             ],

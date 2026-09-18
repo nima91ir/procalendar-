@@ -1,4 +1,4 @@
-class AppRoutes {
+﻿class AppRoutes {
   static const dashboard = '/dashboard';
   static const clients = '/clients';
   static const clientDetail = '/clients/detail';

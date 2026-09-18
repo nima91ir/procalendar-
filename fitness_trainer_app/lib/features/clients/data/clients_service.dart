@@ -35,6 +35,8 @@ class ClientsService {
 
   Future<void> deleteClient(int id) async => repository.deleteClient(id);
 
+  Future<void> updateClientBonus(int id, int bonusSessions) => repository.updateClientBonus(id, bonusSessions);
+
   Future<List<domain.Client>> searchClients(String query) async {
     if (query.trim().isEmpty) return repository.getAllClients();
     return repository.searchClients(query.trim());

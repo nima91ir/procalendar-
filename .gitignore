@@ -1,0 +1,11 @@
+# Agent tooling & scratch worktrees
+.kilo/
+
+# Throwaway migration scripts
+fix_*.py
+update_*.py
+
+# Scratch output
+test_out.txt
+*.log
+.DS_Store

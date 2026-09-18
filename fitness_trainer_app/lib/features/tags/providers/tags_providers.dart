@@ -50,3 +50,15 @@ class TagsNotifier extends Notifier<List<domain.Tag>> {
     state = state.where((t) => t.id != id).toList();
   }
 }
+
+final tagUsageCountProvider = FutureProvider.autoDispose.family<int, int>((ref, tagId) {
+  return ref.watch(tagsServiceProvider).countClientsWithTag(tagId);
+});
+
+/// Tags assigned to a single client, for the client detail header.
+final clientTagsProvider = FutureProvider.autoDispose.family<List<domain.Tag>, int>((ref, clientId) async {
+  final service = ref.watch(tagsServiceProvider);
+  final all = await service.getAllTags();
+  final ids = await service.getClientTagIds(clientId);
+  return all.where((t) => ids.contains(t.id)).toList();
+});

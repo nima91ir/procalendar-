@@ -1,5 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
@@ -26,6 +27,32 @@ Future<void> settle(WidgetTester tester) async {
   for (var i = 0; i < 12; i++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
+}
+
+/// Mirrors the real app's locale wiring so `AppStrings.of(context)` resolves
+/// to Persian (the app's default language) during widget tests.
+Widget buildHarness(
+  AppDatabase db, {
+  ThemeData? theme,
+  Widget? home,
+  String? initialRoute,
+}) {
+  return ProviderScope(
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: MaterialApp(
+      theme: theme,
+      locale: const Locale('fa'),
+      supportedLocales: const [Locale('fa'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: home,
+      onGenerateRoute: AppRouter.onGenerateRoute,
+      initialRoute: initialRoute,
+    ),
+  );
 }
 
 class Fixture {
@@ -69,27 +96,50 @@ void main() {
         await fixture.db.close();
       });
 
-      final staticRoutes = <String, String>{
+      final primaryRoutes = <String, String>{
         '/dashboard': 'تقویم حرفه‌ای',
         '/clients': 'مشتریان',
         '/templates': 'قالب‌های برنامه',
         '/tags': 'برچسب‌ها',
         '/settings': 'تنظیمات',
+      };
+
+      const tabIcons = <String, IconData>{
+        '/clients': Icons.people_outline,
+        '/templates': Icons.calendar_today_outlined,
+        '/tags': Icons.label_outline,
+        '/settings': Icons.settings_outlined,
+      };
+
+      primaryRoutes.forEach((route, expectedText) {
+        testWidgets('renders $route', (tester) async {
+          await tester.pumpWidget(
+            buildHarness(fixture.db, theme: entry.value, home: const MainShell()),
+          );
+          await settle(tester);
+
+          if (route != '/dashboard') {
+            final bottomNav = find.byType(NavigationBar);
+            final navIcon = find.descendant(of: bottomNav, matching: find.byIcon(tabIcons[route]!));
+            await tester.tap(navIcon);
+            await tester.pump();
+            await settle(tester);
+          }
+
+          expect(tester.takeException(), isNull);
+          expect(find.text(expectedText), findsWidgets);
+        });
+      });
+
+      final subRoutes = <String, String>{
         '/clients/add': 'افزودن مشتری',
         '/templates/add': 'قالب جدید',
       };
 
-      staticRoutes.forEach((route, expectedText) {
+      subRoutes.forEach((route, expectedText) {
         testWidgets('renders $route', (tester) async {
           await tester.pumpWidget(
-            ProviderScope(
-              overrides: [databaseProvider.overrideWithValue(fixture.db)],
-              child: MaterialApp(
-                theme: entry.value,
-                onGenerateRoute: AppRouter.onGenerateRoute,
-                initialRoute: route,
-              ),
-            ),
+            buildHarness(fixture.db, theme: entry.value, initialRoute: route),
           );
           await settle(tester);
 
@@ -100,32 +150,19 @@ void main() {
 
       testWidgets('renders /clients/detail/:id', (tester) async {
         await tester.pumpWidget(
-          ProviderScope(
-            overrides: [databaseProvider.overrideWithValue(fixture.db)],
-            child: MaterialApp(
-              theme: entry.value,
-              onGenerateRoute: AppRouter.onGenerateRoute,
-              initialRoute: '/clients/detail/${fixture.clientId}',
-            ),
-          ),
+          buildHarness(fixture.db, theme: entry.value, initialRoute: '/clients/detail/${fixture.clientId}'),
         );
         await settle(tester);
 
         expect(tester.takeException(), isNull);
         expect(find.text('سارا محمدی'), findsWidgets);
         expect(find.text('اطلاعات تماس'), findsOneWidget);
-        expect(find.text('برنامه‌های فعال'), findsOneWidget);
+        expect(find.text('برنامه‌ها'), findsOneWidget);
       });
-    testWidgets('renders /clients/edit/:id', (tester) async {
+
+      testWidgets('renders /clients/edit/:id', (tester) async {
         await tester.pumpWidget(
-          ProviderScope(
-            overrides: [databaseProvider.overrideWithValue(fixture.db)],
-            child: MaterialApp(
-              theme: entry.value,
-              onGenerateRoute: AppRouter.onGenerateRoute,
-              initialRoute: '/clients/edit/${fixture.clientId}',
-            ),
-          ),
+          buildHarness(fixture.db, theme: entry.value, initialRoute: '/clients/edit/${fixture.clientId}'),
         );
         await settle(tester);
 
@@ -135,14 +172,7 @@ void main() {
 
       testWidgets('renders /templates/edit/:id', (tester) async {
         await tester.pumpWidget(
-          ProviderScope(
-            overrides: [databaseProvider.overrideWithValue(fixture.db)],
-            child: MaterialApp(
-              theme: entry.value,
-              onGenerateRoute: AppRouter.onGenerateRoute,
-              initialRoute: '/templates/edit/${fixture.templateId}',
-            ),
-          ),
+          buildHarness(fixture.db, theme: entry.value, initialRoute: '/templates/edit/${fixture.templateId}'),
         );
         await settle(tester);
 
@@ -152,14 +182,7 @@ void main() {
 
       testWidgets('renders /attendance/:id', (tester) async {
         await tester.pumpWidget(
-          ProviderScope(
-            overrides: [databaseProvider.overrideWithValue(fixture.db)],
-            child: MaterialApp(
-              theme: entry.value,
-              onGenerateRoute: AppRouter.onGenerateRoute,
-              initialRoute: '/attendance/${fixture.clientId}',
-            ),
-          ),
+          buildHarness(fixture.db, theme: entry.value, initialRoute: '/attendance/${fixture.clientId}'),
         );
         await settle(tester);
 
@@ -169,14 +192,7 @@ void main() {
 
       testWidgets('renders /add-plan/:id', (tester) async {
         await tester.pumpWidget(
-          ProviderScope(
-            overrides: [databaseProvider.overrideWithValue(fixture.db)],
-            child: MaterialApp(
-              theme: entry.value,
-              onGenerateRoute: AppRouter.onGenerateRoute,
-              initialRoute: '/add-plan/${fixture.clientId}',
-            ),
-          ),
+          buildHarness(fixture.db, theme: entry.value, initialRoute: '/add-plan/${fixture.clientId}'),
         );
         await settle(tester);
 

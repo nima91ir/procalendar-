@@ -1,4 +1,5 @@
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,7 +21,9 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.pump();
 
-    expect(find.text('تقویم حرفه‌ای'), findsOneWidget);
+    expect(find.text('تقویم حرفه‌ای'), findsWidgets);
+    expect(find.byType(RefreshIndicator), findsWidgets);
   });
 }
