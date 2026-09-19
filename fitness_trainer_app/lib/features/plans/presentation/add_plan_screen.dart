@@ -91,7 +91,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                       child: Icon(Icons.fitness_center, size: 44, color: t.primaryDark),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    Text('قالبی تعریف نشده', style: AppTypography.headlineMedium, textAlign: TextAlign.center),
+                    Text(s.noTemplatesTitle, style: AppTypography.headlineMedium, textAlign: TextAlign.center),
                     const SizedBox(height: AppSpacing.md),
                     FilledButton.icon(
                       onPressed: () async {

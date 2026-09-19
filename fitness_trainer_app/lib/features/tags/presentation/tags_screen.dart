@@ -92,14 +92,14 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
   }
 
   void _showAddDialog(BuildContext context) async {
-    final newTag = await showTagEditorDialog(context, ref);
+    final newTag = await showTagEditorDialog(context, ref, callerRef: ref);
     if (newTag != null && context.mounted) {
       ref.invalidateAppData();
     }
   }
 
   void _showEditDialog(BuildContext context, dynamic tag) async {
-    final updatedTag = await showTagEditorDialog(context, ref, existing: tag);
+    final updatedTag = await showTagEditorDialog(context, ref, existing: tag, callerRef: ref);
     if (updatedTag != null && context.mounted) {
       ref.invalidateAppData();
     }

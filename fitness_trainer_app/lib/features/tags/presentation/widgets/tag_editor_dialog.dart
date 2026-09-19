@@ -13,11 +13,13 @@ import 'package:fitness_trainer_app/features/tags/domain/tag.dart' as domain;
 ///
 /// Returns the created/updated [domain.Tag] (with its id), or `null` if
 /// dismissed. Non-empty name is required.
+/// 
+/// Pass [callerRef] to ensure invalidation triggers the correct provider refresh.
 Future<domain.Tag?> showTagEditorDialog(
   BuildContext context,
   WidgetRef ref, {
   domain.Tag? existing,
-  WidgetRef? pickerRef,
+  required WidgetRef callerRef,
 }) {
   final s = AppStrings.of(context);
   final nameController = TextEditingController(text: existing?.name ?? '');
@@ -65,7 +67,7 @@ Future<domain.Tag?> showTagEditorDialog(
                           color: Color(color),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: selectedColor == color ? t.onSurface : Colors.transparent,
+                            color: selectedColor == color ? t.primary : Colors.transparent,
                             width: 2,
                           ),
                         ),
@@ -83,19 +85,19 @@ Future<domain.Tag?> showTagEditorDialog(
               onPressed: () async {
                 final name = nameController.text.trim();
                 if (name.isEmpty || isSaving) return;
+                FocusScope.of(context).unfocus();
                 setDialogState(() => isSaving = true);
                 final service = ref.read(tagsServiceProvider);
-                final activeRef = pickerRef ?? ref;
                 try {
                   if (existing == null) {
                     final id = await service.createTag(name, emoji: emojiController.text.trim(), color: selectedColor);
-                    activeRef.invalidateAppData();
+                    callerRef.invalidateAppData();
                     if (context.mounted) {
                       Navigator.pop(context, domain.Tag(id: id, name: name, emoji: emojiController.text.trim(), color: selectedColor));
                     }
                   } else {
                     await service.updateTag(existing.id!, name, emoji: emojiController.text.trim(), color: selectedColor);
-                    activeRef.invalidateAppData();
+                    callerRef.invalidateAppData();
                     if (context.mounted) {
                       Navigator.pop(context, domain.Tag(id: existing.id!, name: name, emoji: emojiController.text.trim(), color: selectedColor));
                     }

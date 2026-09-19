@@ -47,7 +47,7 @@ Future<Set<int>?> showClientTagPicker(
                               Text(s.tagsSection, style: AppTypography.titleLarge),
                               TextButton.icon(
                                 onPressed: () async {
-                                  final newTag = await showTagEditorDialog(context, ref);
+                                  final newTag = await showTagEditorDialog(context, ref, callerRef: ref);
                                   if (newTag != null && context.mounted) {
                                     setSheetState(() => result.add(newTag.id!));
                                   }
@@ -68,7 +68,7 @@ Future<Set<int>?> showClientTagPicker(
                                     const SizedBox(height: AppSpacing.md),
                                     FilledButton.icon(
                                       onPressed: () async {
-                                        final newTag = await showTagEditorDialog(context, ref);
+                                        final newTag = await showTagEditorDialog(context, ref, callerRef: ref);
                                         if (newTag != null && context.mounted) {
                                           setSheetState(() => result.add(newTag.id!));
                                         }
