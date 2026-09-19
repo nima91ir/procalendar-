@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/dev/demo_data.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/core/theme/app_accents.dart';
+import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/platform/file_transfer.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
+import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
+import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
 import 'package:fitness_trainer_app/features/backup/data/backup_service.dart';
 import 'package:fitness_trainer_app/features/backup/providers/backup_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
@@ -47,6 +51,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       await ref.read(settingsServiceProvider).setTrainerName(_nameController.text.trim());
       if (mounted) {
+        ref.invalidateAppData();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.of(context).saved)));
       }
     } catch (e) {
@@ -74,6 +79,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(bonusSessionClientsProvider);
       ref.invalidate(todayAttendanceProvider);
       ref.invalidate(clientNamesProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(clientTransactionsProvider);
+      if (mounted) _loadSettings();
       messenger.showSnackBar(SnackBar(content: Text(summary)));
     } catch (e) {
       if (mounted) messenger.showSnackBar(SnackBar(content: Text('${AppStrings.of(context).errorPrefix}$e')));
@@ -118,6 +126,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: Text(s.csvAttendance),
             onTap: () => Navigator.of(context).pop(_CsvKind.attendance),
           ),
+          ListTile(
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: Text(s.csvTransactions),
+            onTap: () => Navigator.of(context).pop(_CsvKind.transactions),
+          ),
           const SizedBox(height: AppSpacing.lg),
         ],
       ),
@@ -144,6 +157,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _CsvKind.attendance => (
             await service.exportAttendanceCsv(),
             'procalendar-attendance-$suffix.csv',
+          ),
+        _CsvKind.transactions => (
+            await service.exportTransactionsCsv(),
+            'procalendar-transactions-$suffix.csv',
           ),
       };
       final saved = await saveTextFile(name, contents);
@@ -189,6 +206,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(s.accentColorLabel, style: AppTypography.bodySmall),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final accent in AppAccent.values)
+                      _AccentChoice(
+                        accent: accent,
+                        label: _accentLabel(s, accent),
+                        selected: accent == ref.watch(accentProvider),
+                        onTap: () => ref.read(accentProvider.notifier).setAccent(accent),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
                 Text(s.themeLabel, style: AppTypography.bodySmall),
                 const SizedBox(height: AppSpacing.md),
                 SegmentedButton<ThemeMode>(
@@ -292,4 +325,64 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-enum _CsvKind { clients, plans, attendance }
+enum _CsvKind { clients, plans, attendance, transactions }
+
+String _accentLabel(AppStrings s, AppAccent accent) {
+  return switch (accent) {
+    AppAccent.green => s.accentGreen,
+    AppAccent.blue => s.accentBlue,
+    AppAccent.purple => s.accentPurple,
+    AppAccent.rose => s.accentRose,
+    AppAccent.orange => s.accentOrange,
+    AppAccent.teal => s.accentTeal,
+  };
+}
+
+class _AccentChoice extends StatelessWidget {
+  final AppAccent accent;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AccentChoice({
+    required this.accent,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tones;
+    final color = AccentPalettes.of(accent).lightPrimary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? t.primaryDark : t.outline,
+                  width: selected ? 3 : 1,
+                ),
+              ),
+              child: selected
+                  ? Icon(Icons.check, size: 20, color: color.computeLuminance() > 0.5 ? t.onSurface : Colors.white)
+                  : null,
+            ),
+            const SizedBox(height: 4),
+            Text(label, style: AppTypography.labelMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}

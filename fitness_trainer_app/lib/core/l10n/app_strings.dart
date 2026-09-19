@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:fitness_trainer_app/features/accounting/domain/transaction_entry.dart';
 import '../utils/persian_numbers.dart';
+import '../utils/jalali_calendar.dart';
 
 /// Lightweight localization (no i18n package).
 ///
@@ -42,6 +44,55 @@ class AppStrings {
   final String navTemplates;
   final String navTags;
   final String navSettings;
+  final String navAccounting;
+
+  // Accounting
+  final String totalIncome;
+  final String totalExpense;
+  final String balanceLabel;
+  final String gymShareLabel;
+  final String gymShareRateTemplate;
+  final String addTransaction;
+  final String transactionsLabel;
+  final String noTransactionsTitle;
+  final String noTransactionsSubtitle;
+  final String transactionType;
+  final String incomeTypeLabel;
+  final String expenseTypeLabel;
+  final String categoryLabel;
+  final String amountLabel;
+  final String amountRequired;
+  final String dateLabel;
+  final String clientOptionalLabel;
+  final String noClientSelected;
+  final String deleteTransactionTitle;
+  final String deleteTransactionMessage;
+  final String transactionSaved;
+  final String transactionDeleted;
+  final String incomeCategoryPlan;
+  final String incomeCategoryOther;
+  final String expenseCategoryRent;
+  final String expenseCategorySalary;
+  final String expenseCategoryEquipment;
+  final String gymShareSettingTitle;
+  final String gymShareSettingHint;
+  final String planPriceLabel;
+  final String planPriceHint;
+  final String planShareLabel;
+  final String perPlanShareTitle;
+  final String shareRateTemplate;
+  final String remainingDaysTemplate;
+  final String gymShareDeductionTemplate;
+  final String netIncomeLabel;
+  final String openReports;
+  final String reportsTitle;
+  final String weeklyLabel;
+  final String monthlyLabel;
+  final String yearlyLabel;
+  final String monthlyChartTitle;
+  final String weeklyChartTitle;
+  final String noReportsTitle;
+  final String noReportsSubtitle;
 
   // Settings
   final String settingsTitle;
@@ -53,6 +104,13 @@ class AppStrings {
   final String themeSystem;
   final String themeLight;
   final String themeDark;
+  final String accentColorLabel;
+  final String accentGreen;
+  final String accentBlue;
+  final String accentPurple;
+  final String accentRose;
+  final String accentOrange;
+  final String accentTeal;
   final String languageLabel;
   final String languageFa;
   final String languageEn;
@@ -192,6 +250,7 @@ class AppStrings {
   final String csvClients;
   final String csvPlans;
   final String csvAttendance;
+  final String csvTransactions;
   final String backupSavedTemplate;
   final String backupFailedTemplate;
   final String importTitle;
@@ -239,6 +298,53 @@ class AppStrings {
     required this.navTemplates,
     required this.navTags,
     required this.navSettings,
+    required this.navAccounting,
+    required this.totalIncome,
+    required this.totalExpense,
+    required this.balanceLabel,
+    required this.gymShareLabel,
+    required this.gymShareRateTemplate,
+    required this.addTransaction,
+    required this.transactionsLabel,
+    required this.noTransactionsTitle,
+    required this.noTransactionsSubtitle,
+    required this.transactionType,
+    required this.incomeTypeLabel,
+    required this.expenseTypeLabel,
+    required this.categoryLabel,
+    required this.amountLabel,
+    required this.amountRequired,
+    required this.dateLabel,
+    required this.clientOptionalLabel,
+    required this.noClientSelected,
+    required this.deleteTransactionTitle,
+    required this.deleteTransactionMessage,
+    required this.transactionSaved,
+    required this.transactionDeleted,
+    required this.incomeCategoryPlan,
+    required this.incomeCategoryOther,
+    required this.expenseCategoryRent,
+    required this.expenseCategorySalary,
+    required this.expenseCategoryEquipment,
+    required this.gymShareSettingTitle,
+    required this.gymShareSettingHint,
+    required this.planPriceLabel,
+    required this.planPriceHint,
+    required this.planShareLabel,
+    required this.perPlanShareTitle,
+    required this.shareRateTemplate,
+    required this.remainingDaysTemplate,
+    required this.gymShareDeductionTemplate,
+    required this.netIncomeLabel,
+    required this.openReports,
+    required this.reportsTitle,
+    required this.weeklyLabel,
+    required this.monthlyLabel,
+    required this.yearlyLabel,
+    required this.monthlyChartTitle,
+    required this.weeklyChartTitle,
+    required this.noReportsTitle,
+    required this.noReportsSubtitle,
     required this.settingsTitle,
     required this.trainerInfo,
     required this.trainerNameLabel,
@@ -248,6 +354,13 @@ class AppStrings {
     required this.themeSystem,
     required this.themeLight,
     required this.themeDark,
+    required this.accentColorLabel,
+    required this.accentGreen,
+    required this.accentBlue,
+    required this.accentPurple,
+    required this.accentRose,
+    required this.accentOrange,
+    required this.accentTeal,
     required this.languageLabel,
     required this.languageFa,
     required this.languageEn,
@@ -370,6 +483,7 @@ class AppStrings {
     required this.csvClients,
     required this.csvPlans,
     required this.csvAttendance,
+    required this.csvTransactions,
     required this.backupSavedTemplate,
     required this.backupFailedTemplate,
     required this.importTitle,
@@ -425,6 +539,70 @@ class AppStrings {
   String importDone(int count) => importDoneTemplate.replaceAll('{count}', _digits('$count'));
   String importFailed(String error) => importFailedTemplate.replaceAll('{error}', error);
 
+  /// Thousands-separated amount in the app language, e.g. `1,250,000`.
+  String money(int value) => _digits(_grouped(value));
+
+  String gymShareRate(int percent) =>
+      gymShareRateTemplate.replaceAll('{percent}', _digits('$percent'));
+
+  String shareRate(int percent) =>
+      shareRateTemplate.replaceAll('{percent}', _digits('$percent'));
+
+  String remainingDays(int count) =>
+      remainingDaysTemplate.replaceAll('{count}', _digits('$count'));
+
+  String gymShareDeduction(int amount) =>
+      gymShareDeductionTemplate.replaceAll('{amount}', money(amount));
+
+  String transactionCategory(String key) {
+    switch (key) {
+      case TransactionCategories.plan:
+        return incomeCategoryPlan;
+      case TransactionCategories.rent:
+        return expenseCategoryRent;
+      case TransactionCategories.salary:
+        return expenseCategorySalary;
+      case TransactionCategories.equipment:
+        return expenseCategoryEquipment;
+      default:
+        return incomeCategoryOther;
+    }
+  }
+
+  static const _enMonthShort = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  static const _enWeekdays = [
+    'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri',
+  ];
+
+  /// Short month label for a Jalali month (1-12) in the app language.
+  /// Persian uses the full month name (there is no distinct short form).
+  String monthShort(int month) {
+    final index = month.clamp(1, 12) - 1;
+    return isPersian ? monthNames[index] : _enMonthShort[index];
+  }
+
+  /// Day-of-week label for a Jalali weekday (1 = Saturday ... 7 = Friday).
+  String weekdayShort(int weekday) {
+    final index = weekday.clamp(1, 7) - 1;
+    return isPersian
+        ? const ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'][index]
+        : _enWeekdays[index];
+  }
+
+  static String _grouped(int value) {
+    final digits = value.abs().toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(digits[i]);
+    }
+    return value < 0 ? '-$buffer' : buffer.toString();
+  }
+
   static AppStrings of(BuildContext context) {
     final code = Localizations.localeOf(context).languageCode;
     return code == 'en' ? en : fa;
@@ -459,6 +637,53 @@ class AppStrings {
     navTemplates: 'برنامه‌ها',
     navTags: 'برچسب‌ها',
     navSettings: 'تنظیمات',
+    navAccounting: 'حسابداری',
+    totalIncome: 'درآمد کل',
+    totalExpense: 'هزینه کل',
+    balanceLabel: 'موجودی',
+    gymShareLabel: 'سهم باشگاه',
+    gymShareRateTemplate: '{percent}٪ از درآمدها',
+    addTransaction: 'ثبت تراکنش',
+    transactionsLabel: 'تراکنش‌ها',
+    noTransactionsTitle: 'هنوز تراکنشی ثبت نشده',
+    noTransactionsSubtitle: 'اولین درآمد یا هزینه را با «ثبت تراکنش» اضافه کنید',
+    transactionType: 'نوع تراکنش',
+    incomeTypeLabel: 'درآمد',
+    expenseTypeLabel: 'هزینه',
+    categoryLabel: 'دسته‌بندی',
+    amountLabel: 'مبلغ (تومان)',
+    amountRequired: 'مبلغ را وارد کنید',
+    dateLabel: 'تاریخ',
+    clientOptionalLabel: 'مشتری (اختیاری)',
+    noClientSelected: 'بدون مشتری',
+    deleteTransactionTitle: 'حذف تراکنش',
+    deleteTransactionMessage: 'این تراکنش حذف شود؟',
+    transactionSaved: 'تراکنش ذخیره شد',
+    transactionDeleted: 'تراکنش حذف شد',
+    incomeCategoryPlan: 'برنامه',
+    incomeCategoryOther: 'سایر',
+    expenseCategoryRent: 'اجاره',
+    expenseCategorySalary: 'حقوق و دستمزد',
+    expenseCategoryEquipment: 'تجهیزات',
+    gymShareSettingTitle: 'سهم باشگاه',
+    gymShareSettingHint: 'درصدی از درآمدها که به باشگاه تعلق می‌گیرد',
+    planPriceLabel: 'قیمت برنامه (تومان)',
+    planPriceHint: 'اگر بیشتر از صفر باشد، هنگام ثبت برنامه یک تراکنش درآمدِ «برنامه» خودکار ثبت می‌شود.',
+    planShareLabel: 'سهم باشگاه (٪)',
+    perPlanShareTitle: 'سهم برنامه‌ها',
+    shareRateTemplate: '{percent}٪',
+    remainingDaysTemplate: '{count} روز باقی‌مانده',
+    gymShareDeductionTemplate: 'سهم باشگاه: {amount}',
+    netIncomeLabel: 'سود خالص',
+    openReports: 'گزارش‌ها',
+    reportsTitle: 'گزارش درآمد و هزینه',
+    weeklyLabel: 'هفتگی',
+    monthlyLabel: 'ماهانه',
+    yearlyLabel: 'سالانه',
+    monthlyChartTitle: 'روند درآمد ماهانه (۱۲ ماه اخیر)',
+    weeklyChartTitle: 'درآمد هفت روز اخیر',
+    noReportsTitle: 'هنوز گزارشی برای نمایش نیست',
+    noReportsSubtitle: 'با ثبت تراکنش‌ها، روند درآمد و هزینه این‌جا نمایش داده می‌شود',
     settingsTitle: 'تنظیمات',
     trainerInfo: 'اطلاعات مربی',
     trainerNameLabel: 'نام مربی',
@@ -468,6 +693,13 @@ class AppStrings {
     themeSystem: 'سیستم',
     themeLight: 'روشن',
     themeDark: 'تیره',
+    accentColorLabel: 'رنگ اصلی',
+    accentGreen: 'سبز',
+    accentBlue: 'آبی',
+    accentPurple: 'بنفش',
+    accentRose: 'صورتی',
+    accentOrange: 'نارنجی',
+    accentTeal: 'فیروزه‌ای',
     languageLabel: 'زبان',
     languageFa: 'فارسی',
     languageEn: 'English',
@@ -589,6 +821,7 @@ class AppStrings {
     csvClients: 'مشتریان',
     csvPlans: 'برنامه‌ها',
     csvAttendance: 'حضور و غیاب',
+    csvTransactions: 'تراکنش‌ها',
     backupSavedTemplate: 'فایل ذخیره شد: {file}',
     backupFailedTemplate: 'ذخیره فایل ناموفق بود: {error}',
     importTitle: 'ورود پشتیبان',
@@ -639,6 +872,53 @@ class AppStrings {
     navTemplates: 'Templates',
     navTags: 'Tags',
     navSettings: 'Settings',
+    navAccounting: 'Accounting',
+    totalIncome: 'Total income',
+    totalExpense: 'Total expense',
+    balanceLabel: 'Balance',
+    gymShareLabel: 'Gym share',
+    gymShareRateTemplate: '{percent}% of income',
+    addTransaction: 'Add transaction',
+    transactionsLabel: 'Transactions',
+    noTransactionsTitle: 'No transactions yet',
+    noTransactionsSubtitle: 'Add your first income or expense with “Add transaction”',
+    transactionType: 'Type',
+    incomeTypeLabel: 'Income',
+    expenseTypeLabel: 'Expense',
+    categoryLabel: 'Category',
+    amountLabel: 'Amount (toman)',
+    amountRequired: 'Enter an amount',
+    dateLabel: 'Date',
+    clientOptionalLabel: 'Client (optional)',
+    noClientSelected: 'No client',
+    deleteTransactionTitle: 'Delete transaction',
+    deleteTransactionMessage: 'Delete this transaction?',
+    transactionSaved: 'Transaction saved',
+    transactionDeleted: 'Transaction deleted',
+    incomeCategoryPlan: 'Plan',
+    incomeCategoryOther: 'Other',
+    expenseCategoryRent: 'Rent',
+    expenseCategorySalary: 'Salary',
+    expenseCategoryEquipment: 'Equipment',
+    gymShareSettingTitle: 'Gym share percent',
+    gymShareSettingHint: 'Percent of income owed to the gym',
+    planPriceLabel: 'Plan price (toman)',
+    planPriceHint: 'When above zero, an automatic “plan” income transaction is recorded when the plan is assigned.',
+    planShareLabel: 'Gym share (%)',
+    perPlanShareTitle: 'Per-plan share',
+    shareRateTemplate: '{percent}%',
+    remainingDaysTemplate: '{count} days left',
+    gymShareDeductionTemplate: 'Gym share: {amount}',
+    netIncomeLabel: 'Net income',
+    openReports: 'Reports',
+    reportsTitle: 'Income & expense reports',
+    weeklyLabel: 'Weekly',
+    monthlyLabel: 'Monthly',
+    yearlyLabel: 'Yearly',
+    monthlyChartTitle: 'Monthly income trend (last 12 months)',
+    weeklyChartTitle: 'Last 7 days income',
+    noReportsTitle: 'Nothing to report yet',
+    noReportsSubtitle: 'Add transactions to see income and expense trends here',
     settingsTitle: 'Settings',
     trainerInfo: 'Trainer info',
     trainerNameLabel: 'Trainer name',
@@ -648,6 +928,13 @@ class AppStrings {
     themeSystem: 'System',
     themeLight: 'Light',
     themeDark: 'Dark',
+    accentColorLabel: 'Accent color',
+    accentGreen: 'Green',
+    accentBlue: 'Blue',
+    accentPurple: 'Purple',
+    accentRose: 'Rose',
+    accentOrange: 'Orange',
+    accentTeal: 'Teal',
     languageLabel: 'Language',
     languageFa: 'فارسی',
     languageEn: 'English',
@@ -772,6 +1059,7 @@ class AppStrings {
     csvClients: 'Clients',
     csvPlans: 'Plans',
     csvAttendance: 'Attendance',
+    csvTransactions: 'Transactions',
     backupSavedTemplate: 'File saved: {file}',
     backupFailedTemplate: 'Could not save file: {error}',
     importTitle: 'Import backup',

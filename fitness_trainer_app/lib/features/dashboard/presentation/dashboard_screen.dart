@@ -13,6 +13,7 @@ import 'package:fitness_trainer_app/features/attendance/providers/attendance_pro
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
+import 'package:fitness_trainer_app/features/tags/domain/tag.dart' as domain;
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/routing/routes.dart';
 
@@ -37,17 +38,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<void> _mark(WidgetRef ref, BuildContext context, AppStrings s, String lang, int clientId, String status) async {
     final messenger = ScaffoldMessenger.of(context);
-    await ref.read(attendanceProvider.notifier).addSession(clientId, jalaliToday(), status: status);
-    if (!context.mounted) return;
     final label = status == 'present' ? s.present : s.absent;
-    messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(label, formatDateLong(jalaliToday(), lang)))));
+    try {
+      await ref.read(attendanceProvider.notifier).addSession(clientId, jalaliToday(), status: status);
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(label, formatDateLong(jalaliToday(), lang)))));
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+    }
   }
 
   Future<void> _undo(WidgetRef ref, BuildContext context, AppStrings s, String lang, int clientId) async {
     final messenger = ScaffoldMessenger.of(context);
-    await ref.read(attendanceProvider.notifier).removeSession(clientId, jalaliToday());
-    if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(formatDateLong(jalaliToday(), lang)))));
+    try {
+      await ref.read(attendanceProvider.notifier).removeLatestSession(clientId, jalaliToday());
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(formatDateLong(jalaliToday(), lang)))));
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+    }
   }
 
   @override
@@ -68,6 +79,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final allClientsAsync = ref.watch(allClientsProvider);
     final tagsAsync = ref.watch(allTagsProvider);
     final tagFilterAsync = ref.watch(clientTagFilterProvider);
+    // A tag may be deleted while selected; drop stale ids so the filter never
+    // silently empties the list.
+    final validTagIds = (tagsAsync.value ?? const <domain.Tag>[]).map((t) => t.id).toSet();
+    final selectedTags = _selectedTagIds.where(validTagIds.contains).toSet();
 
     final clientNames = clientNamesAsync.value ?? const <int, String>{};
 
@@ -164,7 +179,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         );
                       }
                       final tag = tags[index - 1];
-                      final isSelected = _selectedTagIds.contains(tag.id);
+                      final isSelected = selectedTags.contains(tag.id);
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
                         child: FilterChip(
@@ -204,11 +219,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 final tagIdsByClient = tagFilterAsync.value ?? const <int, List<int>>{};
                 // AND semantics: a client is shown only when it carries every
                 // selected tag, so combining tags narrows the list.
-                final visible = _selectedTagIds.isEmpty
+                final visible = selectedTags.isEmpty
                     ? clients
                     : clients
                         .where((c) =>
-                            _selectedTagIds.every((id) => (tagIdsByClient[c.id] ?? const <int>[]).contains(id)))
+                            selectedTags.every((id) => (tagIdsByClient[c.id] ?? const <int>[]).contains(id)))
                         .toList();
                 if (visible.isEmpty) {
                   return AppEmptyState(

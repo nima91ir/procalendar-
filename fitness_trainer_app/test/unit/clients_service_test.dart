@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_service.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_repository.dart';
 
@@ -104,6 +105,15 @@ void main() {
       expect(client.contact, '0999');
       expect(client.note, 'Updated');
       expect(client.bonusSessions, 2);
+    });
+
+    test('createClient stamps today and updates preserve it (clone regression)', () async {
+      final id = await clientsService.createClient('Stamped');
+      expect((await db.getClient(id))!.createdAt, jalaliToday());
+      await clientsService.updateClient(id, 'Stamped 2', bonusSessions: 4);
+      expect((await db.getClient(id))!.createdAt, jalaliToday(), reason: 'updateClient must not wipe createdAt');
+      await clientsRepository.updateClientBonus(id, 1);
+      expect((await db.getClient(id))!.createdAt, jalaliToday(), reason: 'updateClientBonus must not wipe createdAt');
     });
 
     test('updateClient rejects empty name', () async {

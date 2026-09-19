@@ -67,6 +67,7 @@ class ClientsRepository {
         contact: client.contact != null ? Value(client.contact!) : const Value.absent(),
         note: Value(client.note),
         bonusSessions: Value(bonus),
+        createdAt: Value(client.createdAt),
       ));
     }
   }

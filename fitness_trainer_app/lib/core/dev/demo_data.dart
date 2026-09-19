@@ -1,19 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shamsi_date/shamsi_date.dart';
+import 'package:fitness_trainer_app/features/accounting/data/transactions_service.dart';
+import 'package:fitness_trainer_app/features/accounting/domain/transaction_entry.dart';
+import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_session_service.dart';
 import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_service.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_service.dart';
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
+import 'package:fitness_trainer_app/features/settings/data/settings_service.dart';
+import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
 import 'package:fitness_trainer_app/features/tags/data/tags_service.dart';
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/features/templates/data/templates_service.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
 
 /// Development-only data seeder so the app can be exercised (attendance,
-/// session consumption, queue promotion, dashboard alerts) without typing
-/// everything by hand.
+/// session consumption, queue promotion, dashboard alerts, accounting ledger)
+/// without typing everything by hand.
 ///
 /// Only wired into the UI behind `kDebugMode`, so it can never ship.
 class DemoDataService {
@@ -22,6 +27,8 @@ class DemoDataService {
   final TemplatesService templatesService;
   final PlansService plansService;
   final AttendanceSessionService attendanceSessionService;
+  final TransactionService transactionService;
+  final SettingsService settingsService;
 
   DemoDataService({
     required this.clientsService,
@@ -29,6 +36,8 @@ class DemoDataService {
     required this.templatesService,
     required this.plansService,
     required this.attendanceSessionService,
+    required this.transactionService,
+    required this.settingsService,
   });
 
   /// Jalali `yyyy/MM/dd` for [days] ago, using the same format as
@@ -65,10 +74,10 @@ class DemoDataService {
     // stays observable), Reza a long plan that is nearly finished (low-session
     // alert), Mina a normal plan, and Ali deliberately has no plan so his
     // bonus sessions get consumed instead.
-    await plansService.assignPlan(saraId, basicId, 8, 30);
-    await plansService.assignPlan(saraId, proId, 12, 45);
-    await plansService.assignPlan(rezaId, intensiveId, 24, 90);
-    await plansService.assignPlan(minaId, proId, 12, 45);
+    await plansService.assignPlan(saraId, basicId, 8, 30, price: 900000, sharePercent: 30);
+    await plansService.assignPlan(saraId, proId, 12, 45, price: 1500000, sharePercent: 30);
+    await plansService.assignPlan(rezaId, intensiveId, 24, 90, price: 2800000, sharePercent: 30);
+    await plansService.assignPlan(minaId, proId, 12, 45, price: 1200000, sharePercent: 30);
 
     // Attendance (this consumes plan sessions / bonus sessions).
     // Sara: 7 records of 8 -> 1 session left (low-session alert).
@@ -85,7 +94,27 @@ class DemoDataService {
     // Ali: no plan, so one bonus session is consumed (2 left).
     await attendanceSessionService.addSession(aliId, _daysAgo(1), status: 'present');
 
-    return 'داده نمونه اضافه شد: ۴ مشتری، ۳ قالب، ۳ برچسب و ۳۱ رکورد حضور';
+    // Accounting ledger: assigning the plans above already recorded an
+    // automatic income/plan transaction for each priced plan, so no manual
+    // plan-payment rows are needed here — only the gym's running costs. Gym
+    // share now lives on the individual plans, not as a global workbook
+    // setting.
+    await transactionService.addTransaction(TransactionEntry(
+      type: TransactionTypes.expense,
+      category: TransactionCategories.rent,
+      amount: 1200000,
+      date: _daysAgo(30),
+      note: 'اجاره سالن',
+    ));
+    await transactionService.addTransaction(TransactionEntry(
+      type: TransactionTypes.expense,
+      category: TransactionCategories.equipment,
+      amount: 450000,
+      date: _daysAgo(18),
+      note: 'مقاومت و تی آر‌ایکس',
+    ));
+
+    return 'داده نمونه اضافه شد: ۴ مشتری، ۳ قالب، ۳ برچسب، ۳۱ رکورد حضور؛ ۴ برنامه با درآمد خودکار و ۲ تراکنش هزینه';
   }
 }
 
@@ -96,5 +125,7 @@ final demoDataServiceProvider = Provider<DemoDataService>((ref) {
     templatesService: ref.watch(templatesServiceProvider),
     plansService: ref.watch(plansServiceProvider),
     attendanceSessionService: ref.watch(attendanceSessionServiceProvider),
+    transactionService: ref.watch(transactionServiceProvider),
+    settingsService: ref.watch(settingsServiceProvider),
   );
 });

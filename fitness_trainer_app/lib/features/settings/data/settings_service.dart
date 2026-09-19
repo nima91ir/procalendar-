@@ -29,6 +29,9 @@ class SettingsService {
   Future<String?> getThemePreference() => repository.getSetting('theme');
   Future<void> setThemePreference(String theme) => repository.setSetting('theme', theme);
 
+  Future<String?> getAccentPreference() => repository.getSetting('accent');
+  Future<void> setAccentPreference(String accent) => repository.setSetting('accent', accent);
+
   Future<String?> getLanguagePreference() => repository.getSetting('language');
   Future<void> setLanguagePreference(String code) => repository.setSetting('language', code);
 

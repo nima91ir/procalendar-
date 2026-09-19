@@ -1,828 +1,95 @@
-# PRO CALENDER — Development Handoff
-
-Handoff for continuing the "UI/UX refresh + new features + fa/en i18n" project.
-Written at the end of the first working session (Phases 0–1 done). The next
-engineer/AI can pick up at **Phase 2** below.
-
----
-
-## 1. Environment facts (IMPORTANT)
-
-- **Project root**: `D:\work\ZAHRA\PRO CALENDER`
-- **App dir**: `D:\work\ZAHRA\PRO CALENDER\fitness_trainer_app`
-- **Flutter is NOT on PATH.** It lives at `C:\flutter\bin\flutter.bat`.
-  Every shell command must prefix:
-  ```powershell
-  $env:PATH = "C:\flutter\bin;$env:PATH"
-  ```
-- Flutter 3.47.2 stable / Dart 3.13.2 (verified 2026-08-26). This matters for
-  API availability below.
-- Git repo at project root, branch `master`. **Working tree was already dirty
-  before this project started** (user had ~28 modified files + 4 untracked
-  Python scripts). Do not `git clean`; only stage what you yourself changed.
-
-### Commands
-```powershell
-# workdir: D:\work\ZAHRA\PRO CALENDER\fitness_trainer_app
-$env:PATH = "C:\flutter\bin;$env:PATH"; flutter analyze
-$env:PATH = "C:\flutter\bin;$env:PATH"; flutter test
-$env:PATH = "C:\flutter\bin;$env:PATH"; flutter test test/widget/<file>_test.dart  # single file
-```
-
----
-
-## 2. What the app is
-
-Persian (فارسی) RTL, offline-only personal-trainer CRM:
-- Clients (name, contact, notes, tags, bonus sessions)
-- Reusable plan templates (sessions + days)
-- Per-client plans with statuses `active` / `frozen` / `expired` / `queued`;
-  queued plans auto-promote; each attendance consumes 1 session (plan first,
-  bonus sessions fallback)
-- Attendance marked on a Jalali (Shamsi) calendar
-- Dashboard (stats + alert cards + today's attendance), Settings (trainer
-  name, theme, seed-demo data)
-
-Stack: Flutter + **Riverpod 3** (code-gen `riverpod_generator`, NotifierProviders)
-+ **Drift** (SQLite) + `shamsi_date` (Jalali) + `shared_preferences` +
-`flutter_svg`. `flutter_localizations` is a dependency.
-
-**Hard constraint (user-approved): NO new packages.** Everything below is done
-with CustomPainter charts, hand-rolled CSV/JSON, and built-in widgets.
-
----
-
-## 3. Approved plan (the contract)
-
-| Phase | Scope | Status |
-|---|---|---|
-| 0 | Design foundation (colors, typography, card shadows, shared chart/ring/hero/empty-state widgets) | ✅ DONE |
-| 1 | Localization: `AppStrings` fa/en, `languageProvider`, Settings toggle, locale-driven `MaterialApp`, Jalali(fa)/Gregorian(en) switching | ✅ DONE |
-| 2 | Screen refresh + functional gaps (dashboard real "today attendance", clients cards/sort/undo, detail tabs, M3 nav + alert badge, soft-delete) | ⬅️ NEXT |
-| 3 | Data layer schema v4 (`Payments`, `Measurements`, `Clients.isArchived`, migrations, services/providers) | ⏳ |
-| 4 | Revenue tracking (plan price, payments, monthly income chart) | ⏳ |
-| 5 | Measurements & progress (readings, trend chart, deltas) | ⏳ |
-| 6 | Attendance statistics (per-client + global charts) | ⏳ |
-| 7 | Reminders (in-app alerts, dashboard badge, thresholds in settings) | ⏳ |
-| 8 | Backup & export (JSON backup/restore, CSV export) | ✅ data + web UI (§5j); iOS Files picker pending |
-| 9 | Polish & verification (analyze clean, all tests green, new tests, dark-mode + RTL/LTR pass, web/Windows smoke) | ⏳ |
-
-User decisions that shape everything:
-- Language toggle lives in **Settings** (no first-launch prompt). Default `fa`.
-- **Dates**: Jalali always shown as dates in fa; when UI language is `en`,
-  the same stored Jalali key is rendered as its **Gregorian equivalent**.
-- All new extra features are written bilingually from the start.
-- Target: **Android + iOS** (iOS files must be reachable via Files app for
-  backup — set `UIFileSharingEnabled` in Info.plist later in Phase 8).
-
----
-
-## 4. Architecture map
-
-```
-lib/
-  main.dart                  # ProCalendarApp, AppRouter, MainShell (IndexedStack + BottomNavBar)
-  core/
-    database/app_database.dart        # Drift tables + queries (schemaVersion 3)
-    database/migrations/              # EMPTY dir — migrations live inline in MigrationStrategy
-    database/connection/{native,shared,unsupported,web}.dart
-    database/database_providers.dart  # databaseProvider (+ _databaseFutureProvider)
-    l10n/app_strings.dart             # NEW: AppStrings (fa/en) — see §6
-    theme/app_{colors,tokens,typography,theme}.dart
-    utils/{jalali_calendar,persian_numbers,date_format( NEW)}.dart
-    dev/demo_data.dart                # DemoDataService.seed()
-    widgets/{app_widgets,bottom_nav_bar,app_charts( NEW)}.dart
-  features/
-    attendance/{data,domain,presentation,providers}
-    clients/{data,domain,presentation,providers}
-    dashboard/{data,presentation,providers}
-    plans/{data,domain,presentation,providers}
-    settings/{data,domain,presentation,providers}
-    tags/{data,domain,presentation,providers}
-    templates/{data,domain,presentation,providers}
-  routing/routes.dart                  # AppRoutes constants
-```
-
-### Provider inventory (all in `features/*/providers/*.dart`)
-- **dashboard**: `totalClientsProvider`, `activePlansCountProvider`,
-  `expiredPlansCountProvider`, `frozenPlansCountProvider`,
-  `queuedPlansProvider(int)`, `lowSessionPlansProvider`,
-  `bonusSessionClientsProvider`, `todayAttendanceProvider(Map<int,String> date→status)`,
-  `clientNamesProvider`
-- **clients**: `clientsServiceProvider`, `allClientsProvider`,
-  `clientProvider(id)`, `clientsNotifier`
-- **plans**: `plansServiceProvider`, `clientPlansProvider(id)`,
-  `activePlanProvider(id)`, `plansNotifier`
-- **attendance**: `attendanceProvider` (+`.notifier.addSession / markAttendance /
-  undoAttendance`), `clientAttendanceProvider(id)`,
-  `clientAttendanceMapProvider(id)`, `planAttendanceProvider(id)`,
-  `planAttendanceMapProvider(id)`, `todayAttendanceCountProvider(id)`,
-  `todayAttendanceStatusCountsProvider(id)`
-- **sales/tags/templates**: `templatesServiceProvider`, `allTemplatesProvider`,
-  `tagsServiceProvider`, `allTagsProvider`, `tagUsageCountProvider(id)`,
-  `templateUsageCountProvider(id)`
-- **settings**: `settingsServiceProvider`, `trainerNameProvider`,
-  `themeModeProvider` (ThemeMode), `languageProvider` (String 'fa'/'en') — NEW
-
-### DB tables (`app_database.dart`, schemaVersion 3)
-`clients(id,name,contact,note,bonus_sessions,created_at)`,
-`tags(id,name,emoji,color)`, `client_tags(clientId,tagId)`,
-`plan_templates(id,name,sessions,days)`,
-`client_plans(id,clientId,templateId,start_date,sessions,days,remaining,status,queue_order,created_at)`,
-`attendance(id,clientId,planId?,date,status,created_at)`,
-`app_settings(key,value)`.
-
-Migration is inline:
-```dart
-onUpgrade: from<2 addColumn(queueOrder); from<3 addColumn(planId);
-```
-
-### Drift generated files
-`app_database.g.dart` is generated. After editing tables run:
-```powershell
-$env:PATH = "C:\flutter\bin;$env:PATH"; dart run build_runner build --delete-conflicting-outputs
-```
-
----
-
-## 5. Done in this session — file-by-file
-
-Session 2 additions:
-- **Phase 2a (dashboard redesign)**: `dashboard_screen.dart` fully redone —
-  `AppHeroHeader` with greeting + `formatDateLong` date + 4 translucent stat
-  tiles (total/expired/frozen/queued), real "حضور امروز" list (one row per
-  client with quick present/absent buttons, or status pill + undo), low-session
-  cards with warning pill, tappable bonus banner. Localized; `RefreshIndicator`
-  now calls `invalidateAppData()`.
-- **Phase 2c (client detail)**: `client_detail_screen.dart` — gradient hero
-  (avatar, name, contact, `_HeroChip` bonus + tag chips via new
-  `clientTagsProvider`), localized contact section, plan cards with
-  `AppProgressRing` (consumed ratio) + status `AppPill` + freeze/activate/delete.
-- **AppStrings** grew to ~80 keys with `isPersian` flag; template methods now
-  convert digits via `_digits()`. Notable new methods: `remainingDetail`,
-  `deleteClientMessage`, `attendanceCount`, `recordAdded`, `recordRemoved`.
-- `client_detail_screen` section title changed to `plansSection` («برنامهها»)
-  to reflect that **finished/expired plans stay listed as history** (they are
-  never auto-deleted; delete is explicit so a client can review how they used
-  a plan). Update smoke-test assertion accordingly.
-- **Attendance multi-per-day rework (requested by user, IN PROGRESS)** — see
-  §5a below.
-
-### 5i. Jalali weekday off-by-one fix (DONE, analyze clean + 118 tests green)
-
-`shamsi_date`'s `Jalali.weekDay` is **Saturday-based** (شنبه=1 … جمعه=7), NOT
-Dart's Monday-based `DateTime.weekDay` (Mon=1…Sun=7). Two sites wrongly applied
-`% 7` to it, shifting every weekday by one — so today (a Friday) was rendered as
-«شنبه»:
-- `core/utils/jalali_calendar.dart` `formatJalaliLong`:
-  `dayNames[j.weekDay % 7]` → `dayNames[j.weekDay - 1]`. Drives the dashboard
-  «امروز: …» label (and `past_attendance_screen` date headers via
-  `formatDateLong`).
-- `features/attendance/presentation/widgets/attendance_calendar.dart` month grid:
-  `firstDayWeekDay = firstOfMonth.weekDay % 7` → `weekDay - 1`, so day 1 — and
-  every day — sits under the correct column (ش…ج).
-- `core/utils/date_format.dart` was already correct (it uses Dart's Gregorian
-  `DateTime.weekday`).
-- New `test/widget/attendance_calendar_weekday_test.dart` (7 tests): asserts
-  `formatJalaliLong` names for known dates and that the 27th (Friday) / 28th
-  (Saturday) land under the `ج` / `ش` header columns.
-- New `test/widget/plan_creation_refresh_test.dart`: regression guard that a
-  newly created plan appears on the client detail plans list **in place** (the
-  user reported "must revisit the page"; `invalidateAppData` was already
-  correct — the new card simply sits below the fold).
-- `core/providers/app_refresh.dart`: added the six DB-backed providers that were
-  missing from `_appDataProviders` — `activePlanProvider`,
-  `todayAttendanceCountProvider`, `todayAttendanceStatusCountsProvider`,
-  `planStatusClientIdsProvider`, `quickFilterClientIdsProvider`,
-  `templateUsageCountProvider`. The clients-list **quick-filter** chips
-  (`clients_screen.dart:194`) read `quickFilterClientIdsProvider`
-  (→ `planStatusClientIdsProvider`), so they could show a stale client set after
-  a plan freeze/expire/create until the provider was recreated.
-
-**110 → 118 tests.**
-
-### 5j. Backup & export (Phase 8 — data + UI done; iOS Files-picker pending)
-
-Web-first design: the phone runs the GitHub Pages **web app**, so `dart:io`/
-`path_provider` (used by `connection/native.dart`) do not exist there — a tiny
-conditional-import shim bridges the two worlds instead of pretending to be one
-platform:
-- `core/platform/file_transfer.dart` → `file_transfer_io.dart`
-  (documents dir, `isFilePickerSupported == false`) / `file_transfer_web.dart`
-  (`dart:html` Blob download + hidden `<input type=file>` + FileReader,
-  flagged `avoid_web_libraries_in_flutter`). On native there is no built-in file
-  picker, so import falls back to pasting the file contents.
-- `features/backup/data/backup_service.dart`: hand-rolled JSON (all 7 tables +
-  `app`/`format`/`schemaVersion`/`exportedAt`), `previewCounts()` validation,
-  and two restore modes:
-  - **merge** (`InsertMode.insertOrIgnore`, parents-first) — never overwrites;
-  - **replace** (delete children→parents, then insert with preserved ids).
-  CSV (hand-rolled, UTF-8 BOM so Excel renders Persian, RFC-4180 quoting) for
-  clients / plans / attendance with resolved names.
-- `features/backup/presentation/import_backup_screen.dart` at `/settings/
-  import-backup`: textarea + choose-file (web) + paste-from-clipboard, live
-  row-count preview, **Merge (primary) + Replace (destructive, confirm dialog
-  only)**; on success `invalidateAppData()` + reloads `trainerNameProvider`,
-  `themeModeProvider`, `languageProvider` (the backup can carry settings).
-- `settings_screen.dart`: new «پشتیبانگیری و خروجی» section after tags —
-  export JSON, import JSON, export CSV (bottom sheet: clients / plans /
-  attendance). File names `procalendar-backup-<ts>.json`,
-  `procalendar-clients-<ts>.csv`, … via `BackupService.timestampSuffix()`.
-- `app_database.dart`: added `getAllClientTags()`, `getAllAttendance()`,
-  `getAllSettings()` (plain methods — no schema change, no build_runner).
-- New `test/unit/backup_service_test.dart` (9 tests): export shape, preview
-  without writes, replace-restore, merge-adds-into-empty, merge-never
-  overwrites, malformed/newer-schema rejection, CSV quoting + BOM, plans CSV
-  names, timestamp format. (Sets
-  `driftRuntimeOptions.dontWarnAboutMultipleDatabases` — source + target DBs
-  are open at once on purpose.)
-- Left for native-only later (Phase 8 wherever it matters): iOS
-  `UIFileSharingEnabled` + `ITSAppUsesNonExemptEncryption` in
-  `ios/Runner/Info.plist` and a real save-dialog on desktop.
-
-**118 → 127 tests.**
-
-### 5k. Tag filtering + repeated daily attendance (DONE, analyze clean + 129 tests green)
-
-Two user-reported bugs, one shared root cause found while fixing them:
-
-- **Bug 1 — Clients-page tag chips did nothing.** `clients_screen.dart`
-  `_selectedTagId` was set by the chips but never used in list filtering.
-  Fixed by wiring the **already-existing** `clientTagFilterProvider`
-  (client id → tag ids) into the list and switching both tag UIs to
-  **multi-select AND**: a client is shown only when it carries *every*
-  selected tag, so combining tags narrows the list. The «همه» chip clears the
-  selection. Same change applied to the dashboard's «حضور امروز» tag row so
-  both screens behave identically. Empty state when a tag combo matches nobody
-  → `AppEmptyState` with `s.noClientsWithTag`.
-- **Bug 2 — dashboard could only mark attendance once per day.** The
-  `_TodayRow` replaced the quick present/absent buttons with a status pill +
-  undo as soon as one record existed, so a second record was impossible from
-  the dashboard (the data layer always allowed several per day). Restructured
-  `_TodayRow` into two lines: name + per-status `_TonePill`s + undo on line 1,
-  and the present/absent quick buttons **always visible** below. `_QuickButton`
-  label is now `Center`ed so the two buttons stretch evenly.
-- **Shared root cause found en route (real production bug):**
-  `invalidateAppData()` in `core/providers/app_refresh.dart` included
-  `attendanceProvider` — the attendance **notifier's own provider**. When
-  `AttendanceNotifier._invalidateFor` called `invalidateAppData()` after a
-  session change, invalidating itself threw `A provider cannot depend on
-  itself`; the `catch` in `addSession` swallowed it (state → `AsyncError`) and
-  **every later invalidation was skipped** — so the dashboard never refreshed
-  after marking attendance until a manual pull-to-refresh. Removed
-  `attendanceProvider` from `_appDataProviders` (its `state` is a transient
-  "last operation" status; no screen reads it for rendering). Proved with a
-  scratch spectator test before/after the fix.
-- New `test/widget/clients_tag_filter_test.dart`: single tag filters, **AND**
-  of two tags narrows to the client carrying both, «همه» resets (db-checked).
-- New `test/widget/dashboard_attendance_test.dart`: marks the same client
-  twice in one day (2 records for today), quick buttons + undo stay visible
-  after the first mark, undo leaves exactly one record. Tall test viewport so
-  the two-line rows sit above the fold.
-
-**127 → 129 tests.**
-
-### 5b. Clients screen refresh (Phase 2b/8b — DONE, analyze clean + 96 tests green)
-
-Session 2b (this session):
-- `app_strings.dart` **repaired** (see the ⚠️ note in §8) and extended:
-  `clientDeletedTemplate` + `clientDeleted(name)`.
-- `clients_screen.dart`: sort menu, tag chips kept, localized search +
-  empty states, card tap → bottom sheet (view profile / attendance / quick
-  present-absent today via `addSession` / edit / delete). `_SortMode`
-  enum — newest sorts by `id` desc (`createdAt` is always `''`).
-- `client_card.dart`: card is now tappable-only (chips + in-card delete
-  removed); shows active plan + remaining + bonus + today-count pills.
-- `app_widgets.dart`: `AppBottomSheet.show` Container→Material (ListTile ink fix).
-- `clients_navigation_test.dart`: sheet-first navigation assertions.
-
-### 5c. Client-card quick actions + dashboard tag filter (DONE, analyze clean + 99 tests green)
-
-Session 2c (user-driven UX polish):
-- **Client card** (`client_card.dart`): bonus sessions are now editable inline —
-  a `− {n} جلسه اضافه +` stepper (`updateClientBonus` service + repo wrapper added),
-  minus disabled at 0. Freeze/unfreeze is one tap too: the active-plan chip now
-  shows active *or* frozen plans (warning tone + snowflake for frozen) with a
-  pause/play toggle → `plansNotifier.freezePlan/unfreezePlan`. Card still shows
-  remaining (`x از y`) + days + today-count pills; added `noActivePlanLabel`
-  caption when no active/frozen plan exists.
-- **AppStrings**: added `bonusSessionCountTemplate`, `bonusAdded`,
-  `bonusRemoved`, `noClientsWithTag` (fa+en). Also **fixed pre-existing mojibake in
-  the `en` block** (`Â«Â»`, `Ã—`, `Â·`, `ÙفØ§Ø±Ø³ÛŒ` → proper «» × · فارسی) — that
-  corruption was baked in by an earlier repair, not the runtime.
-- **Dashboard** (`dashboard_screen.dart` → now `ConsumerStatefulWidget`): the
-  today-attendance section gained a horizontal **tag FilterChip row** («همه» +
-  tags, same styling as the clients screen) filtering which clients appear;
-  empty filter → `AppEmptyState(noClientsWithTag)`. Backing provider
-  `clientTagFilterProvider` (clientId → tag ids) lives in `dashboard_providers.dart`.
-- **`app_refresh.dart`**: registered `clientProvider` and `clientTagFilterProvider`
-  in `_appDataProviders` so bonus/plan edits refresh card subtrees everywhere.
-- New test `test/widget/client_card_quick_actions_test.dart` (3 cases): shows
-  bonus + remaining; +/− persists bonus (db-checked); freeze toggle flips status
-  (db-checked). **96 → 99 tests.**
-
-### 5d. Systemic light/dark theme fix — `AppTones` (DONE, analyze clean + 99 tests green)
-
-Root cause: every widget pulled colors straight from the light-only `AppColors`
-palette, so dark mode showed dark-on-dark text (client cards, bottom sheet, etc.).
-
-- New `lib/core/theme/app_tones.dart`: `@immutable AppTones` with
-  `static const light` (== the old `AppColors` values) and `static const dark`
-  palettes, `AppTones.of(context)` + `extension AppTonesContext on BuildContext
-  { AppTones get tones }`. Semantic tokens: primary/primaryDark/primaryLight/
-  onPrimary, success/successSoft, warning/warningSoft, error/errorSoft,
-  surface/surfaceVariant/background, onSurface/onSurfaceVar, outline/
-  outlineVariant, today/todaySoft/todayInk, present/absent/queued/frozen.
-- `AppColors` is now **only** the brand palette (base hues + `gradient*`), and
-  `app_theme.dart` still builds ThemeData from it — untouched.
-- Migrated all widgets/screens from `AppColors.<token>` → `t.<token>` (with
-  `final t = context.tones;` in build): `app_widgets.dart` (manual), plus
-  `app_charts`, `styled_text_field`, `form_card_screen`, `bottom_nav_bar`,
-  `main.dart`, `dashboard_screen`, `client_card`, `clients_screen`,
-  `client_detail_screen`, `past_attendance_screen`, `attendance_calendar`,
-  `add_plan_screen`, `templates_screen`, `template_card`, `tags_screen`.
-  Non-build scopes resolved explicitly (`_statusColor(status, t)`,
-  `_buildPlaceholder(context)`, `AppTones.of(context)` in dialog builders).
-  Chart color params made nullable and resolved via `?? t.x`; the line-chart
-  painter now takes a `highlightColor`.
-- `screens_smoke_test.dart` already renders every screen in both **light and
-  dark**, so dark-mode regressions are covered. 99 tests stay green.
-
-### 5f. Navigation UX overhaul — Phase 1 (DONE, analyze clean + 107 tests green)
-
-User feedback: "the app is very hard to navigate". Full 4-phase plan agreed
-(tabs reduced 5→4 with Tags under Settings, tap-a-client opens the profile,
-per-tab nested navigators, polish). **Phase 1 shipped:**
-
-- **Fixed a real dead-tap bug.** `dashboard_screen.dart` still called
-  `Navigator.pushNamed(context, '/clients')` (today-attendance action + bonus
-  card), but `/clients` has no `AppRouter.onGenerateRoute` branch → route
-  generation failed. The selected tab is now a provider, so any screen can
-  switch tabs.
-  - New `lib/core/navigation/navigation_providers.dart`: `tabIndexProvider`
-    (`TabIndexNotifier.select`) + `ClientQuickFilter` enum / `clientQuickFilterProvider`.
-  - `MainShell` watches `tabIndexProvider` and `ref.listen`s to invalidate the
-    tab's providers on change (works for tab-bar taps *and* programmatic
-    switches).
-- **Unknown routes no longer blank/crash**: `AppRouter.onUnknownRoute` renders
-  `AppEmptyState` with the new `AppStrings.pageNotFound` (fa+en), wired via
-  `MaterialApp.onUnknownRoute`.
-- **Dashboard stat cards drill down**: `_HeroStat` is now tappable; total /
-  expired / frozen / queued set the matching `ClientQuickFilter` and switch to
-  the Clients tab. The low-session section header and bonus card do the same.
-  - New `DashboardService.getClientIdsByPlanStatus(status)` +
-    `planStatusClientIdsProvider` / `quickFilterClientIdsProvider`
-    (resolves the active filter to a `Set<int>?`, `null` = all).
-  - `ClientsScreen` watches the filter, narrows the list and shows a
-    dismissible `Chip` naming the active filter.
-- **Client card attendance shortcut**: new calendar `IconButton` on `ClientCard`
-  → `/attendance/<id>` (profile tap stays as-is until Phase 2).
-- **Fixed a latent Hero crash**: the three tab FABs (`clients`/`templates`/`tags`)
-  all used the default `heroTag`, so the IndexedStack had duplicate heroes and
-  any route push threw "multiple heroes that share the same tag". Each FAB now
-  has a unique `heroTag`. (This is why `clients_navigation_test` wrapped
-  `MainShell` in `HeroMode(enabled: false)`.)
-- New tests: `test/unit/quick_filter_provider_test.dart` (filter → client ids)
-  and `test/widget/navigation_ux_test.dart` (stat-card tab switch, "view clients"
-  tab switch, unknown-route page, client-card attendance shortcut).
-  **101 → 107 tests.**
-
-Remaining: Phase 2 (tap→profile + actions overflow/long-press, 4 tabs, Tags under
-Settings, localize Tags/Templates), Phase 3 (per-tab nested navigators), Phase 4
-(polish).
-
-### 5g. Navigation UX overhaul — Phase 2 (DONE, analyze clean + 109 tests green)
-
-- **Tabs 5→4; Tags no longer a bottom destination.**
-  - `lib/main.dart`: `MainShell._screens` is now
-    [dashboard, clients, templates, settings]; `AppRoutes.tags` added to
-    `AppRouter.onGenerateRoute` (pushes `TagsScreen` on the root navigator);
-    `_invalidateTabProviders` updated (case 3 = settings, tags case removed).
-  - `lib/core/widgets/bottom_nav_bar.dart`: dropped the Tags destination.
-- **Tap a client → profile.** `ClientCard` gained `onLongPress` +
-  `onShowActions` params (`onLongPress` on its inner `InkWell`; the `⋮`
-  `IconButton` renders only when `onShowActions != null`).
-  `clients_screen.dart`: `onTap` → `/clients/detail/<id>`; long-press or `⋮` →
-  `_showClientActions(client)` (renamed from `_openClientSheet`; the old
-  "view profile" sheet row removed). Bonus ± and freeze stay inline on the card.
-- **Tags under Settings**: `settings_screen.dart` gets a «مدیریت برچسبها» row →
-  `AppRoutes.tags`. NOTE: the row's `ListTile` is wrapped in
-  `Material(type: MaterialType.transparency)` — `AppCard`'s colored
-  `DecoratedBox` otherwise trips Flutter's "ListTile background or ink splashes
-  may be invisible" debug assertion, which fired for *every* `MainShell` test.
-- **Localization**: `tags_screen.dart` + `templates_screen.dart` now go through
-  `AppStrings`; added `clientActionsTitle` + the templates/tags keys
-  (`templatesTitle, noTemplatesTitle, noTemplatesSubtitle, addTemplate,
-  usedByCountTemplate, deleteTemplateTitle, deleteTemplateMessageTemplate,
-  sessionsCountTemplate, daysCountTemplate, oneSessionPerDaysTemplate, newTag,
-  editTagTitle, deleteTagTitle, deleteTagMessageTemplate, tagNameLabel,
-  emojiOptionalLabel, colorLabel, tagClientCountTemplate,
-  noTagsDefinedSubtitle, manageTags`) + their formatting methods (fa+en).
-- Tests updated: `bottom_nav_bar_test` (5→4, «برچسبها» absent),
-  `screens_smoke_test` (`/tags` moved to sub-routes; primary set now 4),
-  `clients_navigation_test` (tap→detail screen + new long-press→actions-sheet
-  test), `navigation_ux_test` (+ settings→tags nav test; use
-  `scrollUntilVisible` — Settings is a lazy `ListView`).
-  **107 → 109 tests.**
-
-### 5h. Navigation UX overhaul — Phase 3+: nested per-tab navigators + back (DONE, analyze clean + 110 tests green)
-
-- Goals: each tab keeps its own back stack; a pushed screen (client detail,
-  add/edit, attendance, tags…) lives *inside* its tab, so the bottom bar stays
-  visible and state survives tab switches.
-- `lib/main.dart`:
-  - `AppRouter.onGenerateRoute` gained the four tab-root branches
-    (`/dashboard`, `/clients`, `/templates`, `/settings`) so nested navigators
-    can use the same router.
-  - `MainShell` replaced its direct `_screens` `IndexedStack` children with
-    four nested `Navigator`s (`initialRoute: <tab route>`,
-    `onGenerateRoute`/`onUnknownRoute: AppRouter.*`), each with a
-    `GlobalKey<NavigatorState>`.
-  - System back: **`PopScope` does NOT work for this** — the root navigator's
-    first route is `isFirst`, so `maybePop` *bubbles* (returns false) and calls
-    `SystemNavigator.pop`, never consulting the `PopScope`. Instead
-    `_MainShellState` is now a `WidgetsBindingObserver`: `WidgetsApp.didPopRoute`
-    runs first (root pop → bubble → false, so the event still reaches us), then
-    `didPopRoute()` forwards to the active tab's nested navigator
-    (`maybePop`), returning false only when that stack is empty so the system
-    can exit the app. (Verified with a throwaway probe test against
-    `C:\flutter\...\widgets\binding.dart` `handlePopRoute` + `navigator.dart`
-    `maybePop`.)
-  - Removed dead code: `AppStrings.viewProfile` (fa+en field, ctor param,
-    values) — the Phase 2 actions sheet dropped its last user.
-- Behavior changes to remember for tests: pushed routes now leave the bottom
-  bar on screen (finders see BOTH a detail-section title and the matching
-  bottom-nav label, e.g. «برنامهها» appears twice), and non-selected tabs are
-  offstage in the `IndexedStack` (only the active tab's `Navigator` is found).
-- Tests: `clients_navigation_test` «برنامهها» now `findsWidgets`;
-  `navigation_ux_test` gained "pushed screens keep the bottom bar and system
-  back pops the tab stack" — mocks `SystemChannels.platform`
-  (`SystemNavigator.pop`) to assert the first back pops the nested detail
-  (handled=true, no pop) and the second back exits (handled=false, one pop).
-  **109 → 110 tests.**
-
-### 5e. Assign/remove tags on a client (DONE, analyze clean + 101 tests green)
-
-The data layer already supported per-client tags (`client_tags` join table +
-`assignTagToClient`/`removeTagFromClient`) but **no screen ever called them** —
-tags were display/filter-only, so there was no way to add a tag to a client.
-
-- New reusable picker `lib/features/tags/presentation/widgets/client_tag_picker.dart`:
-  `showClientTagPicker(context, ref, selectedIds)` opens a bottom sheet listing
-  every tag as a toggleable `FilterChip` and returns the new id set (or null).
-  The caller persists — form keeps it local until save, detail writes instantly.
-- **Add/Edit client form** (`add_edit_client_screen.dart`): new «برچسبها»
-  section with removable `Chip`s + an «افزودن برچسب» `ActionChip` opening the
-  picker. `_loadClient` seeds the current ids; `_save` diffs
-  (`assign` added, `remove` dropped) and, for a brand-new client, assigns after
-  `createClient` returns the new id. (Was also the only way to tag at creation.)
-- **Client detail** (`client_detail_screen.dart`): hero tag chips are now tappable
-  (`_HeroChip.onTap`), plus an «افزودن برچسب» chip; `editTags()` reads the current
-  ids, opens the picker, applies the diff, then invalidates `clientTagsProvider`
-  and `invalidateAppData()`.
-- New `AppStrings`: `tagsSection`, `addTag`, `noTagsDefined` (fa+en).
-- `app_refresh.dart`: registered `clientTagsProvider`, `allTagsProvider`,
-  `tagUsageCountProvider` so assignments refresh the detail header, dashboard
-  tag filter and tag usage counts.
-- New test `test/widget/client_tags_test.dart` (2 cases, db-checked): edit form
-  lists an assigned tag and adds a second; detail screen removes a tag.
-  **99 → 101 tests.**
-
-### 5a. Multi-attendance-per-day rework (DONE, analyze clean + 96 tests green)
-
-The user requires: multiple attendance records allowed per **any** day (past or
-today); quick add from client card; detailed calendar + records in the
-attendance sub-page; finished-plan history kept.
-
-Key facts learned:
-- The `Attendance` table has **NO unique constraint on (clientId,date)** —
-  multiple rows per day were already storable.
-- Drift `getSingleOrNull` **throws when 2+ rows match** — everywhere that
-  fetched one record per (client,date) needed a `..limit(1)`.
-
-Changes made:
-- `app_database.dart`: `getAttendance` and `getPlanAttendanceForDate` now
-  order by `id DESC LIMIT 1` (latest record). `removeOneAttendance` also got
-  `LIMIT 1` (it previously threw "Too many elements" on 2-record days).
-- `attendance_service.dart`: `markAttendance` now **always inserts a new
-  record** (no upsert of the existing row). `undoAttendance` deletes the
-  latest record. `addAttendance`/`removeOneAttendance` retained (used by the
-  session service).
-- `attendance_session_service.dart`: removed `markAttendance`/`undoAttendance`;
-   the UI layer now only uses `addSession` (insert + consume plan-then-bonus
-   session) and `removeSession` (delete latest record + refund). Doc comment
-   updated: **every add consumes, every removal refunds**.
-- `attendance_providers.dart`: `clientAttendanceMapProvider` /
-  `planAttendanceMapProvider` are now `Map<String, List<String>>` (date →
-  list of statuses) for the calendar; `AttendanceNotifier` keeps only
-  `addSession`/`removeSession`; `_invalidateFor` also invalidates
-  `planAttendanceProvider`/`planAttendanceMapProvider` (whole families).
-  `app_refresh.dart` lists both plan providers too.
-- `attendance_calendar.dart`: `attendanceMap` is the list-map; cell shows the
-  strongest status color (present wins) and a `×N` badge when a day has
-  multiple records; attendance-mode tap now calls **`onDayTapped(dateKey)`**
-  (no more status-cycling). Picker mode (`onDaySelected`/`selectionKey`)
-  unchanged — `add_plan_screen.dart` updated to `const <String, List<String>>{}`
-  + `onDayTapped: (_) {}`.
-- `past_attendance_screen.dart` (rewritten, fully localized): session summary
-  card (sessionStatusTitle/activePlanRemainingLabel/noActivePlanLabel/
-  queuedPlansLabel/bonusSessions/recordedSessionsLabel), quick-add-today row
-  (`s.quickAddToday`, «حاضر + / غایب +» → `addSession` with snackbars via
-  `s.recordAdded`), calendar with day-tap → **`_DayAttendanceSheet`** bottom
-  sheet (that day's records + per-record delete via `removeSession` +
-  present/absent add buttons), history list grouped per day with per-record
-  delete (`s.recordRemoved` snackbar, `s.deleteSession` tooltip). Empty states
-  localized (`s.noHistoryYet`/`s.noHistorySubtitle`). Dates rendered with
-  `formatDateLong(date, lang)`.
-- `dashboard_screen.dart`: `_mark`/`_undo` now call notifier `addSession`/
-  `removeSession` (incl. recordAdded/recordRemoved snackbars);
-  `todayAttendanceProvider` is `Map<int, Map<String,int>>` (clientId →
-  {status: count}) fed by `DashboardService.getTodayAttendance`; `_TodayRow`
-  shows a count pill `s.attendanceCount('حاضر'|'غایب', n)` + undo when any
-  records exist, else the quick-mark buttons. `dashboard_providers.dart` type
-  updated.
-- `client_detail_screen.dart`: plans section header now `s.plansSection`
-  («برنامهها») to include finished/expired plans in history.
-- `demo_data.dart`: switched to `addSession`.
-- Tests: unit — replaced "updates existing record status" and "unique per
-  client and date" with multi-record tests; added "getAttendance returns the
-  latest" and "getTodayAttendance counts multiple records per client/status"
-  (94 → **96 tests**). Widget — `attendance_marking_test.dart`:
-  `PastAttendanceScreen` now needs the locale harness (bare MaterialApp fell
-  back to English); buttons are «حاضر +» (was hardcoded «حضور +»); the undo
-  tap targets the record-card `IconButton` after dismissing the snackbar and
-  scrolling the lazy ListView (and asserts via DB, not off-screen text).
-  `screens_smoke_test.dart` + `clients_navigation_test.dart` detail assertion
-  is now «برنامهها» (was «برنامههای فعال»).
-
-### Phase 0 — design foundation (DONE, analyze+94 tests green)
-
-**`lib/core/theme/app_colors.dart`** — added gradient endpoint lists:
-`gradientPrimary`, `gradientSuccess`, `gradientWarning`, `gradientError`,
-`gradientFrozen`, `gradientDark`. Base palette untouched.
-
-**`lib/core/theme/app_typography.dart`** — added `titleLarge` (16/w700) and
-`caption` (11/w500).
-
-**`lib/core/theme/app_theme.dart`** — both light & dark themes now define:
-`navigationBarTheme` (Material 3 NavigationBar: elevation 0, indicator,
-label font), `snackBarTheme` (floating + rounded), `progressIndicatorTheme`
-(primary), `dialogTheme` (rounded), `dividerTheme`.
-Note: `DialogThemeData` exists on Flutter 3.47 (do not downgrade to `DialogTheme`).
-
-**`lib/core/widgets/app_widgets.dart`** —
-- `AppCard`: now adds a soft box-shadow in light mode
-  (`Color(0xFF1F2A1E).withValues(alpha:0.06)`, blur 14, offset (0,5)); in dark
-  mode no shadow, uses theme surface + outline border.
-- `AppEmptyState`: icon now sits in a 96px gradient circle (primaryLight→
-  surfaceVariant), icon color `primaryDark`, size 44.
-- NEW `AppHeroHeader`: gradient rounded header. `child`, optional `gradient`
-  (default `AppColors.gradientPrimary`), optional `padding`. Foreground color is
-  auto-derived from the last gradient color's luminance (white or `onSurface`)
-  and merged into the child via `DefaultTextStyle`.
-
-**`lib/core/widgets/app_charts.dart`** (NEW file, no external package):
-- `AppProgressRing(value, size=88, strokeWidth=10, trackColor=surfaceVariant,
-  progressColor=primary, child)` — CustomPainter arc with sweep shader + round
-  cap. Clamp 0..1. The `.g.dart`-style const usage: `const AppProgressRing(...)`.
-- `BarDatum(label, value, color?, highlighted?)`
-- `AppMiniBarChart(data, height=120, maxValue?)` — vertical gradient bars,
-  highlight draws a border.
-- `ChartPoint(label, value, highlight=false)`
-- `AppLineChart(points, height=140, lineColor=primary, fillColor?)` — grid,
-  area fill, polyline, dots (highlight dots are bigger/onSurface).
-
-### Phase 1 — localization (DONE)
-
-**`lib/core/l10n/app_strings.dart`** (NEW) — pattern:
-```dart
-final s = AppStrings.of(context);   // resolves from Localizations.localeOf
-```
-- Const instances `AppStrings.fa` / `AppStrings.en` with ~45 fields each.
-- Template strings use `{token}` placeholders resolved by methods:
-  `welcomeWith(name)`, `bonusClients(count)`, `remainingSessions(count)`,
-  `clientsWithBonus(count)`.
-- Keys currently defined: common actions (ok/yes/no/cancel/confirm/delete/
-  edit/save/saved/errorPrefix/loading), nav labels, settings labels
-  (trainer/appearance/theme system/light/dark/language fa/en/dev tools),
-  dashboard (totalClients/expired/frozen/queued/todayAttendance/present/absent/
-  lowSessionPlans/viewClients/sessionsLeft/noAttendanceYet/...), databaseFailedTitle.
-- **To add new strings**: add a `final String x;` + constructor param + both
-  `fa` and `en` values. Ideally also add a wire test.
-
-**`lib/core/utils/date_format.dart`** (NEW) —
-- `formatDateLong(jalaliKey, languageCode)` — fa: «شنبه ۲۵ اسفند ۱۴۰۴»;
-  en: «Saturday, 15 March 2026» (Gregorian of the same Jalali day).
-- `formatDateShort(...)` — fa: «۱۴۰۴/۱۲/۲۵»; en: «2026/03/15».
-- `localizeNumber(value, languageCode)` — Persian digits only when 'fa'.
-- GOTCHA already fixed: `Jalali.toGregorian()` returns a **`Gregorian`**, not a
-  `DateTime`; build a `DateTime(g.year, g.month, g.day)` for `.weekday`.
-
-**`lib/core/utils/jalali_calendar.dart`** — bugfix: `formatJalaliLong` had a
-literal `?` in the output (`'$dayName? ${...}'`) → removed. Result now clean:
-«شنبه ۲۵ اسفند ۱۴۰۴».
-
-**`lib/features/settings/data/settings_service.dart`** — added
-`getLanguagePreference()` / `setLanguagePreference(code)` (key `'language'`).
-
-**`lib/features/settings/providers/settings_providers.dart`** — added
-`languageProvider` (NotifierProvider<String>), default `'fa'`, loads persisted
-value, `setLanguage(code)` persists. NOTE: null-promotion gotcha — assignment
-after an OR-check needs `stored!`.
-
-**`lib/features/settings/presentation/settings_screen.dart`** — fully localized;
-new **Language** section with `SegmentedButton<String>` (فارسی / English) wired
-to `languageProvider`. Theme section unchanged but localized. Dev-tools seed
-section still `kDebugMode`-only. Invalidates the same providers after seeding.
-
-**`lib/main.dart`** —
-- `ProCalendarApp`: `locale` is now `Locale(ref.watch(languageProvider))`
-  (was hardcoded `Locale('fa','IR')`). Supported locales already
-  `fa_IR` / `en_US`.
-- `StartupErrorApp` stays hardcoded-Persian (fallback UI without providers).
-- `MainShell` unchanged (IndexedStack + BottomNavBar).
-
-**`lib/core/widgets/bottom_nav_bar.dart`** — replaced `BottomNavigationBar`
-with Material 3 **`NavigationBar`** + `NavigationDestination`s; labels localized.
-Added optional `badgeCount` param → shows a `Badge` on the **Dashboard**
-destination and `Badge` with a bounce on Dashboard (Phase 7 will count
-reminders and pass it from MainShell).
-
-**`lib/features/templates/presentation/templates_screen.dart`** — fixed a
-**pre-existing broken line** in the dirty tree: `usageCountAsync.value` was
-undefined; changed to `snapshot.data ?? 0`.
-
-### Test updates (in `test/widget/`)
-
-Because nav is now M3 `NavigationBar` and labels are locale-driven:
-- `bottom_nav_bar_test.dart`: MaterialApp now passes `locale: Locale('fa')`,
-  `supportedLocales: [fa, en]`, and the three `Global*Localizations.delegate`s
-  — otherwise locale resolves to `en` and Arabic-free labels are English.
-- `screens_smoke_test.dart`: added `buildHarness(db, {theme, home, initialRoute})`
-  that mirrors the app's locale wiring; all 7 route blocks use it;
-  `find.byType(NavigationBar)` replaces `BottomNavigationBar`.
-- `clients_navigation_test.dart`: same locale wiring + NavigationBar type.
-
-**Rule for any future widget test that renders localized UI**: reuse the
-`buildHarness` pattern (delegates + supportedLocales) or the locale falls back
-to English.
-
----
-
-## 6. Conventions (must follow)
-
-1. **New UI strings go through `AppStrings`**, both `fa` and `en`. Do not
-   hardcode new Persian strings in screens that are already localized.
-   Screens not yet localized (templates, tags, add/edit forms, attendance)
-   may keep Persian for now — they get converted as they are refreshed.
-2. **Numbers**: use the `toPersian()` util (via `localizeNumber`) for Persian
-   UI; keep Western digits in en mode and in stored data.
-3. **Providers**: Riverpod 3 — `FutureProvider.autoDispose`/family for reads,
-   `NotifierProvider` for mutable state, plain `Provider` for services.
-   Invalidate tab providers in `MainShell._invalidateTabProviders` after
-   mutations (it's the pattern that keeps stale data away).
-4. **DB**: add columns/tables + bump `schemaVersion` + extend `onUpgrade`.
-   Regenerate `.g.dart` with build_runner.
-5. **No new packages.** Charts → `app_charts.dart`. CSV → hand-rolled.
-   Anything needing ffi/plugins (notifications, share) is out of scope or
-   replaced with in-app equivalents.
-6. **RTL**: default direction comes from Material localizations; don't force
-   `Directionality` in screens. Test in both themes (smoke test covers light+dark).
-7. Cards/empty states/hero → shared widgets in `app_widgets.dart`; charts →
-   `app_charts.dart`.
-
----
-
-## 7. Gotchas / traps (learned the hard way)
-
-- `flutter` not on PATH → prefix `$env:PATH = "C:\flutter\bin;$env:PATH"`.
-- `Jalali.toGregorian()` returns `Gregorian` (no `.weekday`).
-- Bare `MaterialApp` in tests resolves locale→`en` without delegates:
-  localized widget tests need the delegates/supportedLocales harness.
-- `AppCard` builds a Container inside InkWell; the shadow is added on the
-  Container's BoxDecoration (uses `withValues`, which is the non-deprecated
-  `withOpacity` replacement on modern Flutter — do NOT switch back to
-  `withOpacity`).
-- Riverpod 3 + code-gen: regenerate after touching `@riverpod` annotations;
-  `ClientPlans` patch updates use `patchPlan` (a full `replace` wipes
-  `Value.absent()` columns — documented in code).
-- `SectionHeader` must never be placed inside a `Row` (unbounded-width
-  `Expanded` crash — commented in `client_detail_screen.dart`).
-- grep/ripgrep tool fails on paths containing spaces — use PowerShell
-  `Select-String` in this workspace.
-- The user's uncommitted working tree contains throwaway Python scripts
-  (`fix_*.py`, `update_*.py`) — do not delete them.
-
----
-
-## 8. Where to pick up — Phase 2 (screen refresh + gaps)
-
-Status: **8a ✅ done** (dashboard), **8c ✅ done** (client detail + `clientTagsProvider`),
-**5a ✅ done** (multi-per-day attendance rework — see §5a), **8b ✅ done**
-(clients screen sort + bottom sheet — see below), **8d/8e pending**.
-
-> ⚠️ 2026-09 **l10n near-miss**: a parallel agent (Cline) left `app_strings.dart`
-> half-wired — duplicate `en` block, constructor missing 17 required params, and
-> a **mojibake fa block** (~3000 corrupted chars incl. literal `U+0081`/`U+00AD`).
-> Repaired: rebuilt the whole `fa` block with correct Persian (Write-tool roundtrip
-> verified; file re-saved UTF-8 **without** BOM — Read/Edit tools mis-decode a
-> BOM'd file that was double-encoded), removed duplicate `en`, wired the 17
-> constructor params, renamed the bogus `remainingDetail:` values. `app_strings.dart`
-> is still **untracked** (part of the uncommitted 5a/2b work) — if it ever needs a
-> clean source, tests + `postgres`… currently the tests ARE the oracle
-> (`flutter test` = 96 green).
-
-### 8b. Clients screen — DONE
-
-Implemented (analyze clean + 96 tests green):
-- `clients_screen.dart`: AppBar sort `PopupMenuButton` (`_SortMode.name/newest/bonus`,
-  newest = `id` desc because `createdAt` defaults to `''` in the DB), tag chips,
-  localized search/empty states (`s.emptyClientsTitle`, `s.noResults…`); card tap
-  → `AppBottomSheet.show` with viewProfile → detail, «مشاهده حضور و غیاب» →
-  `/attendance/:id`, quick-add present/absent today (`attendanceProvider.addSession`
-  with `jalaliToday()` + active `planId`), edit, delete (localized
-  `s.deleteClientMessage` + `s.clientDeleted` snackbar). Dismissible retained.
-- `client_card.dart`: removed the `حضور+ / غیبت+` FilterChip row and `onDelete`
-  icon — card is tappable-only, keeps active-plan chip + remaining (`s.remainingDetail`)
-  + bonus + today-count pills.
-- `AppBottomSheet.show` (`app_widgets.dart`): `Container(decoration…)` → `Material`
-  (ListTiles asserted "ink may be invisible" on the decorated Container).
-- `clients_navigation_test.dart`: tap «سارا محمدی» → sheet asserts
-  «مشاهده پروفایل / ثبت سریع امروز / حاضر / غایب / ویرایش مشتری / حذف مشتری» → tap
-  viewProfile → detail markers. (Sheet labels use status words «حاضر/غایب», not
-  «حضور/غیبت» — the test matches the AppStrings values.)
-- Added l10n: `clientDeletedTemplate` + `clientDeleted(name)` method (fa/en).
-
-Remaining 8b idea (deferred to Phase 3 soft-delete): search matching note text.
-
-### 8d. MainShell badge
-- `MainShell._invalidateTabProviders` add new providers as they appear;
-  pass a reminder/alarm count into `BottomNavBar(badgeCount: ...)`.
-
-### 8e. Templates / Tags screens (light polish)
-- Restyle cards to new tokens; localize strings; keep behavior.
-
----
-
-## 9. Phase 3 — data layer detail (schema v4)
-
-Attendance notes carried over into v4: do **not** add a unique index on
-`attendance(clientId,date)` — multi-record days are intentional. `getAttendance`
-returns the latest row for a day (`id` desc, limit 1); per-record ops use
-`removeOneAttendance` (latest first). One record consumed = one session
-(plan, then bonus); `removeSession` refunds.
-
-In `app_database.dart`:
-- `Clients`: add `BoolColumn get isArchived => boolean().withDefault(const Constant(false))();`
-- New tables (mirror existing style):
-  - `Payments`: `id` autoPK, `clientId` ref Clients #id cascade,
-    `planId` int nullable, `amount` real, `date` text, `note` text default '',
-    `createdAt` text default ''.
-  - `Measurements`: `id` autoPK, `clientId` ref cascade, `date` text,
-    `weight`/`bodyFat`/`chest`/`waist`/`hips`/`arm`/`thigh` real nullable,
-    `note` text default '', `createdAt` text default ''.
-- Bump `schemaVersion` → 4; in `onUpgrade`: `if (from < 4) { addColumn(isArchived); createTable(payments); createTable(measurements); }`
-- Regenerate with build_runner.
-- New feature dirs `lib/features/revenue/`, `lib/features/measurements/` with
-  `data/repository`, `data/service`, `providers/*.dart` following the
-  clients/plans pattern exactly (Repository wraps `db`, Service holds business
-  logic, providers wire them).
-- Archive-aware queries: list clients filters `isArchived == false`; Settings
-  gets an "archive" section to restore/reactivate.
-
-## 10. Phases 4–8 briefing
-
-- **Revenue (4)**: add `price` IntColumn to `ClientPlans` (Phase 5 of migration
-  — bump again) + AddPlan field; Payments screen under client detail; monthly
-  income with `AppMiniBarChart`; "expected vs collected".
-- **Measurements (5)**: readings form (weight/bodyFat/chest/waist/arm/thigh),
-  `AppLineChart` trend, delta chip (▲/▼ vs previous), no photos (image_picker
-  out).
-- **Attendance stats (6)**: per-client % , streaks, weekday frequency;
-  global monthly bar chart; entry from dashboard + attendance screen.
-- **Reminders (7)**: computed list (expired/frozen>N/queued/≤2 sessions/
-  inactive ≥ threshold/unpaid), Settings thresholds (`AppSettings` keys), a
-  "یادآوریها" screen, badge on Nav `badgeCount`. No push notifications.
-- **Backup/export (8)**: DONE (data + web UI, see §5j). JSON of all tables
-  (`app`/`format`/`schemaVersion`/`exportedAt`) with **merge + replace**
-  restore; web download/upload via `dart:html`, native saves to the app
-  documents dir, clipboard-paste fallback for import; CSV export
-  (clients/plans/attendance) hand-rolled with BOM — no `csv` package; Settings
-  section «پشتیبانگیری». Remaining (native-only): iOS
-  `UIFileSharingEnabled` + `ITSAppUsesNonExemptEncryption` in
-  `ios/Runner/Info.plist`.
-
-## 11. Phase 9 — verification checklist
-- `flutter analyze` → No issues found.
-- `flutter test` → all green (129 today; will grow with new tests —
-  add service unit tests for revenue/measurements + a widget test that
-  switches language in Settings and asserts an English label appears).
-- Smoke builds (as past commits did): `flutter build web --release` and
-  `flutter build windows --release` (or at least `flutter build web`).
-- Dark-mode visual pass; RTL fa ↔ LTR en pass.
-  (`screens_smoke_test.dart` already asserts every screen renders in light **and**
-  dark, via `AppTones`.)
-
-## 12. Git hygiene reminder
-- Commit only when told; follow repo's commit-message style (prefix tags like
-  `UI:`, `feat:`, `fix:`). The user's dirty tree is theirs — don't stage it.
+# DEVELOPMENT_HANDOFF — fitness_trainer_app (Pro Calendar / Pro Calender)
+
+Persian (RTL) **personal-trainer CRM**: clients, plans (from templates),
+attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
+`fitness_trainer_app/`. This file tells the next session what exists and what's
+next. It is the only long-form source of truth besides `AGENTS.md`.
+
+Relative paths below are from the root `D:\work\ZAHRA\PRO CALENDER\fitness_trainer_app`.
+
+**PATH & TOOLING GOTCHAS (READ FIRST — this burned a whole session):**
+- These bind to ONE canonical tree only: `D:\work\ZAHRA\PRO CALENDER\fitness_trainer_app`
+  (paths contain a REAL SPACE, "PRO CALENDER"). If your reads return content that
+  doesn't match that path / looks like a spell-alike, IGNORE the spell-alike and
+  fall back to `flutter analyze` + `flutter test` as the only ground truth.
+- `flutter` is NOT on PATH. Prefix every command:
+  `$env:PATH = "C:\flutter\bin;$env:PATH"; flutter ...  `  — run inside
+  `fitness_trainer_app/`. Flutter lives at `C:\flutter`.
+- After editing Drift tables/providers, regenerate the generated file:
+  `dart run build_runner build --delete-conflicting-outputs` — STALE `.g.dart`
+  is the #1 cause of "I edited it but nothing changed" confusion here.
+- `dart run build_runner build` needs `dart` on PATH too (same prefix).
+
+**ACTIVE WORK — Per-Plan Pricing + Auto-Income (Task 2 of the handoff plan): COMPLETED**
+Goal: each plan gets its own `price` and gym `sharePercent`; assigning/purchasing a
+plan auto-creates an **income** transaction; accounting shows per-plan share, and
+reports (Jalali charts) show the split with a monthly Jalali chart.
+
+STATUS: **All slices DONE — green.**
+- `ClientPlans` table has `price` (default 0) and `sharePercent` (default 0);
+  schemaVersion 6 (v5 added price/share, v6 added `Transactions.planId`). `.g.dart`
+  regenerated. Auto-income rows link to their plan via `Transactions.planId` (FK
+  setNull), and `deletePlan` deletes that plan's transactions first so the ledger
+  and per-plan share stay in sync.
+- **Inline create everywhere**: a shared `TagEditorDialog` (`lib/features/tags/presentation/widgets/tag_editor_dialog.dart`) provides one consistent create/edit tag UI (name + emoji + 8 colors) used by both the Tags screen and the client tag picker. The client tag picker (`client_tag_picker.dart`) now watches tags live and shows an "افزودن تگ جدید" affordance; newly created tags appear instantly and are auto-selected.
+- **Add-plan empty-state create**: when no templates exist, the add-plan screen shows a "ساخت قالب جدید" button that pushes the existing `AddEditTemplateScreen`; on return it invalidates templates and auto-selects the newly created template.
+- Review round: transaction rows delete via a trailing delete button (no whole-
+  card tap), money/price/share/session inputs accept Persian digits
+  (`toLatinDigits` in `core/utils/persian_numbers.dart`), dead code removed.
+- Domain `ClientPlan` model, repository mappings, and `PlansService.assignPlan`
+  all thread `price` + `sharePercent` (optional named params, default 0).
+- **Bug fixed**: `PlansRepository.getActivePlan`, `getFrozenPlan`, `getPlan` now
+  correctly map `price` + `sharePercent` (were missing before).
+- **Auto-income wired**: `assignPlan(price > 0)` inserts `income/plan` transaction
+  (active or queued). Provider + add-plan UI pass price/share; demo data seeds priced plans.
+- **Per-plan share on accounting screen**: summary shows income, expense, gym share
+  (Σ price×share%), net balance. New "سهم برنامه‌ها" section lists each priced plan
+  with template name, client, price, share%, deduction, remaining days.
+- **Reports feature** (`lib/features/reports/`): period selector (weekly/monthly/yearly),
+  Jalali monthly income bar chart (last 12 months, current highlighted), 7-day trend
+  line chart. Route `/reports` accessible from accounting app bar.
+- **Accounting summary uses per-plan share**: `gymShare` = sum of per-plan deductions,
+  `net` = income − gymShare − expense.
+- **Onboarding (new)**: first-launch carousel (4 slides) covering Clients, Plans, Attendance, Reports. Shown once via `shared_preferences` flag `onboarding_completed`. Slide text fully localized in `AppStrings` (`onboardingTitle1..4`, `onboardingBody1..4`, `onboardingSkip/Next/GetStarted`). Implemented in `lib/features/onboarding/presentation/onboarding_screen.dart` and gated in `main.dart` via `OnboardingGate`.
+- Verdict: `flutter analyze` clean; `flutter test` **129/129 pass** (onboarding included; core suite still 164/164).
+
+## Architecture / how the app is planned
+- **Data**: Drift (`lib/core/database/app_database.dart` + `.g.dart`). Tables:
+  Clients, ClientTags, Tags, PlanTemplates, ClientPlans (price + sharePercent),
+  Attendance, AppSettings, Transactions.
+- **Plans feature** `lib/features/plans/`: service → repository → drift DAO.
+  `assignPlan(clientId, templateId, sessions, days, price, sharePercent, startDate)`
+  is the single plan-assignment entry point; queues when active exists; auto-income
+  when `price > 0`. Freeze/promote/queue-promote in `plans_service.dart` /
+  `plans_repository.dart`. `getAllPlans()`, `planShareDeduction(plan)` added.
+- **Accounting feature** `lib/features/accounting/`: transactions service +
+  repository; screen shows income/expense/gym-share/net + per-plan share section.
+- **Reports feature** `lib/features/reports/`: pure `ReportsService` computes
+  `totalsBetween`, `monthlyBuckets`, `dailyBuckets`; `ReportsScreen` renders charts
+  using `AppMiniBarChart` + `AppLineChart`.
+- **Providers**: Riverpod (`.autoDispose` reads), services kept alive. Providers in
+  `lib/features/plans/providers/`, `lib/features/accounting/providers/`,
+  `lib/features/reports/providers/`. `allPlansProvider` added + invalidated on mutations.
+- **Localization**: `AppStrings` (Persian + English, `lib/core/l10n/`); new keys
+  for price, share, per-plan share, reports, month/day labels. Jalali utils in
+  `lib/core/utils/jalali_calendar.dart` + `shamsi_date`.
+- **Backup**: `BackupService` JSON/CSV export/import; schema version exported in
+  JSON marker (test asserts `schemaVersion == 6`).
+- **Demo data**: seeds 4 clients, 3 templates, 3 tags, 31 attendance records;
+  4 plans with price/sharePercent (auto-income recorded); 2 expense transactions.
+- **Onboarding**: `lib/features/onboarding/presentation/onboarding_screen.dart` — 4-slide
+  carousel (Clients, Plans, Attendance, Reports) with page indicators, Skip/Next/Get Started.
+  Persists `onboarding_completed` in `shared_preferences`. Gated by `OnboardingGate` in `main.dart`.
+
+## Commands
+- Run: `$env:PATH = "C:\flutter\bin;$env:PATH"; flutter run`
+- Analyze: `flutter analyze` (keep at "No issues found!")
+- Tests: `flutter test` (keep at 160/160; add tests for new behavior)
+- Drift codegen: `dart run build_runner build --delete-conflicting-outputs`
+- Regenerate DB for a scratch run, etc. — careful with paths.
+
+## Git / housekeeping
+- Do not commit unless asked. Working-tree scratch scripts (`fix_*.py`, DB
+  dumps, etc.) are throwaway — never delete or commit them.
+- After each completed task, update this file's status lines so the next
+  session knows exactly what's done.

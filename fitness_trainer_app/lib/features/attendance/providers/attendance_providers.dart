@@ -79,27 +79,46 @@ class AttendanceNotifier extends Notifier<AsyncValue<void>> {
   @override
   AsyncValue<void> build() => const AsyncValue.data(null);
 
-  Future<void> addSession(int clientId, String date, {String status = 'present', int? planId}) async {
+  Future<void> addSession(int clientId, String date, {String status = 'present'}) async {
     final service = ref.read(attendanceSessionServiceProvider);
     state = const AsyncValue.loading();
     try {
-      await service.addSession(clientId, date, status: status, planId: planId);
+      await service.addSession(clientId, date, status: status);
       _invalidateFor(clientId);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+      rethrow;
     }
   }
 
-  Future<void> removeSession(int clientId, String date) async {
+  /// Deletes a single attendance record and refunds its session.
+  /// Re-throws so UI callers can react to failures.
+  Future<void> removeSessionById(int attendanceId) async {
     final service = ref.read(attendanceSessionServiceProvider);
     state = const AsyncValue.loading();
     try {
-      await service.removeSession(clientId, date);
-      _invalidateFor(clientId);
+      final clientId = await service.removeSessionById(attendanceId);
+      if (clientId != null) _invalidateFor(clientId);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+      rethrow;
+    }
+  }
+
+  /// Deletes the latest record for a client/day (dashboard undo) and refunds
+  /// its session. Re-throws so UI callers can react to failures.
+  Future<void> removeLatestSession(int clientId, String date) async {
+    final service = ref.read(attendanceSessionServiceProvider);
+    state = const AsyncValue.loading();
+    try {
+      final removedClientId = await service.removeLatestSession(clientId, date);
+      if (removedClientId != null) _invalidateFor(removedClientId);
+      state = const AsyncValue.data(null);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
     }
   }
 

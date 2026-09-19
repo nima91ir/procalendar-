@@ -135,36 +135,130 @@ void main() {
       await db.close();
     });
 
-    test('removeSession returns the session to the active plan', () async {
+    test('removeLatestSession returns the session to the active plan', () async {
       final planId = await plansService.assignPlan(clientId, 1, 5, 30);
       await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       expect((await db.getPlan(planId))!.remaining, 4);
-      await sessionService.removeSession(clientId, '1405/06/21');
+      final removed = await sessionService.removeLatestSession(clientId, '1405/06/21');
+      expect(removed, clientId);
       expect((await db.getPlan(planId))!.remaining, 5);
       expect(await db.getAttendance(clientId, '1405/06/21'), isNull);
     });
 
-    test('removeSession only removes the latest record of the day', () async {
+    test('the record stores the plan the session was consumed from', () async {
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      expect((await db.getAttendance(clientId, '1405/06/21'))!.planId, planId);
+    });
+
+    test('a bonus attendance records a null planId', () async {
+      await clientsService.updateClient(clientId, 'Client', bonusSessions: 1);
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      expect((await db.getAttendance(clientId, '1405/06/21'))!.planId, isNull);
+    });
+
+    test('removeLatestSession only removes the latest record of the day', () async {
       final planId = await plansService.assignPlan(clientId, 1, 5, 30);
       await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       await sessionService.addSession(clientId, '1405/06/21', status: 'absent');
-      await sessionService.removeSession(clientId, '1405/06/21');
+      await sessionService.removeLatestSession(clientId, '1405/06/21');
       final remaining = await db.select(db.attendance).get();
       expect(remaining.length, 1);
       expect(remaining.first.status, 'present');
       expect((await db.getPlan(planId))!.remaining, 4);
     });
 
+    test('removeSessionById deletes exactly the tapped record', () async {
+      // Two records on one day; delete the *earlier* one by id — the later
+      // record must survive.
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      final presentId = (await db.getAttendance(clientId, '1405/06/21'))!.id;
+      await sessionService.addSession(clientId, '1405/06/21', status: 'absent');
+      final removed = await sessionService.removeSessionById(presentId);
+      expect(removed, clientId);
+      final remaining = await db.select(db.attendance).get();
+      expect(remaining.length, 1);
+      expect(remaining.first.status, 'absent');
+      expect((await db.getPlan(planId))!.remaining, 4);
+    });
+
+    test('removeSessionById refunds the session to the recorded plan, not the current active one', () async {
+      // A=2 sessions, then a queued B. Both records come from A; consuming the
+      // second expires A and promotes B. Deleting B's record must NOT refund B
+      // (B consumed no record); it refunds A, which is no longer active, so the
+      // session lands in the active successor B.
+      final aId = await plansService.assignPlan(clientId, 1, 2, 30);
+      final bId = await plansService.assignPlan(clientId, 1, 3, 30);
+      await sessionService.addSession(clientId, '1405/06/20', status: 'present');
+      final aLastRecordId = (await db.getAttendance(clientId, '1405/06/20'))!.id;
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      await sessionService.addSession(clientId, '1405/06/22', status: 'present');
+      expect((await db.getPlan(aId))!.status, 'expired');
+      expect((await db.getPlan(bId))!.remaining, 2, reason: 'third record consumed from promoted B');
+
+      await sessionService.removeSessionById(aLastRecordId);
+
+      expect((await db.getPlan(aId))!.status, 'expired', reason: 'successor is active, expired stays expired');
+      expect((await db.getPlan(bId))!.remaining, 3, reason: 'refund lands in the active successor');
+    });
+
+    test('removing the record that expired a plan reactivates it when nothing else is active', () async {
+      final aId = await plansService.assignPlan(clientId, 1, 2, 30);
+      await sessionService.addSession(clientId, '1405/06/20', status: 'present');
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      expect((await db.getPlan(aId))!.status, 'expired');
+      final expiringId = (await db.getAttendance(clientId, '1405/06/21'))!.id;
+
+      await sessionService.removeSessionById(expiringId);
+
+      final refreshed = await db.getPlan(aId);
+      expect(refreshed!.status, 'active');
+      expect(refreshed.remaining, 1, reason: 'one record still consumed a session from A');
+      expect(refreshed.queueOrder, isNull);
+    });
+
+    test('when the active successor is full, the refund becomes a bonus session', () async {
+      // A=2, B=2. Both records consume A; the second expires A and promotes B
+      // (full). Deleting the first record has nowhere to land: A is expired, B
+      // is already full -> the session is restored as a bonus.
+      final aId = await plansService.assignPlan(clientId, 1, 2, 30);
+      final bId = await plansService.assignPlan(clientId, 1, 2, 30);
+      await sessionService.addSession(clientId, '1405/06/20', status: 'present');
+      final firstRecordId = (await db.getAttendance(clientId, '1405/06/20'))!.id;
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      expect((await db.getPlan(aId))!.status, 'expired');
+      expect((await db.getPlan(bId))!.status, 'active');
+
+      await sessionService.removeSessionById(firstRecordId);
+
+      expect((await db.getPlan(aId))!.status, 'expired');
+      expect((await db.getPlan(bId))!.remaining, 2);
+      expect((await db.getClient(clientId))!.bonusSessions, 1);
+    });
+
+    test('removing a record refunds a frozen plan', () async {
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      expect((await db.getPlan(planId))!.remaining, 4);
+      await plansService.freezePlan(planId);
+      await sessionService.removeLatestSession(clientId, '1405/06/21');
+      final plan = await db.getPlan(planId);
+      expect(plan!.status, 'frozen');
+      expect(plan.remaining, 5);
+    });
+
     test('removeSession is a no-op when there is no record for that day', () async {
-      await sessionService.removeSession(clientId, '1405/06/21');
+      expect(await sessionService.removeLatestSession(clientId, '1405/06/21'), isNull);
+      expect(await sessionService.removeSessionById(9999), isNull);
       expect(await db.getAttendance(clientId, '1405/06/21'), isNull);
     });
 
-    test('removeSession returns a bonus session when the client has no plan', () async {
+    test('removeLatestSession restores a bonus session when the client has no plan', () async {
       await clientsService.updateClient(clientId, 'Client', bonusSessions: 2);
       await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       expect((await db.getClient(clientId))!.bonusSessions, 1);
-      await sessionService.removeSession(clientId, '1405/06/21');
+      await sessionService.removeLatestSession(clientId, '1405/06/21');
       expect((await db.getClient(clientId))!.bonusSessions, 2);
     });
   });

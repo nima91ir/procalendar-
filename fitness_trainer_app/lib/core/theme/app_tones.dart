@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_accents.dart';
 import 'app_colors.dart';
 
 /// Brightness-aware semantic colors.
@@ -68,12 +69,35 @@ class AppTones {
     required this.absent,
     required this.queued,
     required this.frozen,
+    required this.gradientPrimary,
   });
 
-  static AppTones of(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? dark : light;
+  /// Brand gradient for hero headers; follows the active accent.
+  final List<Color> gradientPrimary;
 
-  static const light = AppTones(
+  static AppTones of(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent =
+        Theme.of(context).extension<AccentThemeData>()?.accent ??
+            AppAccent.green;
+    return forAccent(accent, dark);
+  }
+
+  /// The exact palette for an accent + brightness. Surfaces and semantic
+  /// status colours are accent-independent (copied from the built-in light
+  /// or dark const) — only the primary family and gradient vary.
+  static AppTones forAccent(AppAccent accent, bool dark) {
+    final p = AccentPalettes.of(accent);
+    final base = dark ? darkPalette : lightPalette;
+    return base.copyWith(
+      primary: dark ? p.darkPrimary : p.lightPrimary,
+      primaryDark: dark ? p.darkPrimaryDark : p.lightPrimaryDark,
+      primaryLight: dark ? p.darkPrimaryLight : p.lightPrimaryLight,
+      gradientPrimary: p.gradientPrimary,
+    );
+  }
+
+  static const lightPalette = AppTones(
     primary: AppColors.primary,
     primaryDark: AppColors.primaryDark,
     primaryLight: AppColors.primaryLight,
@@ -98,9 +122,13 @@ class AppTones {
     absent: AppColors.absent,
     queued: AppColors.queued,
     frozen: AppColors.frozen,
+    gradientPrimary: AppColors.gradientPrimary,
   );
 
-  static const dark = AppTones(
+  /// Backwards-compatible alias for [lightPalette] (the green default).
+  static const light = lightPalette;
+
+  static const darkPalette = AppTones(
     primary: Color(0xFF9DBE7E),
     primaryDark: Color(0xFF7FA365),
     primaryLight: Color(0xFF33422F),
@@ -125,7 +153,46 @@ class AppTones {
     absent: Color(0xFFE57373),
     queued: Color(0xFFFFB74D),
     frozen: Color(0xFF64B5F6),
+    gradientPrimary: AppColors.gradientDark,
   );
+
+  /// Backwards-compatible alias for [darkPalette] (the green default).
+  static const dark = darkPalette;
+
+  AppTones copyWith({
+    Color? primary,
+    Color? primaryDark,
+    Color? primaryLight,
+    List<Color>? gradientPrimary,
+  }) {
+    return AppTones(
+      primary: primary ?? this.primary,
+      primaryDark: primaryDark ?? this.primaryDark,
+      primaryLight: primaryLight ?? this.primaryLight,
+      onPrimary: onPrimary,
+      success: success,
+      successSoft: successSoft,
+      warning: warning,
+      warningSoft: warningSoft,
+      error: error,
+      errorSoft: errorSoft,
+      surface: surface,
+      surfaceVariant: surfaceVariant,
+      background: background,
+      onSurface: onSurface,
+      onSurfaceVar: onSurfaceVar,
+      outline: outline,
+      outlineVariant: outlineVariant,
+      today: today,
+      todaySoft: todaySoft,
+      todayInk: todayInk,
+      present: present,
+      absent: absent,
+      queued: queued,
+      frozen: frozen,
+      gradientPrimary: gradientPrimary ?? this.gradientPrimary,
+    );
+  }
 }
 
 extension AppTonesContext on BuildContext {

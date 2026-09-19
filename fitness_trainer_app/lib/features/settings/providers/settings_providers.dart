@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
+import 'package:fitness_trainer_app/core/theme/app_accents.dart';
 import 'package:fitness_trainer_app/features/settings/data/settings_service.dart';
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
@@ -52,6 +53,40 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
       default:
         return ThemeMode.system;
     }
+  }
+}
+
+/// Selected brand accent, persisted in `app_settings`. `MaterialApp` watches
+/// it so switching accent re-tints every screen instantly.
+final accentProvider = NotifierProvider<AccentNotifier, AppAccent>(AccentNotifier.new);
+
+class AccentNotifier extends Notifier<AppAccent> {
+  @override
+  AppAccent build() {
+    _load();
+    return AppAccent.green;
+  }
+
+  Future<void> _load() async {
+    try {
+      final stored = await ref.read(settingsServiceProvider).getAccentPreference();
+      if (stored != null) {
+        for (final accent in AppAccent.values) {
+          if (accent.name == stored) {
+            state = accent;
+            return;
+          }
+        }
+      }
+    } catch (_) {
+      // Database not ready; keep the default accent.
+    }
+  }
+
+  Future<void> setAccent(AppAccent accent) async {
+    if (accent == state) return;
+    state = accent;
+    await ref.read(settingsServiceProvider).setAccentPreference(accent.name);
   }
 }
 

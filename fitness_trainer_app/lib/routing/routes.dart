@@ -9,6 +9,8 @@
   static const editTemplate = '/templates/edit';
   static const tags = '/tags';
   static const settings = '/settings';
+  static const accounting = '/accounting';
+  static const reports = '/reports';
   static const importBackup = '/settings/import-backup';
   static const attendance = '/attendance';
   static const addPlan = '/add-plan';

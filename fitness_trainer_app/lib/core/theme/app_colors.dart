@@ -19,6 +19,15 @@ class AppColors {
   static const surfaceVariant = Color(0xFFF2F4EE);
   static const background = Color(0xFFEFF2EA);
 
+  // Dark-mode surfaces (neutral dark-green family, shared with AppTones.dark).
+  static const darkSurface = Color(0xFF1F2A1E);
+  static const darkCard = Color(0xFF2A3829);
+  static const darkBackground = Color(0xFF161D15);
+  static const darkOnSurface = Color(0xFFE3F0E5);
+  static const darkOutline = Color(0xFF4A5A4A);
+  static const darkOutlineVariant = Color(0xFF3A4A39);
+  static const darkError = Color(0xFFEE9C8E);
+
   static const onSurface = Color(0xFF1F2A1E);
   static const onSurfaceVar = Color(0xFF4A5A4A);
 

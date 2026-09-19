@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:fitness_trainer_app/core/database/app_database.dart';
@@ -77,6 +78,53 @@ void main() {
       expect(plan!.status, 'frozen');
     });
 
+    test('deletePlan promotes the next queued plan when the active one is deleted', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final activeId = await plansService.assignPlan(clientId, 1, 5, 30);
+      final queuedId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await plansService.deletePlan(activeId);
+      final active = await db.getPlan(activeId);
+      expect(active, isNull);
+      final promoted = await db.getPlan(queuedId);
+      expect(promoted!.status, 'active');
+      expect(promoted.queueOrder, isNull);
+      expect(promoted.startDate, isNotNull);
+    });
+
+    test('deletePlan leaves the active plan untouched when a queued plan is deleted', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final firstId = await plansService.assignPlan(clientId, 1, 5, 30);
+      final queuedId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await plansService.assignPlan(clientId, 1, 5, 30);
+      await plansService.deletePlan(queuedId);
+      expect((await db.getPlan(firstId))!.status, 'active', reason: 'active plan is not affected');
+      final surviving = await db.select(db.clientPlans).get();
+      expect(surviving.map((p) => p.status).toSet(), {'active', 'queued'});
+      // The only remaining queued plan is still promoted when the active one
+      // expires despite the queue-order gap left by the deletion.
+      final remainingQueued = surviving.firstWhere((p) => p.status == 'queued');
+      final active = surviving.firstWhere((p) => p.status == 'active');
+      await plansService.consumeSession(active.id);
+      await plansService.consumeSession(active.id);
+      await plansService.consumeSession(active.id);
+      await plansService.consumeSession(active.id);
+      await plansService.consumeSession(active.id);
+      expect((await db.getPlan(remainingQueued.id))!.status, 'active');
+    });
+
+    test('reactivatePlan restores an expired plan to active with the refunded session', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 2, 30);
+      await plansService.consumeSession(planId);
+      await plansService.consumeSession(planId);
+      expect((await db.getPlan(planId))!.status, 'expired');
+      await plansService.reactivatePlan(planId);
+      final plan = await db.getPlan(planId);
+      expect(plan!.status, 'active');
+      expect(plan.remaining, 1);
+      expect(plan.queueOrder, isNull);
+    });
+
     test('unfreezePlan changes status back to active', () async {
       final clientId = (await db.select(db.clients).get()).first.id;
       final planId = await plansService.assignPlan(clientId, 1, 5, 30);
@@ -84,6 +132,105 @@ void main() {
       await plansService.unfreezePlan(planId);
       final plan = await db.getPlan(planId);
       expect(plan!.status, 'active');
+    });
+
+    test('assignPlan with price records an income/plan transaction', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, price: 1000000, sharePercent: 30);
+      final plan = await db.getPlan(planId);
+      expect(plan!.price, 1000000);
+      expect(plan.sharePercent, 30);
+
+      await plansService.assignPlan(clientId, 1, 5, 30, price: 500000);
+      final transactions = await db.getAllTransactions();
+      expect(transactions.length, 2);
+      for (final tx in transactions) {
+        expect(tx.type, 'income');
+        expect(tx.category, 'plan');
+        expect(tx.clientId, clientId);
+        expect(tx.date, isNotEmpty);
+      }
+      expect(transactions.map((t) => t.amount).toSet(), {1000000, 500000});
+    });
+
+    test('assignPlan with price 0 records no transaction', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      await plansService.assignPlan(clientId, 1, 5, 30);
+      expect(await db.getAllTransactions(), isEmpty);
+    });
+
+    test('queued plan assignment with price also records income', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      await plansService.assignPlan(clientId, 1, 5, 30, price: 800000);
+      await plansService.assignPlan(clientId, 1, 5, 30, price: 900000);
+      final transactions = await db.getAllTransactions();
+      expect(transactions.length, 2);
+      expect(transactions.map((t) => t.amount).toSet(), {800000, 900000});
+    });
+
+    test('repository getPlan maps price and sharePercent', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, price: 750000, sharePercent: 40);
+      final plan = await plansService.getPlan(planId);
+      expect(plan!.price, 750000);
+      expect(plan.sharePercent, 40);
+    });
+
+    test('planShareDeduction rounds the gym share down', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, price: 99999, sharePercent: 30);
+      final plan = await plansService.getPlan(planId);
+      expect(plansService.planShareDeduction(plan!), 29999);
+    });
+
+    test('assignPlan links the auto-income to the plan id', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, price: 700000);
+      final tx = (await db.getAllTransactions()).single;
+      expect(tx.planId, planId);
+    });
+
+    test('deleting a priced plan removes its auto-income', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, price: 700000);
+      expect(await db.getAllTransactions(), hasLength(1));
+
+      await plansService.deletePlan(planId);
+
+      expect(await db.getPlan(planId), isNull);
+      expect(await db.getAllTransactions(), isEmpty);
+    });
+
+    test('deleting a queued priced plan removes its auto-income', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      await plansService.assignPlan(clientId, 1, 5, 30, price: 400000);
+      final queuedId = await plansService.assignPlan(clientId, 1, 5, 30, price: 900000);
+      expect(await db.getAllTransactions(), hasLength(2));
+
+      await plansService.deletePlan(queuedId);
+
+      final remaining = await db.getAllTransactions();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.amount, 400000);
+    });
+
+    test('deleting a plan keeps manual (non-plan) transactions', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, price: 700000);
+      await db.insertTransaction(TransactionsCompanion.insert(
+        clientId: Value(clientId),
+        type: 'expense',
+        category: 'rent',
+        amount: 500000,
+        date: '1405/06/01',
+      ));
+      expect(await db.getAllTransactions(), hasLength(2));
+
+      await plansService.deletePlan(planId);
+
+      final remaining = await db.getAllTransactions();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.category, 'rent');
     });
   });
 }

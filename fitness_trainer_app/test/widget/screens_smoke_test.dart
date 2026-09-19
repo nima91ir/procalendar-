@@ -100,12 +100,14 @@ void main() {
         '/dashboard': 'تقویم حرفه‌ای',
         '/clients': 'مشتریان',
         '/templates': 'قالب‌های برنامه',
+        '/accounting': 'حسابداری',
         '/settings': 'تنظیمات',
       };
 
       const tabIcons = <String, IconData>{
         '/clients': Icons.people_outline,
         '/templates': Icons.calendar_today_outlined,
+        '/accounting': Icons.account_balance_wallet_outlined,
         '/settings': Icons.settings_outlined,
       };
 

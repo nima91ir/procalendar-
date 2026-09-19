@@ -1,10 +1,12 @@
 ﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
 import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
+import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
 
 /// Every provider backed by database reads. Mutations anywhere in the app call
 /// [invalidateAppData] so all *watching* screens refetch immediately — this
@@ -19,7 +21,8 @@ final List<Object> _appDataProviders = [
   clientPlansProvider,
   plansProvider,
   activePlanProvider,
-clientAttendanceProvider,
+  allPlansProvider,
+  clientAttendanceProvider,
   clientAttendanceMapProvider,
   planAttendanceProvider,
   planAttendanceMapProvider,
@@ -42,6 +45,9 @@ clientAttendanceProvider,
   tagUsageCountProvider,
   allTemplatesProvider,
   templateUsageCountProvider,
+  trainerNameProvider,
+  transactionsProvider,
+  clientTransactionsProvider,
 ];
 
 extension AppDataRefresh on Ref {

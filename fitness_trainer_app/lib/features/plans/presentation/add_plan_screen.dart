@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
@@ -9,6 +10,7 @@ import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/attendance/presentation/widgets/attendance_calendar.dart';
+import 'package:fitness_trainer_app/features/templates/presentation/add_edit_template_screen.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 
@@ -27,6 +29,27 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
   /// Month currently displayed by the picker sheet.
   int _pickerYear = Jalali.fromDateTime(DateTime.now()).year;
   int _pickerMonth = Jalali.fromDateTime(DateTime.now()).month;
+  final _priceController = TextEditingController();
+  final _shareController = TextEditingController();
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    _shareController.dispose();
+    super.dispose();
+  }
+
+  /// Price entered as toman digits (commas ignored), 0 when empty/invalid.
+  int get _price =>
+      int.tryParse(toLatinDigits(_priceController.text.trim().replaceAll(',', ''))) ?? 0;
+
+  /// Gym share percent entered, 0 when empty/invalid (clamped 0..100).
+  int get _sharePercent =>
+      (_shareController.text.trim().isEmpty ||
+              int.tryParse(toLatinDigits(_shareController.text.trim())) == null
+          ? 0
+          : int.tryParse(toLatinDigits(_shareController.text.trim()))!)
+      .clamp(0, 100);
 
   /// Approximate end date: start + (duration days - 1), e.g. a 30-day course
   /// starting 1403/01/01 ends 1403/01/30.
@@ -44,7 +67,52 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
         error: (e, _) => AppErrorState(message: e.toString()),
         data: (templates) {
           if (templates.isEmpty) {
-            return const AppEmptyState(icon: Icons.fitness_center, title: 'قالبی تعریف نشده');
+            final s = AppStrings.of(context);
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xxxl),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            t.primaryLight.withValues(alpha: 0.55),
+                            t.surfaceVariant,
+                          ],
+                        ),
+                      ),
+                      child: Icon(Icons.fitness_center, size: 44, color: t.primaryDark),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text('قالبی تعریف نشده', style: AppTypography.headlineMedium, textAlign: TextAlign.center),
+                    const SizedBox(height: AppSpacing.md),
+                    FilledButton.icon(
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AddEditTemplateScreen()),
+                        );
+                        if (!mounted) return;
+                        ref.invalidateAppData();
+                        final fresh = await ref.read(allTemplatesProvider.future);
+                        if (fresh.isNotEmpty) {
+                          setState(() => _selectedTemplateId = fresh.last.id!);
+                        }
+                      },
+                      icon: const Icon(Icons.add, size: 18),
+                      label: Text(s.addTemplate),
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
           return ListView.builder(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -94,6 +162,11 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _PriceFields(
+                        priceController: _priceController,
+                        shareController: _shareController,
                       ),
                       const SizedBox(height: AppSpacing.md),
                       SizedBox(
@@ -201,6 +274,7 @@ attendanceMap: const <String, List<String>>{},
     final plans = await ref.read(clientPlansProvider(widget.clientId).future);
     if (!mounted) return;
     final hasCurrent = plans.any((p) => p.isActive || p.isFrozen);
+    final s = AppStrings.of(context);
     final t = context.tones;
     final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
@@ -216,6 +290,16 @@ attendanceMap: const <String, List<String>>{},
               _ConfirmRow(label: 'تاریخ شروع', value: formatJalali(_startDateKey)),
               _ConfirmRow(label: 'تاریخ پایان', value: formatJalali(_endDateFor(template.days))),
               _ConfirmRow(label: 'تعداد جلسات', value: toPersian(template.sessions.toString())),
+              if (_price > 0) ...[
+                _ConfirmRow(
+                  label: s.planPriceLabel,
+                  value: s.money(_price),
+                ),
+                _ConfirmRow(
+                  label: s.planShareLabel,
+                  value: s.shareRate(_sharePercent),
+                ),
+              ],
               const SizedBox(height: AppSpacing.sm),
               if (hasCurrent) ...[
                 Text(
@@ -252,6 +336,8 @@ attendanceMap: const <String, List<String>>{},
       template.id,
       template.sessions,
       template.days,
+      price: _price,
+      sharePercent: _sharePercent,
       startDate: _startDateKey,
     );
     if (mounted) {
@@ -305,6 +391,43 @@ class _StartDateTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PriceFields extends StatelessWidget {
+  final TextEditingController priceController;
+  final TextEditingController shareController;
+
+  const _PriceFields({
+    required this.priceController,
+    required this.shareController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
+    return Column(
+      children: [
+        TextField(
+          controller: priceController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: s.planPriceLabel,
+            helperText: s.planPriceHint,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextField(
+          controller: shareController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: s.planShareLabel,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+          ),
+        ),
+      ],
     );
   }
 }

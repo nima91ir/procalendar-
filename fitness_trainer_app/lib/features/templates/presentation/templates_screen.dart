@@ -89,7 +89,7 @@ class TemplatesScreen extends ConsumerWidget {
                             const SizedBox(width: AppSpacing.sm),
                             AppPill(label: s.daysCount(template.days), color: t.surfaceVariant),
                             const SizedBox(width: AppSpacing.sm),
-                            AppPill(label: s.oneSessionPerDays(template.days ~/ template.sessions), color: t.warningSoft),
+                            AppPill(label: s.oneSessionPerDays(template.sessions > 0 ? template.days ~/ template.sessions : 0), color: t.warningSoft),
                           ],
                         ),
                       ],

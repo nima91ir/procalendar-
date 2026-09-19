@@ -1,6 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
 import 'package:fitness_trainer_app/core/widgets/form_card_screen.dart';
 import 'package:fitness_trainer_app/core/widgets/styled_text_field.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
@@ -43,8 +45,8 @@ class _AddEditTemplateScreenState extends ConsumerState<AddEditTemplateScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نام قالب الزامی است')));
       return;
     }
-    final sessions = int.tryParse(_sessionsController.text);
-    final days = int.tryParse(_daysController.text);
+final sessions = int.tryParse(toLatinDigits(_sessionsController.text));
+    final days = int.tryParse(toLatinDigits(_daysController.text));
     if (sessions == null || days == null || sessions <= 0 || days <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('جلسات و روزها باید عدد صحیح و بزرگتر از صفر باشند')));
       return;
@@ -56,7 +58,10 @@ class _AddEditTemplateScreenState extends ConsumerState<AddEditTemplateScreen> {
       } else {
         await ref.read(templatesServiceProvider).updateTemplate(widget.templateId!, _nameController.text.trim(), sessions, days);
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ref.invalidateAppData();
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطا: $e')));
     } finally {

@@ -5,6 +5,8 @@ class ClientPlan {
   final String? startDate;
   final int sessions;
   final int days;
+  final int price;
+  final int sharePercent;
   final int remaining;
   final String status;
   final int? queueOrder;
@@ -17,6 +19,8 @@ class ClientPlan {
     this.startDate,
     required this.sessions,
     required this.days,
+    this.price = 0,
+    this.sharePercent = 0,
     required this.remaining,
     this.status = 'active',
     this.queueOrder,
@@ -35,6 +39,8 @@ class ClientPlan {
     String? startDate,
     int? sessions,
     int? days,
+    int? price,
+    int? sharePercent,
     int? remaining,
     String? status,
     int? queueOrder,
@@ -47,6 +53,8 @@ class ClientPlan {
       startDate: startDate ?? this.startDate,
       sessions: sessions ?? this.sessions,
       days: days ?? this.days,
+      price: price ?? this.price,
+      sharePercent: sharePercent ?? this.sharePercent,
       remaining: remaining ?? this.remaining,
       status: status ?? this.status,
       queueOrder: queueOrder ?? this.queueOrder,

@@ -9,6 +9,7 @@ class BackupCounts {
     this.plans = 0,
     this.attendance = 0,
     this.settings = 0,
+    this.transactions = 0,
   });
 
   final int clients;
@@ -18,9 +19,10 @@ class BackupCounts {
   final int plans;
   final int attendance;
   final int settings;
+  final int transactions;
 
   int get total =>
-      clients + tags + clientTags + templates + plans + attendance + settings;
+      clients + tags + clientTags + templates + plans + attendance + settings + transactions;
 
   bool get isEmpty => total == 0;
 }

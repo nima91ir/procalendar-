@@ -11,6 +11,7 @@ import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
+import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
 import 'package:fitness_trainer_app/features/backup/presentation/import_backup_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/clients_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/add_edit_client_screen.dart';
@@ -22,6 +23,8 @@ import 'package:fitness_trainer_app/features/tags/presentation/tags_screen.dart'
 import 'package:fitness_trainer_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/presentation/settings_screen.dart';
+import 'package:fitness_trainer_app/features/accounting/presentation/accounting_screen.dart';
+import 'package:fitness_trainer_app/features/reports/presentation/reports_screen.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
 import 'package:fitness_trainer_app/routing/routes.dart';
 import 'package:fitness_trainer_app/features/plans/presentation/add_plan_screen.dart';
@@ -88,13 +91,14 @@ class StartupErrorApp extends StatelessWidget {
 class ProCalendarApp extends ConsumerWidget {
   const ProCalendarApp({super.key});
 
-  @override
+@override
   Widget build(BuildContext context, WidgetRef ref) {
+    final accent = ref.watch(accentProvider);
     return MaterialApp(
       title: 'تقویم حرفه‌ای',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.lightForAccent(accent),
+      darkTheme: AppTheme.darkForAccent(accent),
       themeMode: ref.watch(themeModeProvider),
       locale: Locale(ref.watch(languageProvider)),
       home: const MainShell(),
@@ -143,6 +147,8 @@ class AppRouter {
     if (name == AppRoutes.clients) return page(const ClientsScreen());
     if (name == AppRoutes.templates) return page(const TemplatesScreen());
     if (name == AppRoutes.settings) return page(const SettingsScreen());
+    if (name == AppRoutes.accounting) return page(const AccountingScreen());
+    if (name == AppRoutes.reports) return page(const ReportsScreen());
 
     if (name == AppRoutes.addClient) return page(const AddEditClientScreen());
     if (name == AppRoutes.addTemplate) return page(const AddEditTemplateScreen());
@@ -205,6 +211,7 @@ class _MainShellState extends ConsumerState<MainShell>
     AppRoutes.dashboard,
     AppRoutes.clients,
     AppRoutes.templates,
+    AppRoutes.accounting,
     AppRoutes.settings,
   ];
 
@@ -255,6 +262,10 @@ class _MainShellState extends ConsumerState<MainShell>
         ref.invalidate(allTemplatesProvider);
         break;
       case 3:
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(clientTransactionsProvider);
+        break;
+      case 4:
         break;
     }
   }

@@ -37,6 +37,9 @@ class BackupService {
       'attendance': [
         for (final a in await db.getAllAttendance()) _attendanceMap(a),
       ],
+      'transactions': [
+        for (final t in await db.getAllTransactions()) _transactionMap(t),
+      ],
       'settings': [
         for (final s in await db.getAllSettings()) _settingMap(s),
       ],
@@ -86,6 +89,7 @@ class BackupService {
     final templateIds = (await db.select(db.planTemplates).get()).map((r) => r.id).toSet();
     final planIds = (await db.select(db.clientPlans).get()).map((r) => r.id).toSet();
     final attendanceIds = (await db.select(db.attendance).get()).map((r) => r.id).toSet();
+    final transactionIds = (await db.select(db.transactions).get()).map((r) => r.id).toSet();
     final clientTagKeys = (await db.select(db.clientTags).get())
         .map((r) => '${r.clientId}:${r.tagId}')
         .toSet();
@@ -102,6 +106,7 @@ class BackupService {
       templates: added(data.templates, (m) => templateIds.contains(_asInt(m['id']))),
       plans: added(data.plans, (m) => planIds.contains(_asInt(m['id']))),
       attendance: added(data.attendance, (m) => attendanceIds.contains(_asInt(m['id']))),
+      transactions: added(data.transactions, (m) => transactionIds.contains(_asInt(m['id']))),
       clientTags: added(
         data.clientTags,
         (m) => clientTagKeys.contains('${_asInt(m['clientId'])}:${_asInt(m['tagId'])}'),
@@ -111,6 +116,7 @@ class BackupService {
   }
 
   Future<void> _wipe() async {
+    await db.delete(db.transactions).go();
     await db.delete(db.attendance).go();
     await db.delete(db.clientTags).go();
     await db.delete(db.clientPlans).go();
@@ -128,6 +134,7 @@ class BackupService {
       batch.insertAll(db.clientTags, data.clientTags.map(_clientTagCompanion), mode: mode);
       batch.insertAll(db.clientPlans, data.plans.map(_planCompanion), mode: mode);
       batch.insertAll(db.attendance, data.attendance.map(_attendanceCompanion), mode: mode);
+      batch.insertAll(db.transactions, data.transactions.map(_transactionCompanion), mode: mode);
       batch.insertAll(db.appSettings, data.settings.map(_settingCompanion), mode: mode);
     });
   }
@@ -187,6 +194,28 @@ class BackupService {
           a.date,
           a.status,
           a.createdAt,
+        ],
+    ]);
+  }
+
+  Future<String> exportTransactionsCsv() async {
+    final clientNames = {
+      for (final c in await db.getAllClients()) c.id: c.name,
+    };
+    final transactions = await db.getAllTransactions();
+    return _csv([
+      ['id', 'clientId', 'clientName', 'type', 'category', 'amount', 'date', 'note', 'createdAt'],
+      for (final t in transactions)
+        [
+          '${t.id}',
+          t.clientId == null ? '' : '${t.clientId}',
+          t.clientId == null ? '' : clientNames[t.clientId] ?? '',
+          t.type,
+          t.category,
+          '${t.amount}',
+          t.date,
+          t.note,
+          t.createdAt,
         ],
     ]);
   }
@@ -255,6 +284,7 @@ class BackupService {
         templates: _rows(payload, 'templates'),
         plans: _rows(payload, 'plans'),
         attendance: _rows(payload, 'attendance'),
+        transactions: _rows(payload, 'transactions'),
         settings: _rows(payload, 'settings'),
       );
 
@@ -411,6 +441,31 @@ class BackupService {
         key: _stringValue(m['key']),
         value: _stringValue(m['value']),
       );
+
+  static Map<String, dynamic> _transactionMap(Transaction t) => {
+        'id': t.id,
+        'clientId': t.clientId,
+        'planId': t.planId,
+        'type': t.type,
+        'category': t.category,
+        'amount': t.amount,
+        'date': t.date,
+        'note': t.note,
+        'createdAt': t.createdAt,
+      };
+
+  static TransactionsCompanion _transactionCompanion(Map<String, dynamic> m) =>
+      TransactionsCompanion(
+        id: _idValue(m['id']),
+        clientId: _nullableIntValue(m['clientId']),
+        planId: _nullableIntValue(m['planId']),
+        type: _stringValue(m['type']),
+        category: _stringValue(m['category']),
+        amount: _intValue(m['amount']),
+        date: _stringValue(m['date']),
+        note: _stringValue(m['note']),
+        createdAt: _stringValue(m['createdAt']),
+      );
 }
 
 class _ParsedBackup {
@@ -421,6 +476,7 @@ class _ParsedBackup {
     required this.templates,
     required this.plans,
     required this.attendance,
+    required this.transactions,
     required this.settings,
   });
 
@@ -430,6 +486,7 @@ class _ParsedBackup {
   final List<Map<String, dynamic>> templates;
   final List<Map<String, dynamic>> plans;
   final List<Map<String, dynamic>> attendance;
+  final List<Map<String, dynamic>> transactions;
   final List<Map<String, dynamic>> settings;
 
   BackupCounts get counts => BackupCounts(
@@ -439,6 +496,7 @@ class _ParsedBackup {
         templates: templates.length,
         plans: plans.length,
         attendance: attendance.length,
+        transactions: transactions.length,
         settings: settings.length,
       );
 }

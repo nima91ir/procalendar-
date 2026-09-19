@@ -11,9 +11,9 @@ import 'package:fitness_trainer_app/features/attendance/providers/attendance_pro
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/clients/domain/client.dart' as domain;
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
+import 'package:fitness_trainer_app/features/tags/domain/tag.dart' as tagdomain;
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/widgets/client_card.dart';
-import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 import 'package:fitness_trainer_app/routing/routes.dart';
 
 enum _SortMode { name, newest, bonus }
@@ -96,6 +96,20 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     }
   }
 
+  /// Quick-adds an attendance record for today from the client bottom sheet.
+  /// Errors surface as a snackbar only — a success toast is unnecessary, the
+  /// record count and dashboard refresh right away.
+  Future<void> _quickAddAttendance(int clientId, String status) async {
+    final s = AppStrings.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(attendanceProvider.notifier).addSession(clientId, jalaliToday(), status: status);
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+    }
+  }
+
   /// Bottom-sheet quick actions for a client, opened by long-press or the
   /// card's ⋮ button. Tapping the card itself opens the client profile.
   void _showClientActions(domain.Client client) {
@@ -126,38 +140,26 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Consumer(
-              builder: (context, ref, _) {
-                final plans = ref.watch(clientPlansProvider(clientId));
-                final activePlanId = plans.value?.where((p) => p.isActive).firstOrNull?.id;
-                final notifier = ref.read(attendanceProvider.notifier);
-                final today = jalaliToday();
-                return Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          notifier.addSession(clientId, today, status: 'present', planId: activePlanId);
-                        },
-                        icon: const Icon(Icons.check),
-                        label: Text(s.present),
-                        style: FilledButton.styleFrom(backgroundColor: t.successSoft, foregroundColor: t.success),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          notifier.addSession(clientId, today, status: 'absent', planId: activePlanId);
-                        },
-                        icon: const Icon(Icons.close),
-                        label: Text(s.absent),
-                        style: FilledButton.styleFrom(backgroundColor: t.errorSoft, foregroundColor: t.error),
-                      ),
-                    ),
-                  ],
-                );
-              },
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _quickAddAttendance(clientId, 'present'),
+                    icon: const Icon(Icons.check),
+                    label: Text(s.present),
+                    style: FilledButton.styleFrom(backgroundColor: t.successSoft, foregroundColor: t.success),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _quickAddAttendance(clientId, 'absent'),
+                    icon: const Icon(Icons.close),
+                    label: Text(s.absent),
+                    style: FilledButton.styleFrom(backgroundColor: t.errorSoft, foregroundColor: t.error),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -193,6 +195,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     final quickFilter = ref.watch(clientQuickFilterProvider);
     final quickFilterIdsAsync = ref.watch(quickFilterClientIdsProvider);
     final tagFilterAsync = ref.watch(clientTagFilterProvider);
+    // A tag may be deleted while selected; drop stale ids so the filter never
+    // silently empties the list.
+    final validTagIds = (tagsAsync.value ?? const <tagdomain.Tag>[]).map((t) => t.id).toSet();
+    final selectedTags = _selectedTagIds.where(validTagIds.contains).toSet();
 
     return Scaffold(
       appBar: AppBar(
@@ -269,7 +275,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                       );
                     }
                     final tag = tags[index - 1];
-                    final isSelected = _selectedTagIds.contains(tag.id);
+                    final isSelected = selectedTags.contains(tag.id);
                     return Padding(
                       padding: const EdgeInsets.only(left: AppSpacing.sm, right: AppSpacing.sm),
                       child: FilterChip(
@@ -320,11 +326,11 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                     : searched.where((c) => quickIds.contains(c.id)).toList();
                 // AND semantics: a client is shown only when it carries every
                 // selected tag, so combining tags narrows the list.
-                final tagFiltered = _selectedTagIds.isEmpty
+                final tagFiltered = selectedTags.isEmpty
                     ? quickFiltered
                     : quickFiltered.where((c) {
                         final ids = tagFilterAsync.value?[c.id] ?? const <int>[];
-                        return _selectedTagIds.every(ids.contains);
+                        return selectedTags.every(ids.contains);
                       }).toList();
                 final clients = _applySort(tagFiltered);
                 if (clients.isEmpty) {

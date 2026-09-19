@@ -11,6 +11,7 @@ class PlansService {
   PlansService(this.repository, this.db);
 
   Future<List<domain.ClientPlan>> getClientPlans(int clientId) => repository.getClientPlans(clientId);
+  Future<List<domain.ClientPlan>> getAllPlans() => repository.getAllPlans();
   Future<domain.ClientPlan?> getActivePlan(int clientId) => repository.getActivePlan(clientId);
   Future<domain.ClientPlan?> getPlan(int planId) => repository.getPlan(planId);
   Future<domain.ClientPlan?> getFrozenPlan(int clientId) async {
@@ -25,33 +26,51 @@ class PlansService {
   /// new plan is queued regardless — its real start date is stamped (today)
   /// at promotion time, because queuing implies "starts when the current plan
   /// finishes".
-  Future<int> assignPlan(int clientId, int templateId, int sessions, int days, {String? startDate}) async {
+  Future<int> assignPlan(int clientId, int templateId, int sessions, int days, {int price = 0, int sharePercent = 0, String? startDate}) async {
     final active = await repository.getActivePlan(clientId);
     final frozen = await repository.getFrozenPlan(clientId);
+    late int planId;
     if (active != null || frozen != null) {
       final queuedCount = await repository.countQueuedPlans(clientId);
-      return repository.insertPlan(ClientPlansCompanion.insert(
+      planId = await repository.insertPlan(ClientPlansCompanion.insert(
         clientId: clientId,
         templateId: templateId,
         startDate: const Value.absent(),
         sessions: sessions,
         days: days,
+        price: Value(price),
+        sharePercent: Value(sharePercent),
         remaining: sessions,
         status: const Value('queued'),
         queueOrder: Value(queuedCount + 1),
       ));
+    } else {
+      final today = jalaliToday();
+      planId = await repository.insertPlan(ClientPlansCompanion.insert(
+        clientId: clientId,
+        templateId: templateId,
+        startDate: Value(startDate ?? today),
+        sessions: sessions,
+        days: days,
+        price: Value(price),
+        sharePercent: Value(sharePercent),
+        remaining: sessions,
+        status: const Value('active'),
+        queueOrder: const Value.absent(),
+      ));
     }
-    final today = jalaliToday();
-    return repository.insertPlan(ClientPlansCompanion.insert(
-      clientId: clientId,
-      templateId: templateId,
-      startDate: Value(startDate ?? today),
-      sessions: sessions,
-      days: days,
-      remaining: sessions,
-      status: const Value('active'),
-      queueOrder: const Value.absent(),
-    ));
+    if (price > 0) {
+      await db.insertTransaction(TransactionsCompanion(
+        clientId: Value(clientId),
+        planId: Value(planId),
+        type: const Value('income'),
+        category: const Value('plan'),
+        amount: Value(price),
+        date: Value(jalaliToday()),
+        note: const Value(''),
+      ));
+    }
+    return planId;
   }
 
   Future<void> freezePlan(int planId) async {
@@ -66,7 +85,20 @@ class PlansService {
     await repository.updatePlanStatus(planId, 'active');
   }
 
-  Future<void> deletePlan(int planId) async => repository.deletePlan(planId);
+  Future<void> deletePlan(int planId) async {
+    final plan = await repository.getPlan(planId);
+    // Remove the auto-income recorded for this plan before deleting it
+    // (deleting first would let the FK null out the `planId` link). A plan
+    // delete reverses its income so the ledger and the per-plan share section
+    // stay in sync.
+    await db.deleteTransactionsForPlan(planId);
+    await repository.deletePlan(planId);
+    // Deleting the running plan must promote the next queued plan, otherwise
+    // the client ends up with queued plans stranded behind nothing.
+    if (plan != null && plan.status == 'active') {
+      await _promoteQueuedPlan(plan.clientId);
+    }
+  }
 
   /// Plans created from [templateId], used to propagate template edits.
   Future<List<domain.ClientPlan>> getPlansUsingTemplate(int templateId) =>
@@ -77,6 +109,9 @@ class PlansService {
     if (plan == null || plan.status != 'active') return;
     final newRemaining = plan.remaining - 1;
     if (newRemaining <= 0) {
+      // Settle at 0 so a later refund (record delete/undo) restores exactly
+      // one session; the expired badge does not rely on the old marker value.
+      await repository.updatePlanRemaining(planId, 0);
       await repository.updatePlanStatus(planId, 'expired');
       await _promoteQueuedPlan(plan.clientId);
     } else {
@@ -93,6 +128,24 @@ class PlansService {
     if (restored <= plan.sessions) {
       await repository.updatePlanRemaining(planId, restored);
     }
+  }
+
+  /// Brings a previously expired plan back to active with one refunded session
+  /// (used when the attendance record that consumed its last session is removed
+  /// and no successor plan is active). Capped at the plan's total.
+  Future<void> reactivatePlan(int planId) async {
+    final plan = await repository.getPlan(planId);
+    if (plan == null || plan.status == 'queued') return;
+    var restored = plan.remaining + 1;
+    if (restored > plan.sessions) restored = plan.sessions;
+    await db.patchPlan(
+      planId,
+      ClientPlansCompanion(
+        status: const Value('active'),
+        remaining: Value(restored),
+        queueOrder: const Value(null),
+      ),
+    );
   }
 
   Future<void> _promoteQueuedPlan(int clientId) async {
@@ -127,6 +180,9 @@ class PlansService {
       ),
     );
   }
+
+  /// The gym's share of a plan's price, rounded down: `price * sharePercent / 100`.
+  int planShareDeduction(domain.ClientPlan plan) => (plan.price * plan.sharePercent) ~/ 100;
 
   /// Calculates remaining days for an active/frozen plan based on its
   /// [startDate] and [days] fields vs today. Returns `null` for queued plans

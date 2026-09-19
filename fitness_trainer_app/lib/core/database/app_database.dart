@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart';
 import 'package:fitness_trainer_app/core/database/connection/shared.dart' as connection;
-import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 
 part 'app_database.g.dart';
 
@@ -41,6 +40,8 @@ class ClientPlans extends Table {
   TextColumn get startDate => text().nullable()();
   IntColumn get sessions => integer()();
   IntColumn get days => integer()();
+  IntColumn get price => integer().withDefault(const Constant(0))();
+  IntColumn get sharePercent => integer().withDefault(const Constant(0))();
   IntColumn get remaining => integer()();
   TextColumn get status => text().withDefault(const Constant('active'))();
   IntColumn get queueOrder => integer().nullable()();
@@ -63,6 +64,18 @@ class AppSettings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+class Transactions extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get clientId => integer().references(Clients, #id, onDelete: KeyAction.setNull).nullable()();
+  IntColumn get planId => integer().references(ClientPlans, #id, onDelete: KeyAction.setNull).nullable()();
+  TextColumn get type => text()();
+  TextColumn get category => text()();
+  IntColumn get amount => integer()();
+  TextColumn get date => text()();
+  TextColumn get note => text().withDefault(const Constant(''))();
+  TextColumn get createdAt => text().withDefault(const Constant(''))();
+}
+
 @DriftDatabase(tables: [
   Clients,
   Tags,
@@ -71,6 +84,7 @@ class AppSettings extends Table {
   ClientPlans,
   Attendance,
   AppSettings,
+  Transactions,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
@@ -79,11 +93,11 @@ class AppDatabase extends _$AppDatabase {
 
   static Future<AppDatabase> create() async {
     final executor = await connection.createExecutor();
-    return AppDatabase(executor);
+return AppDatabase(executor);
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -97,6 +111,16 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 3) {
           await m.addColumn(attendance, attendance.planId);
+        }
+        if (from < 4) {
+          await m.createTable(transactions);
+        }
+        if (from < 5) {
+          await m.addColumn(clientPlans, clientPlans.price);
+          await m.addColumn(clientPlans, clientPlans.sharePercent);
+        }
+        if (from < 6) {
+          await m.addColumn(transactions, transactions.planId);
         }
       },
     );
@@ -205,12 +229,9 @@ Future<List<AttendanceData>> getClientAttendance(int clientId) => (select(attend
   Future<int> insertAttendance(AttendanceCompanion insert) => into(attendance).insert(insert);
   Future<bool> updateAttendance(AttendanceCompanion insert) => update(attendance).replace(insert);
   Future<int> deleteAttendance(int id) => (delete(attendance)..where((a) => a.id.equals(id))).go();
-  Future<int> addAttendance(AttendanceCompanion insert) => into(attendance).insert(insert);
-  Future<int> removeOneAttendance(int clientId, String date) async {
-  final row = await (select(attendance)..where((a) => a.clientId.equals(clientId) & a.date.equals(date))..orderBy([(a) => OrderingTerm.desc(a.id)])..limit(1)).getSingleOrNull();
-  if (row == null) return 0;
-  return deleteAttendance(row.id);
-}
+Future<int> addAttendance(AttendanceCompanion insert) => into(attendance).insert(insert);
+  Future<AttendanceData?> getAttendanceById(int id) =>
+      (select(attendance)..where((a) => a.id.equals(id))).getSingleOrNull();
   Stream<List<AttendanceData>> watchClientAttendance(int clientId) => (select(attendance)..where((a) => a.clientId.equals(clientId))..orderBy([(a) => OrderingTerm.desc(a.date)])).watch();
   Future<List<AttendanceData>> getAllAttendance() => select(attendance).get();
 
@@ -223,15 +244,21 @@ Future<List<AttendanceData>> getClientAttendance(int clientId) => (select(attend
     final rows = await (select(clientPlans)..where((p) => p.status.equals('active'))).get();
     return rows.where((p) => p.remaining < 3).map((p) => {'planId': p.id, 'clientId': p.clientId, 'remaining': p.remaining}).toList();
   }
-  Future<List<Map<String, dynamic>>> getBonusSessionClients() async {
+Future<List<Map<String, dynamic>>> getBonusSessionClients() async {
     final rows = await select(clients).get();
     return rows.where((c) => c.bonusSessions > 0).map((c) => {'clientId': c.id, 'clientName': c.name, 'bonusSessions': c.bonusSessions}).toList();
   }
-  Future<Map<int, String>> getTodayAttendance() async {
-    final date = jalaliToday();
-    final rows = await (select(attendance)..where((a) => a.date.equals(date))).get();
-    return {for (var r in rows) r.clientId: r.status};
-  }
 
   Future<List<AppSetting>> getAllSettings() => select(appSettings).get();
+
+  Future<List<Transaction>> getAllTransactions() =>
+      (select(transactions)..orderBy([(t) => OrderingTerm.desc(t.date), (t) => OrderingTerm.desc(t.id)])).get();
+  Future<List<Transaction>> getClientTransactions(int clientId) =>
+      (select(transactions)..where((t) => t.clientId.equals(clientId))..orderBy([(t) => OrderingTerm.desc(t.date), (t) => OrderingTerm.desc(t.id)])).get();
+  Future<Transaction?> getTransaction(int id) => (select(transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
+  Future<int> insertTransaction(TransactionsCompanion insert) => into(transactions).insert(insert);
+  Future<bool> updateTransaction(TransactionsCompanion insert) => update(transactions).replace(insert);
+  Future<int> deleteTransaction(int id) => (delete(transactions)..where((t) => t.id.equals(id))).go();
+  Future<int> deleteTransactionsForPlan(int planId) =>
+      (delete(transactions)..where((t) => t.planId.equals(planId))).go();
 }

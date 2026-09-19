@@ -24,6 +24,12 @@ final activePlanProvider = FutureProvider.autoDispose.family<domain.ClientPlan?,
   return ref.watch(plansServiceProvider).getActivePlan(clientId);
 });
 
+/// Every client plan across all clients, used by the accounting per-plan
+/// share section and other whole-app views.
+final allPlansProvider = FutureProvider.autoDispose<List<domain.ClientPlan>>((ref) {
+  return ref.watch(plansServiceProvider).getAllPlans();
+});
+
 class PlansNotifier extends Notifier<List<domain.ClientPlan>> {
   @override
   List<domain.ClientPlan> build() => [];
@@ -33,9 +39,11 @@ class PlansNotifier extends Notifier<List<domain.ClientPlan>> {
     state = await service.getClientPlans(clientId);
   }
 
-  Future<void> assignPlan(int clientId, int templateId, int sessions, int days, {String? startDate}) async {
+  Future<void> assignPlan(int clientId, int templateId, int sessions, int days,
+      {int price = 0, int sharePercent = 0, String? startDate}) async {
     final service = ref.read(plansServiceProvider);
-    await service.assignPlan(clientId, templateId, sessions, days, startDate: startDate);
+    await service.assignPlan(clientId, templateId, sessions, days,
+        price: price, sharePercent: sharePercent, startDate: startDate);
   }
 
   Future<void> freezePlan(int planId) async {

@@ -41,6 +41,14 @@ Future<void> seed(AppDatabase db) async {
     date: '1405/06/27',
     status: 'present',
   ));
+  await db.insertTransaction(TransactionsCompanion.insert(
+    clientId: Value(clientId),
+    type: 'income',
+    category: 'plan',
+    amount: 300000,
+    date: '1405/06/27',
+    note: const Value('جلسه اول'),
+  ));
   await db.into(db.appSettings).insert(
         AppSettingsCompanion.insert(key: 'trainer_name', value: 'نیما'),
       );
@@ -59,13 +67,14 @@ void main() {
       final decoded = jsonDecode(json) as Map<String, dynamic>;
 
       expect(decoded['app'], 'procalendar');
-      expect(decoded['schemaVersion'], 3);
+      expect(decoded['schemaVersion'], 6);
       expect((decoded['clients'] as List).length, 1);
       expect((decoded['tags'] as List).length, 1);
       expect((decoded['clientTags'] as List).length, 1);
       expect((decoded['templates'] as List).length, 1);
       expect((decoded['plans'] as List).length, 1);
       expect((decoded['attendance'] as List).length, 1);
+      expect((decoded['transactions'] as List).length, 1);
       expect((decoded['settings'] as List).length, 1);
       await db.close();
     });
@@ -108,6 +117,7 @@ void main() {
       expect(clients.single.name, 'سارا محمدی');
       expect(clients.single.bonusSessions, 2);
       expect((await target.getAllAttendance()).single.date, '1405/06/27');
+      expect((await target.getAllTransactions()).single.amount, 300000);
       expect((await target.getAllSettings()).single.key, 'trainer_name');
 
       await source.close();
@@ -186,6 +196,16 @@ void main() {
       final csv = await BackupService(db).exportPlansCsv();
       expect(csv.contains('سارا محمدی'), isTrue);
       expect(csv.contains('قدرت'), isTrue);
+      await db.close();
+    });
+
+    test('transactions CSV resolves client name and amount', () async {
+      final db = createDb();
+      await seed(db);
+      final csv = await BackupService(db).exportTransactionsCsv();
+      expect(csv.contains('سارا محمدی'), isTrue);
+      expect(csv.contains('300000'), isTrue);
+      expect(csv.contains('income'), isTrue);
       await db.close();
     });
   });

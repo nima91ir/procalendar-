@@ -328,7 +328,7 @@ class AppHeroHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = gradient ?? AppColors.gradientPrimary;
+    final colors = gradient ?? context.tones.gradientPrimary;
     final luminance = colors.last.computeLuminance();
     final onGradient = luminance > 0.5 ? AppColors.onSurface : Colors.white;
     return Container(

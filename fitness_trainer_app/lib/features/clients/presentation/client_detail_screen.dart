@@ -62,6 +62,7 @@ class ClientDetailScreen extends ConsumerWidget {
       );
       if (!confirmed) return;
       await ref.read(clientsServiceProvider).deleteClient(clientId);
+      ref.invalidateAppData();
       if (context.mounted) Navigator.pop(context, true);
     }
 
@@ -271,7 +272,7 @@ class ClientDetailScreen extends ConsumerWidget {
                                   TextButton.icon(
                                     onPressed: () async {
                                       await ref.read(plansServiceProvider).freezePlan(plan.id!);
-                                      ref.invalidate(clientPlansProvider(clientId));
+                                      ref.invalidateAppData();
                                     },
                                     icon: const Icon(Icons.pause_circle_outline, size: 18),
                                     label: Text(s.freeze),
@@ -280,7 +281,7 @@ class ClientDetailScreen extends ConsumerWidget {
                                   TextButton.icon(
                                     onPressed: () async {
                                       await ref.read(plansServiceProvider).unfreezePlan(plan.id!);
-                                      ref.invalidate(clientPlansProvider(clientId));
+                                      ref.invalidateAppData();
                                     },
                                     icon: const Icon(Icons.play_circle_outline, size: 18),
                                     label: Text(s.activate),
@@ -295,7 +296,7 @@ class ClientDetailScreen extends ConsumerWidget {
                                     );
                                     if (!confirmed) return;
                                     await ref.read(plansServiceProvider).deletePlan(plan.id!);
-                                    ref.invalidate(clientPlansProvider(clientId));
+                                    ref.invalidateAppData();
                                   },
                                   icon: Icon(Icons.delete_outline, size: 18, color: t.error),
                                   label: Text(s.deletePlan),

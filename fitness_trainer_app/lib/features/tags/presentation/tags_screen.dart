@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
+import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
+import 'package:fitness_trainer_app/features/tags/presentation/widgets/tag_editor_dialog.dart';
 
 class TagsScreen extends ConsumerStatefulWidget {
   const TagsScreen({super.key});
@@ -15,20 +17,6 @@ class TagsScreen extends ConsumerStatefulWidget {
 }
 
 class _TagsScreenState extends ConsumerState<TagsScreen> {
-  final _nameController = TextEditingController();
-  final _emojiController = TextEditingController();
-  int _selectedColor = 0xFF88A36B;
-  final List<int> _colorOptions = const [
-    0xFF88A36B,
-    0xFF4A6B4E,
-    0xFF8B6F3E,
-    0xFF8B4A3E,
-    0xFF64B5F6,
-    0xFFFFB74D,
-    0xFFE57373,
-    0xFFAB47BC,
-  ];
-
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
@@ -81,7 +69,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                               );
                               if (confirm == true) {
                                 await ref.read(tagsServiceProvider).deleteTag(tag.id!);
-                                ref.invalidate(allTagsProvider);
+                                ref.invalidateAppData();
                               }
                             },
                             icon: Icon(Icons.delete_outline, color: t.error),
@@ -103,139 +91,18 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
     );
   }
 
-  void _showAddDialog(BuildContext context) {
-    final s = AppStrings.of(context);
-    _nameController.clear();
-    _emojiController.clear();
-    _selectedColor = _colorOptions.first;
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(s.newTag),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: InputDecoration(labelText: s.tagNameLabel),
-                autofocus: true,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: _emojiController,
-                decoration: InputDecoration(labelText: s.emojiOptionalLabel),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Text(s.colorLabel),
-                  const SizedBox(width: AppSpacing.sm),
-                  ..._colorOptions.map((color) {
-                    return GestureDetector(
-                      onTap: () => setDialogState(() => _selectedColor = color),
-                      child: Container(
-                        margin: const EdgeInsets.only(left: AppSpacing.sm),
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Color(color),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _selectedColor == color ? AppTones.of(context).onSurface : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                        child: _selectedColor == color ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(s.cancel)),
-            ElevatedButton(
-              onPressed: () async {
-                if (_nameController.text.trim().isEmpty) return;
-                await ref.read(tagsServiceProvider).createTag(_nameController.text.trim(), emoji: _emojiController.text.trim(), color: _selectedColor);
-                ref.invalidate(allTagsProvider);
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: Text(s.addTag),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _showAddDialog(BuildContext context) async {
+    final newTag = await showTagEditorDialog(context, ref);
+    if (newTag != null && context.mounted) {
+      ref.invalidateAppData();
+    }
   }
 
-  void _showEditDialog(BuildContext context, dynamic tag) {
-    final s = AppStrings.of(context);
-    _nameController.text = tag.name;
-    _emojiController.text = tag.emoji;
-    _selectedColor = tag.color;
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(s.editTagTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: InputDecoration(labelText: s.tagNameLabel),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: _emojiController,
-                decoration: InputDecoration(labelText: s.emojiOptionalLabel),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Text(s.colorLabel),
-                  const SizedBox(width: AppSpacing.sm),
-                  ..._colorOptions.map((color) {
-                    return GestureDetector(
-                      onTap: () => setDialogState(() => _selectedColor = color),
-                      child: Container(
-                        margin: const EdgeInsets.only(left: AppSpacing.sm),
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Color(color),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _selectedColor == color ? AppTones.of(context).onSurface : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                        child: _selectedColor == color ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(s.cancel)),
-            ElevatedButton(
-              onPressed: () async {
-                if (_nameController.text.trim().isEmpty) return;
-                await ref.read(tagsServiceProvider).updateTag(tag.id!, _nameController.text.trim(), emoji: _emojiController.text.trim(), color: _selectedColor);
-                ref.invalidate(allTagsProvider);
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: Text(s.save),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _showEditDialog(BuildContext context, dynamic tag) async {
+    final updatedTag = await showTagEditorDialog(context, ref, existing: tag);
+    if (updatedTag != null && context.mounted) {
+      ref.invalidateAppData();
+    }
   }
 }
 

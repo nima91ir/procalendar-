@@ -61,6 +61,39 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
 
   String _localizedDate(String date, AppStrings s, String lang) => formatDateLong(date, lang);
 
+  /// Adds a present/absent record for the client; shows success/error via
+  /// snackbar (errors are also stored on [attendanceProvider] for the progress
+  /// indicator listeners).
+  Future<void> _addRecord(String status, {String? date}) async {
+    final s = AppStrings.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final day = date ?? jalaliToday();
+    final lang = ref.read(languageProvider);
+    try {
+      await ref.read(attendanceProvider.notifier).addSession(widget.clientId, day, status: status);
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(status == 'present' ? s.present : s.absent, _localizedDate(day, s, lang)))));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+    }
+  }
+
+  /// Deletes exactly the tapped record (by id) and refunds its session.
+  Future<void> _deleteRecord(AttendanceRecord record) async {
+    final s = AppStrings.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final lang = ref.read(languageProvider);
+    try {
+      await ref.read(attendanceProvider.notifier).removeSessionById(record.id!);
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(_localizedDate(record.date, s, lang)))));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+    }
+  }
+
   void _openDaySheet(String date) {
     final s = AppStrings.of(context);
     final lang = ref.read(languageProvider);
@@ -93,12 +126,6 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
     final clientsAsync = ref.watch(allClientsProvider);
     final busy = ref.watch(attendanceProvider).isLoading;
 
-    ref.listen(attendanceProvider, (previous, next) {
-      next.whenOrNull(error: (error, _) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${s.errorPrefix}$error')));
-      });
-    });
-
     final client = clientsAsync.value?.where((c) => c.id == widget.clientId).firstOrNull;
     final plans = plansAsync.value;
     final activePlan = plans?.where((p) => p.isActive).firstOrNull;
@@ -107,7 +134,6 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
     final attendanceMap = attendanceMapAsync.value ?? const <String, List<String>>{};
     final records = recordsAsync.value ?? const <AttendanceRecord>[];
 
-    final today = jalaliToday();
     final groupedRecords = <String, List<AttendanceRecord>>{};
     for (final record in records) {
       groupedRecords.putIfAbsent(record.date, () => []).add(record);
@@ -140,17 +166,7 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    await ref.read(attendanceProvider.notifier).addSession(
-                          widget.clientId,
-                          today,
-                          status: 'present',
-                          planId: widget.planId,
-                        );
-                    if (!mounted) return;
-                    messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.present, _localizedDate(today, s, lang)))));
-                  },
+                  onPressed: () => _addRecord('present'),
                   icon: const Icon(Icons.add),
                   label: Text('${s.present} +'),
                 ),
@@ -158,17 +174,7 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    await ref.read(attendanceProvider.notifier).addSession(
-                          widget.clientId,
-                          today,
-                          status: 'absent',
-                          planId: widget.planId,
-                        );
-                    if (!mounted) return;
-                    messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.absent, _localizedDate(today, s, lang)))));
-                  },
+                  onPressed: () => _addRecord('absent'),
                   icon: const Icon(Icons.add),
                   label: Text('${s.absent} +'),
                 ),
@@ -238,12 +244,7 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
                               color: isPresent ? t.successSoft : t.errorSoft,
                             ),
                             IconButton(
-                              onPressed: () async {
-                                final messenger = ScaffoldMessenger.of(context);
-                                await ref.read(attendanceProvider.notifier).removeSession(widget.clientId, record.date);
-                                if (!mounted) return;
-                                messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(_localizedDate(record.date, s, lang)))));
-                              },
+                              onPressed: () => _deleteRecord(record),
                               icon: Icon(Icons.delete_outline, color: t.error),
                               tooltip: s.deleteSession,
                             ),
@@ -302,13 +303,12 @@ class _DayAttendanceSheet extends ConsumerWidget {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.of(context);
-                      await ref.read(attendanceProvider.notifier).addSession(
-                            clientId,
-                            date,
-                            status: 'present',
-                            planId: planId,
-                          );
-                      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.present, dateLabel))));
+                      try {
+                        await ref.read(attendanceProvider.notifier).addSession(clientId, date, status: 'present');
+                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.present, dateLabel))));
+                      } catch (e) {
+                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+                      }
                     },
                     icon: const Icon(Icons.add),
                     label: Text('${s.present} +'),
@@ -319,13 +319,12 @@ class _DayAttendanceSheet extends ConsumerWidget {
                   child: OutlinedButton.icon(
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.of(context);
-                      await ref.read(attendanceProvider.notifier).addSession(
-                            clientId,
-                            date,
-                            status: 'absent',
-                            planId: planId,
-                          );
-                      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.absent, dateLabel))));
+                      try {
+                        await ref.read(attendanceProvider.notifier).addSession(clientId, date, status: 'absent');
+                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.absent, dateLabel))));
+                      } catch (e) {
+                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+                      }
                     },
                     icon: const Icon(Icons.add),
                     label: Text('${s.absent} +'),
@@ -350,8 +349,12 @@ class _DayAttendanceSheet extends ConsumerWidget {
                     trailing: IconButton(
                       onPressed: () async {
                         final messenger = ScaffoldMessenger.of(context);
-                        await ref.read(attendanceProvider.notifier).removeSession(clientId, record.date);
-                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(dateLabel))));
+                        try {
+                          await ref.read(attendanceProvider.notifier).removeSessionById(record.id!);
+                          if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(dateLabel))));
+                        } catch (e) {
+                          if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+                        }
                       },
                       icon: Icon(Icons.delete_outline, color: t.error),
                       tooltip: s.deleteSession,

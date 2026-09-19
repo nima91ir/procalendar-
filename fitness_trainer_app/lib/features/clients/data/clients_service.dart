@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/features/clients/domain/client.dart' as domain;
 import 'package:fitness_trainer_app/features/clients/data/clients_repository.dart';
 
@@ -17,6 +18,7 @@ class ClientsService {
       contact: contact?.trim().isNotEmpty == true ? Value(contact!.trim()) : const Value.absent(),
       note: Value(note),
       bonusSessions: Value(bonusSessions),
+      createdAt: Value(jalaliToday()),
     ));
   }
 
@@ -30,6 +32,7 @@ class ClientsService {
       contact: contact?.trim().isNotEmpty == true ? Value(contact!.trim()) : const Value.absent(),
       note: Value(note),
       bonusSessions: Value(bonusSessions),
+      createdAt: Value(existing.createdAt),
     ));
   }
 
