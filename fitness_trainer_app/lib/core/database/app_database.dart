@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:fitness_trainer_app/core/database/connection/shared.dart' as connection;
 
 part 'app_database.g.dart';
@@ -106,21 +107,34 @@ return AppDatabase(executor);
         await m.createAll();
       },
       onUpgrade: (Migrator m, int from, int to) async {
+        // Helper to safely add columns (idempotent - ignores "duplicate column" errors)
+        Future<void> safeAddColumn(Migrator m, TableInfo table, GeneratedColumn column) async {
+          try {
+            await m.addColumn(table, column);
+          } on SqliteException catch (e) {
+            if (!e.message.contains('duplicate column')) rethrow;
+          }
+        }
+
         if (from < 2) {
-          await m.addColumn(clientPlans, clientPlans.queueOrder);
+          await safeAddColumn(m, clientPlans, clientPlans.queueOrder);
         }
         if (from < 3) {
-          await m.addColumn(attendance, attendance.planId);
+          await safeAddColumn(m, attendance, attendance.planId);
         }
         if (from < 4) {
-          await m.createTable(transactions);
+          try {
+            await m.createTable(transactions);
+          } on SqliteException catch (e) {
+            if (!e.message.contains('already exists')) rethrow;
+          }
         }
         if (from < 5) {
-          await m.addColumn(clientPlans, clientPlans.price);
-          await m.addColumn(clientPlans, clientPlans.sharePercent);
+          await safeAddColumn(m, clientPlans, clientPlans.price);
+          await safeAddColumn(m, clientPlans, clientPlans.sharePercent);
         }
         if (from < 6) {
-          await m.addColumn(transactions, transactions.planId);
+          await safeAddColumn(m, transactions, transactions.planId);
         }
       },
     );
