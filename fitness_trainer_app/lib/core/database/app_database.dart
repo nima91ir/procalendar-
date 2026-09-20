@@ -1,5 +1,4 @@
 import 'package:drift/drift.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:fitness_trainer_app/core/database/connection/shared.dart' as connection;
 
 part 'app_database.g.dart';
@@ -111,8 +110,8 @@ return AppDatabase(executor);
         Future<void> safeAddColumn(Migrator m, TableInfo table, GeneratedColumn column) async {
           try {
             await m.addColumn(table, column);
-          } on SqliteException catch (e) {
-            if (!e.message.contains('duplicate column')) rethrow;
+          } on Exception catch (e) {
+            if (!e.toString().contains('duplicate column')) rethrow;
           }
         }
 
@@ -125,8 +124,8 @@ return AppDatabase(executor);
         if (from < 4) {
           try {
             await m.createTable(transactions);
-          } on SqliteException catch (e) {
-            if (!e.message.contains('already exists')) rethrow;
+          } on Exception catch (e) {
+            if (!e.toString().contains('already exists')) rethrow;
           }
         }
         if (from < 5) {
