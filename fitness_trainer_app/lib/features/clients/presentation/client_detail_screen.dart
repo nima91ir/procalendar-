@@ -268,6 +268,36 @@ class ClientDetailScreen extends ConsumerWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    final result = await showDialog<({int price, int share})>(
+                                      context: context,
+                                      builder: (ctx) => _PlanPriceDialog(
+                                        initialPrice: plan.price,
+                                        initialShare: plan.sharePercent,
+                                      ),
+                                    );
+                                    if (result == null) return;
+                                    try {
+                                      await ref.read(plansServiceProvider).setPlanPrice(
+                                            plan.id!,
+                                            result.price,
+                                            result.share,
+                                          );
+                                      ref.invalidateAppData();
+                                      messenger.showSnackBar(
+                                        SnackBar(content: Text(s.planPriceSaved)),
+                                      );
+                                    } catch (e) {
+                                      messenger.showSnackBar(
+                                        SnackBar(content: Text('${s.errorPrefix}$e')),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.payments_outlined, size: 18),
+                                  label: Text(s.setPlanPrice),
+                                ),
                                 if (status == 'active')
                                   TextButton.icon(
                                     onPressed: () async {
@@ -413,6 +443,85 @@ class _InfoRow extends StatelessWidget {
           child: Text(label, style: AppTypography.bodySmall),
         ),
         Expanded(child: Text(value, style: AppTypography.bodyLarge)),
+      ],
+    );
+  }
+}
+
+/// Dialog to record or correct the price and gym-share of an existing plan.
+/// Works for every plan status (active, frozen, queued, expired) — this is how
+/// plans created before the pricing feature get their revenue entered.
+class _PlanPriceDialog extends StatefulWidget {
+  final int initialPrice;
+  final int initialShare;
+
+  const _PlanPriceDialog({required this.initialPrice, required this.initialShare});
+
+  @override
+  State<_PlanPriceDialog> createState() => _PlanPriceDialogState();
+}
+
+class _PlanPriceDialogState extends State<_PlanPriceDialog> {
+  late final TextEditingController _priceController;
+  late final TextEditingController _shareController;
+
+  @override
+  void initState() {
+    super.initState();
+    _priceController = TextEditingController(text: '${widget.initialPrice}');
+    _shareController = TextEditingController(text: '${widget.initialShare}');
+  }
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    _shareController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
+    return AlertDialog(
+      title: Text(s.planPriceDialogTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _priceController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: s.planPriceLabel,
+              helperText: s.planPriceHint,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _shareController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: s.planShareLabel,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(s.cancel),
+        ),
+        FilledButton(
+          onPressed: () {
+            final priceText = _priceController.text.trim().replaceAll(',', '');
+            final price = int.tryParse(toLatinDigits(priceText)) ?? 0;
+            final rawShare = int.tryParse(toLatinDigits(_shareController.text.trim()));
+            final share = rawShare == null ? 0 : rawShare.clamp(0, 100).toInt();
+            Navigator.pop(context, (price: price, share: share));
+          },
+          child: Text(s.save),
+        ),
       ],
     );
   }

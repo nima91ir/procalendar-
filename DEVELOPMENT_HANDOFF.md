@@ -5,6 +5,29 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**CURRENT HEAD (2026-09-20, after Option A) — legacy/expired plans can now be priced into accounting (implemented):**
+- **«ثبت قیمت» button on every plan card** in `/clients/detail/:id` (status-
+  agnostic: active / frozen / queued / expired). Opens a price + gym-share dialog
+  (Persian digits supported, price/share clamped). Saving calls
+  `PlansService.setPlanPrice(planId, price, sharePercent)`, which patches the
+  plan and keeps the ledger in sync: inserts an `income/plan` transaction dated
+  at the plan's `startDate` (today for queued plans without one) when missing,
+  updates that row when the price changes, and removes it when price is set to 0.
+  This is how pre-pricing-history plans (the bulk of old-user data) get their
+  revenue onto the accounting page — no migration can invent prices, so the
+  trainer enters them per plan.
+- **One-time v7 data migration** (`app_database.dart` `onUpgrade`, `from < 7`):
+  `backfillMissingPlanIncome()` inserts the missing income row for every plan
+  with `price > 0` that lacks one (idempotent — rerun never duplicates rows; no
+  schema change, no `.g.dart` regen). `schemaVersion` 6 → 7; fresh installs
+  create at v7.
+- New DAO: `getTransactionsForPlan(planId)`. New AppStrings keys (fa+en +
+  ctor): `planPriceDialogTitle`, `planPriceSaved`, `setPlanPrice`.
+- Tests: +5 in `plans_service_test.dart` (legacy set-price income, price-change
+  updates the row, price-0 removes it, clamp behavior, backfill idempotency);
+  `backup_service_test.dart` now asserts `schemaVersion` 7. `flutter analyze` =
+  No issues found!; `flutter test` = 173/173 green.
+
 **CURRENT HEAD (2026-09-20, after audit) — audit fixes APPLIED (H1, H2, M1, M2, M3):**
 - **BUGFIX (same head):** clicking a plan card in `/clients/detail/:id` pushed
   `/attendance/:id/:planId`, which fell into the "page not found" route — the

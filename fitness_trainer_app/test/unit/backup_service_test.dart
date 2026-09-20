@@ -67,7 +67,7 @@ void main() {
       final decoded = jsonDecode(json) as Map<String, dynamic>;
 
       expect(decoded['app'], 'procalendar');
-      expect(decoded['schemaVersion'], 6);
+      expect(decoded['schemaVersion'], 7);
       expect((decoded['clients'] as List).length, 1);
       expect((decoded['tags'] as List).length, 1);
       expect((decoded['clientTags'] as List).length, 1);

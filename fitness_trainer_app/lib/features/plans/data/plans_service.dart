@@ -191,6 +191,59 @@ class PlansService {
     );
   }
 
+  /// Records (or corrects) the price and gym share of an existing plan and
+  /// keeps the ledger in sync with an income row. Works for every plan status
+  /// (active, frozen, queued, expired): old plans created before the pricing
+  /// feature get their revenue entered retroactively via [setPlanPrice].
+  /// Setting a price of 0 removes the income row recorded for the plan.
+  Future<void> setPlanPrice(int planId, int price, int sharePercent) async {
+    final plan = await repository.getPlan(planId);
+    if (plan == null) return;
+    if (price < 0) price = 0;
+    var share = sharePercent;
+    if (share < 0) share = 0;
+    if (share > 100) share = 100;
+    await db.patchPlan(
+      planId,
+      ClientPlansCompanion(price: Value(price), sharePercent: Value(share)),
+    );
+    // Income belongs to the period the plan ran: use its start date, falling
+    // back to today for queued plans without one.
+    final incomeDate = (plan.startDate != null && plan.startDate!.isNotEmpty)
+        ? plan.startDate!
+        : jalaliToday();
+    final linked = await db.getTransactionsForPlan(planId);
+    final income =
+        linked.where((t) => t.type == 'income' && t.category == 'plan').firstOrNull;
+    if (price > 0) {
+      if (income == null) {
+        await db.insertTransaction(TransactionsCompanion(
+          clientId: Value(plan.clientId),
+          planId: Value(planId),
+          type: const Value('income'),
+          category: const Value('plan'),
+          amount: Value(price),
+          date: Value(incomeDate),
+          note: const Value(''),
+        ));
+      } else if (income.amount != price || income.date != incomeDate) {
+        await db.updateTransaction(TransactionsCompanion(
+          id: Value(income.id),
+          clientId: Value(plan.clientId),
+          planId: Value(planId),
+          type: const Value('income'),
+          category: const Value('plan'),
+          amount: Value(price),
+          date: Value(incomeDate),
+          note: Value(income.note),
+          createdAt: Value(income.createdAt),
+        ));
+      }
+    } else if (income != null) {
+      await db.deleteTransaction(income.id);
+    }
+  }
+
   /// The gym's share of a plan's price, rounded down: `price * sharePercent / 100`.
   int planShareDeduction(domain.ClientPlan plan) => (plan.price * plan.sharePercent) ~/ 100;
 

@@ -80,6 +80,9 @@ class AppStrings {
   final String planPriceHint;
   final String planShareLabel;
   final String perPlanShareTitle;
+  final String planPriceDialogTitle;
+  final String planPriceSaved;
+  final String setPlanPrice;
   final String shareRateTemplate;
   final String remainingDaysTemplate;
   final String gymShareDeductionTemplate;
@@ -365,6 +368,9 @@ class AppStrings {
     required this.planPriceHint,
     required this.planShareLabel,
     required this.perPlanShareTitle,
+    required this.planPriceDialogTitle,
+    required this.planPriceSaved,
+    required this.setPlanPrice,
     required this.shareRateTemplate,
     required this.remainingDaysTemplate,
     required this.gymShareDeductionTemplate,
@@ -735,6 +741,9 @@ class AppStrings {
     planPriceHint: 'اگر بیشتر از صفر باشد، هنگام ثبت برنامه یک تراکنش درآمدِ «برنامه» خودکار ثبت می‌شود.',
     planShareLabel: 'سهم باشگاه (٪)',
     perPlanShareTitle: 'سهم برنامه‌ها',
+    planPriceDialogTitle: 'قیمت برنامه',
+    planPriceSaved: 'قیمت برنامه ثبت شد',
+    setPlanPrice: 'ثبت قیمت',
     shareRateTemplate: '{percent}٪',
     remainingDaysTemplate: '{count} روز باقی‌مانده',
     gymShareDeductionTemplate: 'سهم باشگاه: {amount}',
@@ -999,6 +1008,9 @@ class AppStrings {
     planPriceHint: 'When above zero, an automatic “plan” income transaction is recorded when the plan is assigned.',
     planShareLabel: 'Gym share (%)',
     perPlanShareTitle: 'Per-plan share',
+    planPriceDialogTitle: 'Plan price',
+    planPriceSaved: 'Plan price saved',
+    setPlanPrice: 'Set price',
     shareRateTemplate: '{percent}%',
     remainingDaysTemplate: '{count} days left',
     gymShareDeductionTemplate: 'Gym share: {amount}',

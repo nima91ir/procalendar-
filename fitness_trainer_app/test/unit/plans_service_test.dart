@@ -270,5 +270,85 @@ void main() {
       final plan = await plansService.getPlan(planId);
       expect(plansService.getRemainingDays(plan!), 20);
     });
+
+    test('setPlanPrice records income for a legacy unpriced plan', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      // Legacy flow: assigned without a price, so no income row exists yet.
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30);
+      expect(await db.getAllTransactions(), isEmpty);
+
+      await plansService.setPlanPrice(planId, 500000, 30);
+
+      final plan = await plansService.getPlan(planId);
+      expect(plan!.price, 500000);
+      expect(plan.sharePercent, 30);
+      final txs = await db.getAllTransactions();
+      expect(txs, hasLength(1));
+      expect(txs.single.type, 'income');
+      expect(txs.single.category, 'plan');
+      expect(txs.single.amount, 500000);
+      expect(txs.single.planId, planId);
+      expect(txs.single.clientId, clientId);
+    });
+
+    test('setPlanPrice updates the income row when the price changes', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId =
+          await plansService.assignPlan(clientId, 1, 5, 30, price: 400000, sharePercent: 10);
+
+      await plansService.setPlanPrice(planId, 600000, 20);
+
+      final plan = await plansService.getPlan(planId);
+      expect(plan!.price, 600000);
+      expect(plan.sharePercent, 20);
+      final txs = await db.getAllTransactions();
+      expect(txs, hasLength(1), reason: 'still exactly one income row');
+      expect(txs.single.amount, 600000);
+    });
+
+    test('setPlanPrice with price 0 removes the recorded income', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId =
+          await plansService.assignPlan(clientId, 1, 5, 30, price: 400000, sharePercent: 10);
+      expect(await db.getAllTransactions(), hasLength(1));
+
+      await plansService.setPlanPrice(planId, 0, 0);
+
+      final plan = await plansService.getPlan(planId);
+      expect(plan!.price, 0);
+      expect(plan.sharePercent, 0);
+      expect(await db.getAllTransactions(), isEmpty);
+    });
+
+    test('setPlanPrice clamps share to 0-100 and price to non-negative', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30);
+
+      await plansService.setPlanPrice(planId, -1000, 250);
+
+      final plan = await plansService.getPlan(planId);
+      expect(plan!.price, 0);
+      expect(plan.sharePercent, 100);
+      expect(await db.getAllTransactions(), isEmpty);
+    });
+
+    test('backfillMissingPlanIncome fills priced plans missing income and is idempotent', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      // A plan priced at assign-time already has its income row ...
+      final withIncome = await plansService.assignPlan(clientId, 1, 5, 30, price: 700000);
+      // ... while a legacy plan priced later has none.
+      final legacy = await plansService.assignPlan(clientId, 1, 5, 30);
+      await db.patchPlan(legacy, ClientPlansCompanion(price: Value(500000)));
+
+      await db.backfillMissingPlanIncome();
+      await db.backfillMissingPlanIncome();
+
+      final txs = await db.getAllTransactions();
+      expect(txs.where((t) => t.planId == withIncome), hasLength(1));
+      final legacyTx = txs.where((t) => t.planId == legacy).toList();
+      expect(legacyTx, hasLength(1));
+      expect(legacyTx.single.amount, 500000);
+      expect(legacyTx.single.category, 'plan');
+    });
   });
 }

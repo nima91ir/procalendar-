@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:fitness_trainer_app/core/database/connection/shared.dart' as connection;
+import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 
 part 'app_database.g.dart';
 
@@ -97,7 +98,7 @@ return AppDatabase(executor);
   }
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -134,6 +135,12 @@ return AppDatabase(executor);
         }
         if (from < 6) {
           await safeAddColumn(m, transactions, transactions.planId);
+        }
+        if (from < 7) {
+          // Data-only fix, no schema change: plans created with a price before
+          // auto-income existed (or whose income row is missing) get their
+          // income transaction backfilled.
+          await backfillMissingPlanIncome();
         }
       },
     );
@@ -280,4 +287,36 @@ Future<List<Map<String, dynamic>>> getBonusSessionClients() async {
   Future<int> deleteTransaction(int id) => (delete(transactions)..where((t) => t.id.equals(id))).go();
   Future<int> deleteTransactionsForPlan(int planId) =>
       (delete(transactions)..where((t) => t.planId.equals(planId))).go();
+
+  Future<List<Transaction>> getTransactionsForPlan(int planId) =>
+      (select(transactions)..where((t) => t.planId.equals(planId))).get();
+
+  /// One-time data fix for installs upgraded through the per-plan pricing
+  /// launch: any plan with a price but no linked `income/plan` transaction
+  /// gets its income row backfilled (date = plan start, or today for queued
+  /// plans without one). Idempotent — rerunning never duplicates rows.
+  Future<void> backfillMissingPlanIncome() async {
+    final priced =
+        await (select(clientPlans)..where((p) => p.price.isBiggerThanValue(0))).get();
+    for (final plan in priced) {
+      final linked = await (select(transactions)
+            ..where((t) => t.planId.equals(plan.id) &
+                t.type.equals('income') &
+                t.category.equals('plan')))
+          .get();
+      if (linked.isNotEmpty) continue;
+      final date = (plan.startDate != null && plan.startDate!.isNotEmpty)
+          ? plan.startDate!
+          : jalaliToday();
+      await into(transactions).insert(TransactionsCompanion(
+        clientId: Value(plan.clientId),
+        planId: Value(plan.id),
+        type: const Value('income'),
+        category: const Value('plan'),
+        amount: Value(plan.price),
+        date: Value(date),
+        note: const Value(''),
+      ));
+    }
+  }
 }
