@@ -57,7 +57,7 @@ class StartupErrorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tones;
     return MaterialApp(
-      title: '╪¬┘é┘ê█î┘à ╪¡╪▒┘ü┘çΓÇî╪º█î',
+      title: 'تقویم حرفه‌ای',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: Directionality(
@@ -72,7 +72,7 @@ class StartupErrorApp extends StatelessWidget {
                   Icon(Icons.storage_rounded, size: 64, color: t.error),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
-                    '╪▒╪º┘çΓÇî╪º┘å╪»╪º╪▓█î ╪¿╪º┘å┌⌐ ╪º╪╖┘ä╪º╪╣╪º╪¬█î ┘å╪º┘à┘ê┘ü┘é ╪¿┘ê╪»',
+                    'راه‌اندازی بانک اطلاعاتی ناموفق بود',
                     style: AppTypography.headlineMedium.copyWith(color: t.onSurface),
                     textAlign: TextAlign.center,
                   ),
@@ -95,7 +95,7 @@ class ProCalendarApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final accent = ref.watch(accentProvider);
     return MaterialApp(
-      title: '╪¬┘é┘ê█î┘à ╪¡╪▒┘ü┘çΓÇî╪º█î',
+      title: 'تقویم حرفه‌ای',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightForAccent(accent),
       darkTheme: AppTheme.darkForAccent(accent),
@@ -193,8 +193,8 @@ class AppRouter {
 /// Each tab has its own nested [Navigator], so every tab keeps its own back
 /// stack (a detail screen opened in one tab stays when you switch away and
 /// back). The `IndexedStack` preserves each tab's state. A nested navigator
-/// does not receive platform back events itself ΓÇö the root navigator's first
-/// route just bubbles them (which would exit the app) ΓÇö so this widget
+/// does not receive platform back events itself — the root navigator's first
+/// route just bubbles them (which would exit the app) — so this widget
 /// registers a [WidgetsBindingObserver] and forwards back presses to the
 /// active tab's navigator, falling back to app exit when it has nothing left
 /// to pop.
