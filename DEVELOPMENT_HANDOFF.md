@@ -25,6 +25,21 @@ next. It is the only long-form source of truth besides `AGENTS.md`.
   (`.dart_tool`, `build/`, `.widget_preview/`, `.idea`, `.gradle`,
   `local.properties`, `.iml`). Removed unused deps from `pubspec.yaml`:
   `cupertino_icons`, `flutter_svg`, `shared_preferences` (zero imports).
+- **Mojibake fix (same session)**: `lib/main.dart` contained literally
+  double-encoded Persian (cp437 mojibake) in the app title + startup-error
+  message; repaired to proper UTF-8 and replaced the string with the
+  canonical `AppStrings.appTitle` value. Also set platform display names:
+  Android label + iOS `CFBundleDisplayName` → `تقویم حرفه‌ای`; Windows/Linux
+  runner window titles → `PRO CALENDAR`.
+- **App icons regenerated (same session)**: programmatic (Pillow) icon set on
+  the real brand palette (dark-green `#161D15`/`#1F2A1E`, sage `#9DBE7E`,
+  pale `#E3F0E5`, amber "today" `#FFB74D`): 5 Android mipmaps, the 15-file iOS
+  AppIcon set (opaque), web `favicon.png` (32), `apple-touch-icon.png` (180),
+  `icons/Icon-{192,512}` + maskable variants. Sync: theme colors in
+  `web/index.html` + `web/manifest.json` were navy `#1A1A2E` → now the green
+  palette; deleted stale `web/icons/favicon.png` + `web/icons/apple-touch-icon.png`.
+  NOTE: a future `flutter build web` may regenerate `web/favicon.png` — re-copy
+  the design if it reverts.
 
 Relative paths below are from the root `D:\work\ZAHRA\PRO CALENDER\fitness_trainer_app`.
 
