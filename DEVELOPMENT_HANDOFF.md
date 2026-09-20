@@ -5,6 +5,27 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**LAST SESSION (2026-09-20) — web build fixed; package migration REVERTED:**
+- An uncommitted, half-finished attempt to extract the Drift DB into a new
+  `packages/fitness_database` package was found in the working tree (broken:
+  277 analyze errors; package missing all DAO methods + `forTesting`). It is
+  **reverted** — do NOT recreate a database package; ARCHITECTURE STANDS:
+  `lib/core/database/app_database.dart` + `.g.dart`.
+- **Root cause of `flutter run -d chrome` failing was in HEAD itself**: commit
+  `7fe11b5` added `import 'package:sqlite3/sqlite3.dart';` to `app_database.dart`
+  (to catch `SqliteException` in migrations), which pulls `dart:ffi` into the
+  web build → dart2js: "Dart library 'dart:ffi' is not available on this
+  platform". Fixed by dropping that import and using `on Exception` +
+  `e.toString().contains(...)` (same duplicate-column/already-exists safety).
+- Verdict: `flutter analyze` = No issues found!; `flutter test` = 164/164;
+  `flutter build web` = builds (even wasm dry-run passes).
+- **Workspace cleanup (same session)**: deleted root `sdk-archives.csv`, the two
+  `1789550528600-*.md` plan docs, `.kilo/` state, `test_out.txt`, throwaway
+  `fix_*.py`/`update_*.py` scripts, and regenerable caches
+  (`.dart_tool`, `build/`, `.widget_preview/`, `.idea`, `.gradle`,
+  `local.properties`, `.iml`). Removed unused deps from `pubspec.yaml`:
+  `cupertino_icons`, `flutter_svg`, `shared_preferences` (zero imports).
+
 Relative paths below are from the root `D:\work\ZAHRA\PRO CALENDER\fitness_trainer_app`.
 
 **PATH & TOOLING GOTCHAS (READ FIRST — this burned a whole session):**

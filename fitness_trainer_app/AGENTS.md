@@ -45,7 +45,8 @@ Long-form plan + per-file changelog lives in `../DEVELOPMENT_HANDOFF.md`
   scroll first (`scrollUntilVisible`).
 
 ## Git
-- The user's working tree contains throwaway scripts (`fix_*.py` etc.) — do
-  not delete or commit them. Only commit/stage when the user explicitly asks.
+- The root workspace used to contain throwaway scripts (`fix_*.py` etc.); they
+  were reviewed and deleted (2026-09-20 cleanup). Only commit/stage when the
+  user explicitly asks.
 - Commit-style prefixes from the repo history (`UI:`, `feat:`, `fix:`); ask
   before committing anyway.
