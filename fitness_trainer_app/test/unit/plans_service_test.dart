@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
+import 'package:shamsi_date/shamsi_date.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_service.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_repository.dart';
@@ -231,6 +232,43 @@ void main() {
       final remaining = await db.getAllTransactions();
       expect(remaining, hasLength(1));
       expect(remaining.single.category, 'rent');
+    });
+
+    test('unfreezePlan queues the plan when another plan is already active', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final firstId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await plansService.freezePlan(firstId);
+      // With the plan frozen, a new assignment is queued, not active.
+      final secondId = await plansService.assignPlan(clientId, 1, 5, 30);
+      // Reactivate the first so one plan is ACTIVE while the second is still
+      // queued; freezing the second then yields "frozen + another active".
+      await plansService.unfreezePlan(firstId);
+      await plansService.freezePlan(secondId);
+      expect((await db.getPlan(firstId))!.status, 'active');
+      expect((await db.getPlan(secondId))!.status, 'frozen');
+
+      await plansService.unfreezePlan(secondId);
+
+      final unfrozen = await db.getPlan(secondId);
+      expect(unfrozen!.status, 'queued', reason: 'must not create two active plans');
+      expect(unfrozen.queueOrder, isNotNull);
+      final activeCount =
+          (await db.getClientPlans(clientId)).where((p) => p.status == 'active').length;
+      expect(activeCount, 1, reason: 'exactly one active plan must remain');
+    });
+
+    test('getRemainingDays uses the exact Jalali day difference', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      // A plan that started 10 days ago with a 30-day duration has 20 days
+      // left. Picking the start relative to today keeps the assertion exact
+      // regardless of which day the test runs.
+      final today = Jalali.fromDateTime(DateTime.now());
+      final start = today.addDays(-10);
+      final startKey =
+          '${start.year}/${start.month.toString().padLeft(2, '0')}/${start.day.toString().padLeft(2, '0')}';
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, startDate: startKey);
+      final plan = await plansService.getPlan(planId);
+      expect(plansService.getRemainingDays(plan!), 20);
     });
   });
 }

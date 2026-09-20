@@ -30,6 +30,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   String _query = '';
   final Set<int> _selectedTagIds = {};
   _SortMode _sort = _SortMode.name;
+  /// Clients already dismissed by swipe; kept out of the list until the async
+  /// delete finishes so the Dismissible leaves the tree on the next build.
+  final Set<int> _dismissedIds = {};
 
   @override
   void dispose() {
@@ -333,7 +336,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                         return selectedTags.every(ids.contains);
                       }).toList();
                 final clients = _applySort(tagFiltered);
-                if (clients.isEmpty) {
+                final visibleClients = clients.where((c) => !_dismissedIds.contains(c.id)).toList();
+                if (visibleClients.isEmpty) {
                   if (quickFilter != ClientQuickFilter.all) {
                     return AppEmptyState(
                       icon: Icons.filter_alt_off_outlined,
@@ -353,9 +357,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  itemCount: clients.length,
+                  itemCount: visibleClients.length,
                   itemBuilder: (context, index) {
-                    final client = clients[index];
+                    final client = visibleClients[index];
                       return Dismissible(
                         key: ValueKey(client.id),
                         direction: DismissDirection.endToStart,
@@ -380,10 +384,23 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                         },
                         onDismissed: (_) async {
                           final messenger = ScaffoldMessenger.of(context);
-                          await ref.read(clientsServiceProvider).deleteClient(client.id!);
-                          ref.invalidateAppData();
-                          if (mounted) {
-                            messenger.showSnackBar(SnackBar(content: Text(s.clientDeleted(client.name))));
+                          // Take the row out of the tree synchronously so the
+                          // Dismissible isn't rebuilt while still present (the
+                          // classic "dismissed Dismissible still part of the
+                          // tree" framework error).
+                          setState(() => _dismissedIds.add(client.id!));
+                          try {
+                            await ref.read(clientsServiceProvider).deleteClient(client.id!);
+                            ref.invalidateAppData();
+                            if (mounted) {
+                              messenger.showSnackBar(SnackBar(content: Text(s.clientDeleted(client.name))));
+                            }
+                          } catch (e) {
+                            // Delete failed: bring the row back.
+                            if (mounted) {
+                              setState(() => _dismissedIds.remove(client.id!));
+                              messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+                            }
                           }
                         },
                         child: ClientCard(

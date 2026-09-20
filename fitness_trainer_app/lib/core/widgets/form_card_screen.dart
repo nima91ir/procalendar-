@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
@@ -18,7 +19,7 @@ class FormCardScreen extends ConsumerWidget {
     required this.children,
     this.onSave,
     this.isLoading = false,
-    this.saveLabel = 'ذخیره',
+    this.saveLabel,
   });
 
   @override
@@ -41,7 +42,7 @@ class FormCardScreen extends ConsumerWidget {
                   onPressed: isLoading ? null : onSave,
                   child: isLoading
                       ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: t.onSurface))
-                      : Text(saveLabel!),
+                      : Text(saveLabel ?? AppStrings.of(context).save),
                 ),
               ],
             ],

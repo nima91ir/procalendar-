@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/widgets/form_card_screen.dart';
 import 'package:fitness_trainer_app/core/widgets/styled_text_field.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
@@ -41,14 +42,15 @@ class _AddEditTemplateScreenState extends ConsumerState<AddEditTemplateScreen> {
   }
 
   Future<void> _save() async {
+    final s = AppStrings.of(context);
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نام قالب الزامی است')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.templateNameRequired)));
       return;
     }
-final sessions = int.tryParse(toLatinDigits(_sessionsController.text));
+    final sessions = int.tryParse(toLatinDigits(_sessionsController.text));
     final days = int.tryParse(toLatinDigits(_daysController.text));
     if (sessions == null || days == null || sessions <= 0 || days <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('جلسات و روزها باید عدد صحیح و بزرگتر از صفر باشند')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.templateInvalidNumbers)));
       return;
     }
     setState(() => _isLoading = true);
@@ -63,7 +65,7 @@ final sessions = int.tryParse(toLatinDigits(_sessionsController.text));
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطا: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -71,26 +73,27 @@ final sessions = int.tryParse(toLatinDigits(_sessionsController.text));
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     return FormCardScreen(
-      title: widget.templateId == null ? 'قالب جدید' : 'ویرایش قالب',
+      title: widget.templateId == null ? s.addTemplate : s.editTemplateTitle,
       onSave: _save,
       isLoading: _isLoading,
       children: [
         StyledTextField(
-          label: 'نام قالب *',
+          label: s.templateNameLabel,
           controller: _nameController,
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.lg),
         StyledTextField(
-          label: 'تعداد جلسات *',
+          label: s.templateSessionsLabel,
           controller: _sessionsController,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.lg),
         StyledTextField(
-          label: 'تعداد روزها *',
+          label: s.templateDaysLabel,
           controller: _daysController,
           keyboardType: TextInputType.number,
         ),

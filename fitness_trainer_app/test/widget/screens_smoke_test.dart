@@ -191,6 +191,25 @@ void main() {
         expect(find.text('وضعیت جلسات'), findsOneWidget);
       });
 
+      // Regression: the plan cards in the client detail navigate to
+      // `/attendance/:id/:planId`, which used to fall into the "page not
+      // found" route because the router parsed the whole tail as one id.
+      testWidgets('renders /attendance/:id/:planId (plan-scoped)', (tester) async {
+        final plans = await fixture.db.getClientPlans(fixture.clientId);
+        final planId = plans.first.id;
+        await tester.pumpWidget(
+          buildHarness(
+            fixture.db,
+            theme: entry.value,
+            initialRoute: '/attendance/${fixture.clientId}/$planId',
+          ),
+        );
+        await settle(tester);
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('وضعیت جلسات'), findsOneWidget);
+      });
+
       testWidgets('renders /add-plan/:id', (tester) async {
         await tester.pumpWidget(
           buildHarness(fixture.db, theme: entry.value, initialRoute: '/add-plan/${fixture.clientId}'),

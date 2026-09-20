@@ -98,7 +98,7 @@ class ClientCard extends ConsumerWidget {
               final plan = plans.where((p) => p.isActive || p.isFrozen).firstOrNull;
               final templates = templatesAsync.value;
               final templateName = plan != null
-                  ? (templates?.where((t) => t.id == plan.templateId).firstOrNull?.name ?? 'برنامه فعال')
+                  ? (templates?.where((t) => t.id == plan.templateId).firstOrNull?.name ?? s.activePlanFallback)
                   : null;
               final todayCount = todayCountAsync.value ?? 0;
               final todayStatus = todayStatusAsync.value ?? const <String, int>{};
@@ -160,7 +160,7 @@ class ClientCard extends ConsumerWidget {
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
-                              templateName ?? 'برنامه فعال',
+                              templateName ?? s.activePlanFallback,
                               style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w600),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -169,7 +169,7 @@ class ClientCard extends ConsumerWidget {
                           const SizedBox(width: AppSpacing.sm),
                           Text(s.remainingDetail(plan.remaining, plan.sessions), style: AppTypography.bodySmall),
                           const SizedBox(width: AppSpacing.sm),
-                          Text('${plan.days} روز', style: AppTypography.bodySmall),
+                          Text(s.daysCount(plan.days), style: AppTypography.bodySmall),
                           const SizedBox(width: AppSpacing.xs),
                           IconButton(
                             visualDensity: VisualDensity.compact,

@@ -5,6 +5,46 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**CURRENT HEAD (2026-09-20, after audit) — audit fixes APPLIED (H1, H2, M1, M2, M3):**
+- **BUGFIX (same head):** clicking a plan card in `/clients/detail/:id` pushed
+  `/attendance/:id/:planId`, which fell into the "page not found" route — the
+  router's `_idFrom` tried to parse the whole tail (`3/7`) as one int. The
+  attendance route in `AppRouter.onGenerateRoute` now splits the tail itself
+  (`clientId` from `parts[0]`, optional `planId` from `parts[1]`).
+  `screens_smoke_test.dart` gained `/attendance/:id/:planId` coverage (both
+  themes). `flutter test` = 168/168.
+- Full audit delivered, then all agreed fixes applied in one pass:
+  `flutter analyze` = No issues found!; `flutter test` = 166/166 green.
+- **H1 (double-`active` crash):** `plans_service.unfreezePlan` now reads
+  `getActivePlan(clientId)` first; if a *different* plan is already active, the
+  unfrozen plan is queued (`queueOrder = countQueuedPlans + 1`) instead of being
+  set `active`. `app_database.getActivePlan` is now defensive (`firstOrNull`,
+  tolerates a legacy duplicate-active state) instead of `getSingleOrNull`.
+- **H2 (Jalali day-diff drift):** `getRemainingDays` uses
+  `end.distanceFrom(today)` (exact Julian-day diff). The old code rebuilt a
+  `DateTime` from Jalali components (treated as Gregorian) and drifted across
+  month boundaries.
+- **M1 (hardcoded Persian → AppStrings):** +30 catalog keys (fa+en + ctor params
+  + `approximateEnd(date)` / `planAddedWithStart(date)`). Localized: add-plan
+  flow (app bar, pills, start-date sheet, confirm dialog + actions, queued
+  warning, success snackbar), attendance calendar (month header, weekday glyphs
+  via `weekdayShort`, nav tooltips, legend), add-edit client/template forms +
+  validation snackbars, `AppConfirmDialog.show` defaults → `s.confirm`/`s.cancel`,
+  `form_card_screen` save default → `s.save`, `AppErrorState` retry → `s.retryLabel`,
+  client/template cards, past-attendance session summary, `main.dart` titles.
+  - NOTE: `ProCalendarApp`'s title comes from `languageProvider`
+    (`lang == 'fa' ? AppStrings.fa.appTitle : AppStrings.en.appTitle`) — the
+    context is ABOVE `MaterialApp`, so `AppStrings.of(context)` throws there.
+- **M2 (Dismissible crash):** clients list tracks `_dismissedIds`; `onDismissed`
+  removes the row synchronously (`setState`) then deletes; on failure the row
+  returns with an error snackbar.
+- **M3 (destructive delete):** past-attendance `_deleteRecord` confirms via
+  `AppConfirmDialog` (`s.deleteSession` / `s.deleteSessionMessage`) first.
+- Tests: +2 unit tests (`plans_service_test.dart`: unfreeze-queues-while-active;
+  `getRemainingDays` = exactly 20). Widget tests updated: calendar-weekday test
+  now wires the `fa` locale; attendance-marking test dismisses the new delete
+  dialog. Smoke test untouched (title resolved via provider).
+
 **LAST SESSION (2026-09-20) — web build fixed; package migration REVERTED:**
 - An uncommitted, half-finished attempt to extract the Drift DB into a new
   `packages/fitness_database` package was found in the working tree (broken:

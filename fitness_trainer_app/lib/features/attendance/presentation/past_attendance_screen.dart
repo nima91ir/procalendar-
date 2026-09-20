@@ -84,6 +84,14 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
     final s = AppStrings.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final lang = ref.read(languageProvider);
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: s.deleteSession,
+      message: s.deleteSessionMessage,
+      confirmLabel: s.delete,
+      cancelLabel: s.cancel,
+    );
+    if (!confirmed) return;
     try {
       await ref.read(attendanceProvider.notifier).removeSessionById(record.id!);
       if (!mounted) return;
@@ -401,7 +409,7 @@ class _SessionSummaryCard extends StatelessWidget {
           _SummaryRow(
             label: s.activePlanRemainingLabel,
             value: hasPlan
-                ? '${toPersian(activePlanRemaining!.toString())} از ${toPersian(activePlanSessions.toString())}'
+                ? s.remainingDetail(activePlanRemaining!, activePlanSessions!)
                 : s.noActivePlanLabel,
             color: hasPlan ? t.success : t.onSurfaceVar,
           ),

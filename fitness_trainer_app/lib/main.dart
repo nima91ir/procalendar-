@@ -57,7 +57,7 @@ class StartupErrorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tones;
     return MaterialApp(
-      title: 'تقویم حرفه‌ای',
+      title: AppStrings.fa.appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: Directionality(
@@ -72,7 +72,7 @@ class StartupErrorApp extends StatelessWidget {
                   Icon(Icons.storage_rounded, size: 64, color: t.error),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
-                    'راه‌اندازی بانک اطلاعاتی ناموفق بود',
+                    AppStrings.fa.databaseFailedTitle,
                     style: AppTypography.headlineMedium.copyWith(color: t.onSurface),
                     textAlign: TextAlign.center,
                   ),
@@ -94,13 +94,14 @@ class ProCalendarApp extends ConsumerWidget {
 @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accent = ref.watch(accentProvider);
+    final lang = ref.watch(languageProvider);
     return MaterialApp(
-      title: 'تقویم حرفه‌ای',
+      title: lang == 'fa' ? AppStrings.fa.appTitle : AppStrings.en.appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightForAccent(accent),
       darkTheme: AppTheme.darkForAccent(accent),
       themeMode: ref.watch(themeModeProvider),
-      locale: Locale(ref.watch(languageProvider)),
+      locale: Locale(lang),
       home: const MainShell(),
       onGenerateRoute: AppRouter.onGenerateRoute,
       onUnknownRoute: AppRouter.onUnknownRoute,
@@ -161,11 +162,20 @@ class AppRouter {
     if (editClientId != null) return page(AddEditClientScreen(clientId: editClientId));
     final editTemplateId = _idFrom(name, AppRoutes.editTemplate);
     if (editTemplateId != null) return page(AddEditTemplateScreen(templateId: editTemplateId));
-    final attendanceClientId = _idFrom(name, AppRoutes.attendance);
-    if (attendanceClientId != null) {
-      final segments = (name ?? '').split('/');
-      final planId = segments.length > 3 ? int.tryParse(segments[3]) : null;
-      return page(PastAttendanceScreen(clientId: attendanceClientId, planId: planId));
+    // `/attendance/<clientId>` (whole history) and
+    // `/attendance/<clientId>/<planId>` (filtered to one plan) both resolve.
+    // `_idFrom` can't be reused here: for the two-id form it would try to parse
+    // `3/7` as a single int, fail, and fall into the "page not found" route.
+    final attendancePrefix = '${AppRoutes.attendance}/';
+    if (name != null && name.startsWith(attendancePrefix)) {
+      final parts = name.substring(attendancePrefix.length).split('/');
+      final attendanceClientId = parts.isNotEmpty ? int.tryParse(parts[0]) : null;
+      if (attendanceClientId != null) {
+        return page(PastAttendanceScreen(
+          clientId: attendanceClientId,
+          planId: parts.length > 1 ? int.tryParse(parts[1]) : null,
+        ));
+      }
     }
     final addPlanClientId = _idFrom(name, AppRoutes.addPlan);
     if (addPlanClientId != null) return page(AddPlanScreen(clientId: addPlanClientId));

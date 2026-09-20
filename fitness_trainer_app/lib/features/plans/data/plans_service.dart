@@ -82,6 +82,16 @@ class PlansService {
   Future<void> unfreezePlan(int planId) async {
     final plan = await repository.getPlan(planId);
     if (plan == null) return;
+    // Exactly one active plan per client: reactivating a frozen plan while
+    // another plan is already active would create two `active` rows and crash
+    // `getActivePlan` (it reads with getSingleOrNull). Queue the unfrozen plan
+    // instead and let the active one finish first.
+    final active = await repository.getActivePlan(plan.clientId);
+    if (active != null && active.id != planId) {
+      final queuedCount = await repository.countQueuedPlans(plan.clientId);
+      await repository.updatePlanStatus(planId, 'queued', queueOrder: queuedCount + 1);
+      return;
+    }
     await repository.updatePlanStatus(planId, 'active');
   }
 
@@ -195,9 +205,10 @@ class PlansService {
     final start = Jalali(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
     final end = start.addDays(plan.days);
     final today = Jalali.fromDateTime(DateTime.now());
-    final endDateTime = DateTime(end.year, end.month, end.day);
-    final todayDateTime = DateTime(today.year, today.month, today.day);
-    final diff = endDateTime.difference(todayDateTime).inDays;
+    // Exact Julian-day difference. The previous code rebuilt `DateTime` from
+    // the Jalali components, which are then treated as Gregorian and drift by
+    // a day or two across months — e.g. اسفند ۳۰ became "March 2".
+    final diff = end.distanceFrom(today);
     return diff > 0 ? diff : 0;
   }
 }

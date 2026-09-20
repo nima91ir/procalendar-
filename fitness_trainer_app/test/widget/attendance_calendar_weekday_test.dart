@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitness_trainer_app/core/theme/app_theme.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
@@ -37,6 +38,13 @@ void main() {
     Future<void> pumpMonth(WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('fa'),
+          supportedLocales: const [Locale('fa'), Locale('en')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           theme: AppTheme.light,
           home: Scaffold(
             body: AttendanceCalendar(

@@ -93,6 +93,10 @@ void main() {
       await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
       await settle(tester);
 
+      // M3: deleting a session now asks for confirmation first.
+      await tester.tap(find.widgetWithText(ElevatedButton, 'حذف'));
+      await settle(tester);
+
       expect((await db.getPlan(planId))!.remaining, 5);
       expect((await db.select(db.attendance).get()), isEmpty);
     });

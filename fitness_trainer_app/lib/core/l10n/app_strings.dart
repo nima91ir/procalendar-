@@ -269,6 +269,39 @@ class AppStrings {
   final String importFailedTemplate;
   final String noBackupContent;
 
+  // Plan assignment (add-plan screen & confirmations)
+  final String selectPlanTemplate;
+  final String approximateEndTemplate;
+  final String chooseThisTemplate;
+  final String chooseStartDate;
+  final String confirmDate;
+  final String reviewStartDate;
+  final String startDateLabel;
+  final String endDateLabel;
+  final String sessionsLabel;
+  final String queuedPlanWarning;
+  final String confirmStartDateMessage;
+  final String yesSavePlan;
+  final String planAddedWithStartTemplate;
+  final String change;
+  final String todayLabel;
+  final String prevMonth;
+  final String nextMonth;
+  final String retryLabel;
+
+  // Client / template editor forms
+  final String templateNameLabel;
+  final String templateSessionsLabel;
+  final String templateDaysLabel;
+  final String templateNameRequired;
+  final String templateInvalidNumbers;
+  final String editTemplateTitle;
+  final String clientNameRequired;
+  final String clientNameLabel;
+  final String contactLabel;
+  final String activePlanFallback;
+  final String deleteSessionMessage;
+
   const AppStrings({
     required this.isPersian,
     required this.welcomeTemplate,
@@ -501,6 +534,35 @@ class AppStrings {
     required this.replaceConfirmMessage,
     required this.importFailedTemplate,
     required this.noBackupContent,
+    required this.selectPlanTemplate,
+    required this.approximateEndTemplate,
+    required this.chooseThisTemplate,
+    required this.chooseStartDate,
+    required this.confirmDate,
+    required this.reviewStartDate,
+    required this.startDateLabel,
+    required this.endDateLabel,
+    required this.sessionsLabel,
+    required this.queuedPlanWarning,
+    required this.confirmStartDateMessage,
+    required this.yesSavePlan,
+    required this.planAddedWithStartTemplate,
+    required this.change,
+    required this.todayLabel,
+    required this.prevMonth,
+    required this.nextMonth,
+    required this.retryLabel,
+    required this.templateNameLabel,
+    required this.templateSessionsLabel,
+    required this.templateDaysLabel,
+    required this.templateNameRequired,
+    required this.templateInvalidNumbers,
+    required this.editTemplateTitle,
+    required this.clientNameRequired,
+    required this.clientNameLabel,
+    required this.contactLabel,
+    required this.activePlanFallback,
+    required this.deleteSessionMessage,
   });
 
   String _digits(String value) => isPersian ? toPersian(value) : value;
@@ -538,6 +600,8 @@ class AppStrings {
       .replaceAll('{attendance}', _digits('$attendance'));
   String importDone(int count) => importDoneTemplate.replaceAll('{count}', _digits('$count'));
   String importFailed(String error) => importFailedTemplate.replaceAll('{error}', error);
+  String approximateEnd(String date) => approximateEndTemplate.replaceAll('{date}', date);
+  String planAddedWithStart(String date) => planAddedWithStartTemplate.replaceAll('{date}', date);
 
   /// Thousands-separated amount in the app language, e.g. `1,250,000`.
   String money(int value) => _digits(_grouped(value));
@@ -839,6 +903,35 @@ class AppStrings {
     replaceConfirmMessage: 'تمام اطلاعات فعلی حذف و با محتوای پشتیبان جایگزین می‌شود. ادامه می‌دهید؟',
     importFailedTemplate: 'ورود ناموفق بود: {error}',
     noBackupContent: 'ابتدا محتوای پشتیبان را وارد کنید',
+    selectPlanTemplate: 'انتخاب قالب برنامه',
+    approximateEndTemplate: 'پایان تقریبی دوره: {date}',
+    chooseThisTemplate: 'انتخاب این قالب',
+    chooseStartDate: 'انتخاب تاریخ شروع',
+    confirmDate: 'تأیید تاریخ',
+    reviewStartDate: 'بررسی تاریخ شروع',
+    startDateLabel: 'تاریخ شروع',
+    endDateLabel: 'تاریخ پایان',
+    sessionsLabel: 'تعداد جلسات',
+    queuedPlanWarning: 'این مشتری برنامه فعال دارد؛ برنامه جدید «در صف» ثبت می‌شود و تاریخ شروع آن هنگام فعال شدن به‌روز می‌شود.',
+    confirmStartDateMessage: 'مطمئنید تاریخ شروع را درست انتخاب کرده‌اید؟',
+    yesSavePlan: 'بله، ثبت شود',
+    planAddedWithStartTemplate: 'برنامه اضافه شد (شروع: {date})',
+    change: 'تغییر',
+    todayLabel: 'امروز',
+    prevMonth: 'ماه قبل',
+    nextMonth: 'ماه بعد',
+    retryLabel: 'تلاش مجدد',
+    templateNameLabel: 'نام قالب *',
+    templateSessionsLabel: 'تعداد جلسات *',
+    templateDaysLabel: 'تعداد روزها *',
+    templateNameRequired: 'نام قالب الزامی است',
+    templateInvalidNumbers: 'جلسات و روزها باید عدد صحیح و بزرگتر از صفر باشند',
+    editTemplateTitle: 'ویرایش قالب',
+    clientNameRequired: 'نام مشتری الزامی است',
+    clientNameLabel: 'نام *',
+    contactLabel: 'شماره تماس',
+    activePlanFallback: 'برنامه فعال',
+    deleteSessionMessage: 'این جلسه حذف شود؟ جلسه مصرف‌شده به برنامه یا جلسات هدیه بازگردانده می‌شود.',
   );
 
 
@@ -1077,5 +1170,34 @@ class AppStrings {
     replaceConfirmMessage: 'All current data will be deleted and replaced by the backup. Continue?',
     importFailedTemplate: 'Import failed: {error}',
     noBackupContent: 'Enter the backup contents first',
+    selectPlanTemplate: 'Select plan template',
+    approximateEndTemplate: 'Approximate end date: {date}',
+    chooseThisTemplate: 'Choose this template',
+    chooseStartDate: 'Choose start date',
+    confirmDate: 'Confirm date',
+    reviewStartDate: 'Check start date',
+    startDateLabel: 'Start date',
+    endDateLabel: 'End date',
+    sessionsLabel: 'Number of sessions',
+    queuedPlanWarning: 'This client already has an active plan. The new plan will be queued and its start date updated when it activates.',
+    confirmStartDateMessage: 'Is the start date correct?',
+    yesSavePlan: 'Yes, save it',
+    planAddedWithStartTemplate: 'Plan added (start: {date})',
+    change: 'Change',
+    todayLabel: 'Today',
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
+    retryLabel: 'Try again',
+    templateNameLabel: 'Template name *',
+    templateSessionsLabel: 'Number of sessions *',
+    templateDaysLabel: 'Number of days *',
+    templateNameRequired: 'Template name is required',
+    templateInvalidNumbers: 'Sessions and days must be whole numbers greater than zero',
+    editTemplateTitle: 'Edit template',
+    clientNameRequired: 'Client name is required',
+    clientNameLabel: 'Name *',
+    contactLabel: 'Phone number',
+    activePlanFallback: 'Active plan',
+    deleteSessionMessage: 'Remove this session? The used session is refunded to the plan or bonus sessions.',
   );
 }

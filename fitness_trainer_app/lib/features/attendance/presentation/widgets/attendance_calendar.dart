@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shamsi_date/shamsi_date.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
-import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
 
 /// Interactive Jalali month grid used to mark attendance.
@@ -48,6 +48,7 @@ class AttendanceCalendar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
+    final s = AppStrings.of(context);
     final firstOfMonth = Jalali(year, month, 1);
     final daysInMonth = firstOfMonth.monthLength;
     final firstDayWeekDay = firstOfMonth.weekDay - 1;
@@ -68,11 +69,11 @@ class AttendanceCalendar extends StatelessWidget {
               IconButton(
                 onPressed: onPreviousMonth,
                 icon: const Icon(Icons.chevron_right),
-                tooltip: 'ماه قبل',
+                tooltip: s.prevMonth,
               ),
               Expanded(
                 child: Text(
-                  '${monthNames[month - 1]} ${toPersian(year.toString())}',
+                  '${s.monthShort(month)} ${s.isPersian ? toPersian(year.toString()) : year}',
                   style: AppTypography.headlineMedium,
                   textAlign: TextAlign.center,
                 ),
@@ -80,13 +81,13 @@ class AttendanceCalendar extends StatelessWidget {
               IconButton(
                 onPressed: onNextMonth,
                 icon: const Icon(Icons.chevron_left),
-                tooltip: 'ماه بعد',
+                tooltip: s.nextMonth,
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(
-            children: ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
+            children: List.generate(7, (i) => s.weekdayShort(i + 1).substring(0, 1))
                 .map((d) => Expanded(child: Center(child: Text(d, style: AppTypography.labelMedium))))
                 .toList(),
           ),
@@ -125,11 +126,11 @@ class AttendanceCalendar extends StatelessWidget {
           if (onDaySelected == null)
             Row(
               children: [
-                _LegendDot(color: t.today, label: 'امروز'),
+                _LegendDot(color: t.today, label: s.todayLabel),
                 const SizedBox(width: AppSpacing.md),
-                _LegendDot(color: t.present, label: 'حاضر'),
+                _LegendDot(color: t.present, label: s.present),
                 const SizedBox(width: AppSpacing.md),
-                _LegendDot(color: t.absent, label: 'غایب'),
+                _LegendDot(color: t.absent, label: s.absent),
               ],
             ),
         ],

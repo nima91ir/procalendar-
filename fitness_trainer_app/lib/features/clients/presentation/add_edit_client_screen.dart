@@ -64,8 +64,9 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
   }
 
   Future<void> _save() async {
+    final s = AppStrings.of(context);
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نام مشتری الزامی است')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.clientNameRequired)));
       return;
     }
     setState(() => _isLoading = true);
@@ -102,7 +103,7 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
         if (Navigator.canPop(context)) Navigator.pop(context, true);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطا: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -113,30 +114,30 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
     final s = AppStrings.of(context);
     final tags = ref.watch(allTagsProvider).value ?? const <domain.Tag>[];
     return FormCardScreen(
-      title: widget.clientId == null ? 'افزودن مشتری' : 'ویرایش مشتری',
+      title: widget.clientId == null ? s.addClient : s.editClient,
       onSave: _save,
       isLoading: _isLoading,
       children: [
         StyledTextField(
-          label: 'نام *',
+          label: s.clientNameLabel,
           controller: _nameController,
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.lg),
         StyledTextField(
-          label: 'شماره تماس',
+          label: s.contactLabel,
           controller: _contactController,
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.lg),
         StyledTextField(
-          label: 'یادداشت',
+          label: s.note,
           controller: _noteController,
           maxLines: 3,
         ),
         const SizedBox(height: AppSpacing.lg),
         StyledTextField(
-          label: 'جلسات اضافه',
+          label: s.bonusSessionsLabel,
           controller: _bonusController,
           keyboardType: TextInputType.number,
         ),

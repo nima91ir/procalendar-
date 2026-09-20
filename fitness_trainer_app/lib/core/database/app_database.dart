@@ -184,7 +184,13 @@ return AppDatabase(executor);
       (select(clientPlans)..where((p) => p.templateId.equals(templateId))).get();
 
   Future<List<ClientPlan>> getClientPlans(int clientId) => (select(clientPlans)..where((p) => p.clientId.equals(clientId))).get();
-  Future<ClientPlan?> getActivePlan(int clientId) => (select(clientPlans)..where((p) => p.clientId.equals(clientId) & p.status.equals('active'))).getSingleOrNull();
+  /// The client's active plan. Defensive against a pre-existing double-active
+  /// state (a legacy `unfreezePlan` could create two `active` rows): the first
+  /// active row wins instead of `getSingleOrNull` throwing.
+  Future<ClientPlan?> getActivePlan(int clientId) async {
+    final plans = await (select(clientPlans)..where((p) => p.clientId.equals(clientId))).get();
+    return plans.where((p) => p.status == 'active').firstOrNull;
+  }
   Future<ClientPlan?> getFrozenPlan(int clientId) async {
     final plans = await getClientPlans(clientId);
     return plans.where((p) => p.status == 'frozen').firstOrNull;

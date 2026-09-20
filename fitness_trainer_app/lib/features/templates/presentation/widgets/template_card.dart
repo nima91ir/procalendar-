@@ -3,6 +3,7 @@ import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/features/templates/domain/plan_template.dart' as domain;
 
 class TemplateCard extends StatelessWidget {
@@ -21,12 +22,13 @@ class TemplateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     final t = context.tones;
     return AppCard(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: ListTile(
         title: Text(template.name, style: AppTypography.bodyLarge),
-        subtitle: Text('${template.sessions} جلسه · ${template.days} روز'),
+        subtitle: Text('${s.sessionsCount(template.sessions)} · ${s.daysCount(template.days)}'),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

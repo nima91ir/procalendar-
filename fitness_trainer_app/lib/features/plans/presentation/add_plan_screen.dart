@@ -58,10 +58,11 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
+    final s = AppStrings.of(context);
     final templatesAsync = ref.watch(allTemplatesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('انتخاب قالب برنامه')),
+      appBar: AppBar(title: Text(s.selectPlanTemplate)),
       body: templatesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => AppErrorState(message: e.toString()),
@@ -139,9 +140,9 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        AppPill(label: '${toPersian(template.sessions.toString())} جلسه', color: t.primaryLight),
+                        AppPill(label: s.sessionsCount(template.sessions), color: t.primaryLight),
                         const SizedBox(width: AppSpacing.sm),
-                        AppPill(label: '${toPersian(template.days.toString())} روز', color: t.surfaceVariant),
+                        AppPill(label: s.daysCount(template.days), color: t.surfaceVariant),
                       ],
                     ),
                     if (isSelected) ...[
@@ -157,7 +158,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                           const SizedBox(width: AppSpacing.xs),
                           Expanded(
                             child: Text(
-                              'پایان تقریبی دوره: ${formatJalali(_endDateFor(template.days))}',
+                              s.approximateEnd(formatJalali(_endDateFor(template.days))),
                               style: AppTypography.bodySmall,
                             ),
                           ),
@@ -173,7 +174,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () => _confirmAndAssign(template),
-                          child: const Text('انتخاب این قالب'),
+                          child: Text(s.chooseThisTemplate),
                         ),
                       ),
                     ],
@@ -189,6 +190,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
 
   /// Bottom-sheet Jalali date picker (the calendar doubles as a picker).
   Future<void> _pickStartDate() async {
+    final s = AppStrings.of(context);
     var picked = _startDateKey;
     var year = _pickerYear;
     var month = _pickerMonth;
@@ -204,7 +206,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Text('انتخاب تاریخ شروع', style: AppTypography.headlineMedium),
+                    child: Text(s.chooseStartDate, style: AppTypography.headlineMedium),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -239,14 +241,14 @@ attendanceMap: const <String, List<String>>{},
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(sheetContext),
-                            child: const Text('انصراف'),
+                            child: Text(s.cancel),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () => Navigator.pop(sheetContext, picked),
-                            child: const Text('تأیید تاریخ'),
+                            child: Text(s.confirmDate),
                           ),
                         ),
                       ],
@@ -281,15 +283,18 @@ attendanceMap: const <String, List<String>>{},
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('بررسی تاریخ شروع'),
+          title: Text(s.reviewStartDate),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ConfirmRow(label: 'قالب', value: template.name),
-              _ConfirmRow(label: 'تاریخ شروع', value: formatJalali(_startDateKey)),
-              _ConfirmRow(label: 'تاریخ پایان', value: formatJalali(_endDateFor(template.days))),
-              _ConfirmRow(label: 'تعداد جلسات', value: toPersian(template.sessions.toString())),
+              _ConfirmRow(label: s.planTemplateLabel, value: template.name),
+              _ConfirmRow(label: s.startDateLabel, value: formatJalali(_startDateKey)),
+              _ConfirmRow(label: s.endDateLabel, value: formatJalali(_endDateFor(template.days))),
+              _ConfirmRow(
+                label: s.sessionsLabel,
+                value: s.isPersian ? toPersian(template.sessions.toString()) : '${template.sessions}',
+              ),
               if (_price > 0) ...[
                 _ConfirmRow(
                   label: s.planPriceLabel,
@@ -303,13 +308,13 @@ attendanceMap: const <String, List<String>>{},
               const SizedBox(height: AppSpacing.sm),
               if (hasCurrent) ...[
                 Text(
-                  'این مشتری برنامه فعال دارد؛ برنامه جدید «در صف» ثبت می‌شود و تاریخ شروع آن هنگام فعال شدن به‌روز می‌شود.',
+                  s.queuedPlanWarning,
                   style: AppTypography.bodySmall.copyWith(color: t.warning),
                 ),
                 const SizedBox(height: AppSpacing.xs),
               ],
               Text(
-                'مطمئنید تاریخ شروع را درست انتخاب کرده‌اید؟',
+                s.confirmStartDateMessage,
                 style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
@@ -317,11 +322,11 @@ attendanceMap: const <String, List<String>>{},
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('انصراف'),
+              child: Text(s.cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('بله، ثبت شود'),
+              child: Text(s.yesSavePlan),
             ),
           ],
         );
@@ -344,7 +349,7 @@ attendanceMap: const <String, List<String>>{},
       ref.invalidateAppData();
       navigator.pop();
       messenger.showSnackBar(
-        SnackBar(content: Text('برنامه اضافه شد (شروع: ${formatJalali(_startDateKey)})')),
+        SnackBar(content: Text(s.planAddedWithStart(formatJalali(_startDateKey)))),
       );
     }
   }
@@ -360,6 +365,7 @@ class _StartDateTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
+    final s = AppStrings.of(context);
     return InkWell(
       onTap: onChange,
       borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -378,7 +384,7 @@ class _StartDateTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('تاریخ شروع', style: AppTypography.labelMedium),
+                  Text(s.startDateLabel, style: AppTypography.labelMedium),
                   const SizedBox(height: 2),
                   Text(
                     formatJalali(startDateKey),
@@ -387,7 +393,7 @@ class _StartDateTile extends StatelessWidget {
                 ],
               ),
             ),
-            Text('تغییر', style: AppTypography.labelMedium.copyWith(color: t.primary)),
+            Text(s.change, style: AppTypography.labelMedium.copyWith(color: t.primary)),
           ],
         ),
       ),

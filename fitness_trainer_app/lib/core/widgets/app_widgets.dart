@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_strings.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_tones.dart';
 import '../theme/app_typography.dart';
@@ -191,7 +192,7 @@ class AppErrorState extends StatelessWidget {
               Text(message, style: AppTypography.headlineMedium, textAlign: TextAlign.center),
               if (onRetry != null) ...[
                 const SizedBox(height: AppSpacing.lg),
-                ElevatedButton(onPressed: onRetry, child: const Text('تلاش مجدد')),
+                ElevatedButton(onPressed: onRetry, child: Text(AppStrings.of(context).retryLabel)),
               ],
             ],
           ),
@@ -233,19 +234,21 @@ class AppConfirmDialog extends StatelessWidget {
   static Future<bool> show(BuildContext context, {
     required String title,
     required String message,
-    String confirmLabel = 'تایید',
-    String? cancelLabel = 'لغو',
+    String? confirmLabel,
+    String? cancelLabel,
     VoidCallback? onConfirm,
   }) async {
+    final s = AppStrings.of(context);
+    final confirm = confirmLabel ?? s.confirm;
+    final cancel = cancelLabel ?? s.cancel;
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
         content: Text(message),
         actions: [
-          if (cancelLabel != null)
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(cancelLabel)),
-          ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(confirmLabel)),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(cancel)),
+          ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(confirm)),
         ],
       ),
     );
