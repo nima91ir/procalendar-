@@ -356,7 +356,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                       : AppEmptyState(icon: Icons.search_off, title: s.noResults, subtitle: s.noResultsSubtitle);
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  // Bottom padding clears the floating FAB so the last card's
+                  // actions (bonus steppers, calendar, ⋮ menu) are never hidden.
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 88),
                   itemCount: visibleClients.length,
                   itemBuilder: (context, index) {
                     final client = visibleClients[index];
@@ -417,11 +419,11 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         heroTag: 'clientsFab',
+        tooltip: s.addClient,
         onPressed: () => Navigator.pushNamed(context, AppRoutes.addClient),
-        icon: const Icon(Icons.add),
-        label: Text(s.addClient),
+        child: const Icon(Icons.add),
       ),
     );
   }

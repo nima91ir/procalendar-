@@ -25,6 +25,9 @@ next. It is the only long-form source of truth besides `AGENTS.md`.
   `createdAt` (previously `update().replace()` fell back to defaults and would silently wipe a plan's
   income link when edited). Orphaned-client rows edit safely (dropdown falls back to «بدون مشتری» when
   the linked client is gone). New AppStrings: `editTransaction`, `transactionUpdated`.
+- **FAB compaction (UI)**: the 4 `FloatingActionButton.extended` pills (clients/templates/tags/
+  accounting) became compact circular icon FABs (label moved to tooltip), and every list got 88px of
+  bottom padding so the last card/row's actions are never hidden behind the FAB.
 - Verdict: `flutter analyze` = No issues found!; `flutter test` = 177/177 green.
 
 **CURRENT HEAD (2026-09-20, after Option A) — legacy/expired plans can now be priced into accounting (implemented):**

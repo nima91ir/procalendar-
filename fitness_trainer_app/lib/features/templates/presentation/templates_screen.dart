@@ -27,7 +27,9 @@ class TemplatesScreen extends ConsumerWidget {
             return AppEmptyState(icon: Icons.fitness_center, title: s.noTemplatesTitle, subtitle: s.noTemplatesSubtitle);
           }
           return ListView.builder(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            // Bottom padding clears the floating FAB so the last card is not
+            // hidden behind it.
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 88),
             itemCount: templates.length,
             itemBuilder: (context, index) {
               final template = templates[index];
@@ -101,13 +103,13 @@ class TemplatesScreen extends ConsumerWidget {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         heroTag: 'templatesFab',
+        tooltip: s.addTemplate,
         onPressed: () {
           Navigator.pushNamed(context, AppRoutes.addTemplate);
         },
-        icon: const Icon(Icons.add),
-        label: Text(s.addTemplate),
+        child: const Icon(Icons.add),
       ),
     );
   }

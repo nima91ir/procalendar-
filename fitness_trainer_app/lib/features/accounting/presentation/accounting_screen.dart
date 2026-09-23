@@ -137,15 +137,17 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
+        tooltip: s.addTransaction,
         onPressed: _addTransaction,
-        icon: const Icon(Icons.add),
-        label: Text(s.addTransaction),
+        child: const Icon(Icons.add),
       ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidateAppData(),
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          // Bottom padding clears the floating FAB so the last ledger row is
+          // not hidden behind it.
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 88),
           children: [
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),

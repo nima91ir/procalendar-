@@ -33,7 +33,9 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
             return AppEmptyState(icon: Icons.label_outline, title: s.noTagsDefined, subtitle: s.noTagsDefinedSubtitle);
           }
           return ListView.builder(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            // Bottom padding clears the floating FAB so the last tag row is
+            // not hidden behind it.
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 88),
             itemCount: tags.length,
             itemBuilder: (context, index) {
               final tag = tags[index];
@@ -82,11 +84,11 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         heroTag: 'tagsFab',
+        tooltip: s.newTag,
         onPressed: () => _showAddDialog(context),
-        icon: const Icon(Icons.add),
-        label: Text(s.newTag),
+        child: const Icon(Icons.add),
       ),
     );
   }
