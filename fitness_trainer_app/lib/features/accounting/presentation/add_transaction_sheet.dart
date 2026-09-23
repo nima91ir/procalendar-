@@ -11,23 +11,44 @@ import 'package:fitness_trainer_app/features/clients/providers/clients_providers
 import 'package:fitness_trainer_app/features/attendance/presentation/widgets/attendance_calendar.dart';
 
 /// Bottom sheet that collects the fields of one ledger entry and pops with a
-/// [TransactionEntry] (id/createdAt left for the caller to fill). Editing is
-/// out of scope by design — keeping the ledger append-only keeps the summary
-/// numbers honest, so rows can only be added or deleted.
+/// [TransactionEntry] (id/createdAt left for the caller to fill). Pass
+/// [initial] to edit an existing row — the fields prefill and the popped entry
+/// carries the original id/createdAt so the caller can update in place.
 class AddTransactionSheet extends ConsumerStatefulWidget {
-  const AddTransactionSheet({super.key});
+  const AddTransactionSheet({super.key, this.initial});
+
+  final TransactionEntry? initial;
 
   @override
   ConsumerState<AddTransactionSheet> createState() => _AddTransactionSheetState();
 }
 
 class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
-  String _type = TransactionTypes.income;
-  String _category = TransactionCategories.plan;
-  String _date = jalaliToday();
-  int? _clientId;
-  final _amountController = TextEditingController();
-  final _noteController = TextEditingController();
+  late String _type;
+  late String _category;
+  late String _date;
+  late int? _clientId;
+  late final TextEditingController _amountController;
+  late final TextEditingController _noteController;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    _type = initial?.type ?? TransactionTypes.income;
+    final validCategories = initial == null
+        ? null
+        : (initial.isIncome
+            ? TransactionCategories.income
+            : TransactionCategories.expense);
+    _category = (initial != null && validCategories!.contains(initial.category))
+        ? initial.category
+        : (initial?.isIncome == true ? TransactionCategories.plan : TransactionCategories.rent);
+    _date = initial?.date ?? jalaliToday();
+    _clientId = initial?.clientId;
+    _amountController = TextEditingController(text: initial == null ? '' : '${initial.amount}');
+    _noteController = TextEditingController(text: initial?.note ?? '');
+  }
 
   @override
   void dispose() {
@@ -120,6 +141,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     Navigator.pop(
       context,
       TransactionEntry(
+        id: widget.initial?.id,
+        createdAt: widget.initial?.createdAt ?? '',
         clientId: _clientId,
         type: _type,
         category: _category,
@@ -139,6 +162,11 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     final categories = isIncome
         ? TransactionCategories.income
         : TransactionCategories.expense;
+    // A row may link a client that was deleted (legacy orphan). The dropdown
+    // would assert on an initialValue that is not among its items, so fall
+    // back to "no client" for display while keeping the stored link intact.
+    final clientStillExists =
+        _clientId != null && (clients ?? const []).any((c) => c.id == _clientId);
 
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -147,7 +175,10 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         children: [
           Row(children: [
             Expanded(
-              child: Text(s.addTransaction, style: AppTypography.headlineMedium),
+              child: Text(
+                widget.initial == null ? s.addTransaction : s.editTransaction,
+                style: AppTypography.headlineMedium,
+              ),
             ),
             IconButton(
               onPressed: () => Navigator.pop(context),
@@ -214,7 +245,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           ),
           const SizedBox(height: AppSpacing.md),
           DropdownButtonFormField<int?>(
-            initialValue: _clientId,
+            initialValue: clientStillExists ? _clientId : null,
             decoration: InputDecoration(
               labelText: s.clientOptionalLabel,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
@@ -242,7 +273,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           ElevatedButton.icon(
             onPressed: _save,
             icon: const Icon(Icons.check),
-            label: Text(s.addTransaction),
+            label: Text(widget.initial == null ? s.addTransaction : s.save),
           ),
         ],
       ),

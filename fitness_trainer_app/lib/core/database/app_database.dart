@@ -291,6 +291,40 @@ Future<List<Map<String, dynamic>>> getBonusSessionClients() async {
   Future<List<Transaction>> getTransactionsForPlan(int planId) =>
       (select(transactions)..where((t) => t.planId.equals(planId))).get();
 
+  /// Every attendance record that consumed a session from [planId]. Deleting a
+  /// plan also deletes its history — attendance history is only kept for plans
+  /// that still exist (active / expired / frozen / queued).
+  Future<int> deleteAttendanceForPlan(int planId) =>
+      (delete(attendance)..where((a) => a.planId.equals(planId))).go();
+
+  Future<int> deleteAttendanceForClient(int clientId) =>
+      (delete(attendance)..where((a) => a.clientId.equals(clientId))).go();
+
+  Future<int> deleteTransactionsForClient(int clientId) =>
+      (delete(transactions)..where((t) => t.clientId.equals(clientId))).go();
+
+  Future<int> deletePlansForClient(int clientId) =>
+      (delete(clientPlans)..where((p) => p.clientId.equals(clientId))).go();
+
+  Future<int> deleteClientTagsForClient(int clientId) =>
+      (delete(clientTags)..where((ct) => ct.clientId.equals(clientId))).go();
+
+  /// Deletes a client and everything attached to it in one transaction:
+  /// ledger rows, attendance history, plans (and their linked income rows) and
+  /// tag links. The deletes are explicit instead of relying on FK cascades so
+  /// the behavior is identical on every platform — the web build does not turn
+  /// on `PRAGMA foreign_keys`, so cascades silently no-op there and leave
+  /// orphaned plans/attendance behind.
+  Future<void> deleteClientCascade(int clientId) {
+    return transaction(() async {
+      await deleteTransactionsForClient(clientId);
+      await deleteAttendanceForClient(clientId);
+      await deletePlansForClient(clientId);
+      await deleteClientTagsForClient(clientId);
+      await deleteClient(clientId);
+    });
+  }
+
   /// One-time data fix for installs upgraded through the per-plan pricing
   /// launch: any plan with a price but no linked `income/plan` transaction
   /// gets its income row backfilled (date = plan start, or today for queued

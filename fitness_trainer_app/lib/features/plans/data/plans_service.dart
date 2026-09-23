@@ -102,6 +102,10 @@ class PlansService {
     // delete reverses its income so the ledger and the per-plan share section
     // stay in sync.
     await db.deleteTransactionsForPlan(planId);
+    // Attendance history belongs to the plan: deleting a plan removes the
+    // records that consumed its sessions. History is only kept for plans that
+    // still exist (active / expired / frozen / queued).
+    await db.deleteAttendanceForPlan(planId);
     await repository.deletePlan(planId);
     // Deleting the running plan must promote the next queued plan, otherwise
     // the client ends up with queued plans stranded behind nothing.

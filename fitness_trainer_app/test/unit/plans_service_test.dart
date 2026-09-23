@@ -234,6 +234,43 @@ void main() {
       expect(remaining.single.category, 'rent');
     });
 
+    test('deleting a plan removes its attendance history', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await db.insertAttendance(AttendanceCompanion.insert(
+        clientId: clientId,
+        planId: Value(planId),
+        date: '1405/06/21',
+        status: 'present',
+      ));
+      await plansService.consumeSession(planId);
+      expect(await db.getPlanAttendance(planId), hasLength(1));
+
+      await plansService.deletePlan(planId);
+
+      expect(await db.getPlan(planId), isNull);
+      expect(await db.getPlanAttendance(planId), isEmpty,
+          reason: 'a deleted plan takes its attendance history with it');
+    });
+
+    test('deleting one plan keeps the attendance of the remaining plans', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final activeId = await plansService.assignPlan(clientId, 1, 5, 30);
+      await plansService.assignPlan(clientId, 1, 5, 30); // queued
+      await db.insertAttendance(AttendanceCompanion.insert(
+        clientId: clientId,
+        planId: Value(activeId),
+        date: '1405/06/21',
+        status: 'present',
+      ));
+
+      final queued = (await db.getClientPlans(clientId)).firstWhere((p) => p.status == 'queued');
+      await plansService.deletePlan(queued.id);
+
+      expect(await db.getPlanAttendance(activeId), hasLength(1),
+          reason: 'history of the active plan is untouched by another plan delete');
+    });
+
     test('unfreezePlan queues the plan when another plan is already active', () async {
       final clientId = (await db.select(db.clients).get()).first.id;
       final firstId = await plansService.assignPlan(clientId, 1, 5, 30);

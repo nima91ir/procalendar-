@@ -51,6 +51,25 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     }
   }
 
+  Future<void> _editTransaction(TransactionEntry tx) async {
+    final s = AppStrings.of(context);
+    final updated = await AppBottomSheet.show(
+      context,
+      AddTransactionSheet(initial: tx),
+    );
+    if (updated == null || !mounted) return;
+    try {
+      await ref.read(transactionServiceProvider).updateTransaction(updated);
+      ref.invalidateAppData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.transactionUpdated)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+    }
+  }
+
   Future<void> _deleteTransaction(int id) async {
     final s = AppStrings.of(context);
     final confirmed = await AppConfirmDialog.show(
@@ -205,6 +224,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
                   categoryLabel: s.transactionCategory(tx.category),
                   dateText: formatDateShort(tx.date, lang),
                   amountText: s.money(tx.amount),
+                  onEdit: () => _editTransaction(tx),
                   onDelete: () => _deleteTransaction(tx.id!),
                 ),
           ],
@@ -258,6 +278,7 @@ class _TransactionTile extends StatelessWidget {
   final String categoryLabel;
   final String dateText;
   final String amountText;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _TransactionTile({
@@ -266,6 +287,7 @@ class _TransactionTile extends StatelessWidget {
     required this.categoryLabel,
     required this.dateText,
     required this.amountText,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -309,6 +331,11 @@ class _TransactionTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
+          IconButton(
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: AppStrings.of(context).edit,
+          ),
           IconButton(
             onPressed: onDelete,
             icon: Icon(Icons.delete_outline, color: t.error),

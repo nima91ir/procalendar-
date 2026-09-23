@@ -27,17 +27,26 @@ class TransactionRepository {
         ),
       );
 
-  Future<bool> update(TransactionEntry entry) => db.updateTransaction(
-        TransactionsCompanion(
-          id: Value(entry.id!),
-          clientId: Value(entry.clientId),
-          type: Value(entry.type),
-          category: Value(entry.category),
-          amount: Value(entry.amount),
-          date: Value(entry.date),
-          note: Value(entry.note),
-        ),
-      );
+  Future<bool> update(TransactionEntry entry) async {
+    // Preserve the plan link and createdAt of the row being edited: the edit
+    // sheet only touches type/category/amount/date/note/client, and
+    // `update().replace()` would otherwise fall back to column defaults and
+    // silently wipe `planId` (plan income link) and `createdAt`.
+    final existing = await db.getTransaction(entry.id!);
+    return db.updateTransaction(
+      TransactionsCompanion(
+        id: Value(entry.id!),
+        clientId: Value(entry.clientId),
+        type: Value(entry.type),
+        category: Value(entry.category),
+        amount: Value(entry.amount),
+        date: Value(entry.date),
+        note: Value(entry.note),
+        planId: existing == null ? const Value.absent() : Value(existing.planId),
+        createdAt: existing == null ? const Value.absent() : Value(existing.createdAt),
+      ),
+    );
+  }
 
   Future<int> delete(int id) => db.deleteTransaction(id);
 

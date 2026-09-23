@@ -69,6 +69,8 @@ class AppStrings {
   final String deleteTransactionMessage;
   final String transactionSaved;
   final String transactionDeleted;
+  final String editTransaction;
+  final String transactionUpdated;
   final String incomeCategoryPlan;
   final String incomeCategoryOther;
   final String expenseCategoryRent;
@@ -357,6 +359,8 @@ class AppStrings {
     required this.deleteTransactionMessage,
     required this.transactionSaved,
     required this.transactionDeleted,
+    required this.editTransaction,
+    required this.transactionUpdated,
     required this.incomeCategoryPlan,
     required this.incomeCategoryOther,
     required this.expenseCategoryRent,
@@ -730,6 +734,8 @@ class AppStrings {
     deleteTransactionMessage: 'این تراکنش حذف شود؟',
     transactionSaved: 'تراکنش ذخیره شد',
     transactionDeleted: 'تراکنش حذف شد',
+    editTransaction: 'ویرایش تراکنش',
+    transactionUpdated: 'تراکنش به‌روزرسانی شد',
     incomeCategoryPlan: 'برنامه',
     incomeCategoryOther: 'سایر',
     expenseCategoryRent: 'اجاره',
@@ -997,6 +1003,8 @@ class AppStrings {
     deleteTransactionMessage: 'Delete this transaction?',
     transactionSaved: 'Transaction saved',
     transactionDeleted: 'Transaction deleted',
+    editTransaction: 'Edit transaction',
+    transactionUpdated: 'Transaction updated',
     incomeCategoryPlan: 'Plan',
     incomeCategoryOther: 'Other',
     expenseCategoryRent: 'Rent',

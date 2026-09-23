@@ -62,7 +62,92 @@ void main() {
       expect(await db.getClient(id), isNull);
     });
 
-    test('deleteClient cascades plans and attendance', () async {
+    test('deleteClient cascade removes plans, attendance, ledger rows and tags', () async {
+      final clientId = await clientsService.createClient('CascadeFull');
+      await db.insertTemplate(PlanTemplatesCompanion.insert(
+        name: 'Test Template',
+        sessions: 5,
+        days: 30,
+      ));
+      final planId = await db.insertPlan(ClientPlansCompanion.insert(
+        clientId: clientId,
+        templateId: 1,
+        sessions: 5,
+        days: 30,
+        remaining: 5,
+        status: const Value('active'),
+      ));
+      await db.insertAttendance(AttendanceCompanion.insert(
+        clientId: clientId,
+        planId: Value(planId),
+        date: '1405/06/21',
+        status: 'present',
+      ));
+      final tagId = await db.insertTag(TagsCompanion.insert(name: 'تست'));
+      await db.assignTagToClient(clientId, tagId);
+      await db.insertTransaction(TransactionsCompanion.insert(
+        clientId: Value(clientId),
+        type: 'income',
+        category: 'plan',
+        amount: 1000000,
+        date: '1405/06/21',
+      ));
+
+      await clientsService.deleteClient(clientId);
+
+      expect(await db.getClient(clientId), isNull);
+      expect(await db.getClientPlans(clientId), isEmpty);
+      expect(await db.getClientAttendance(clientId), isEmpty);
+      expect(await db.getClientTransactions(clientId), isEmpty);
+      expect(await db.getClientTagIds(clientId), isEmpty);
+    });
+
+    test('deleteClient cascade works without FK enforcement (web-like)', () async {
+      // SQLite web builds never run `PRAGMA foreign_keys = ON`, so cascades
+      // must not be relied on — the explicit deletes have to do the work.
+      final webDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final webRepository = ClientsRepository(webDb);
+      final webService = ClientsService(webRepository);
+      final clientId = await webService.createClient('WebClient');
+      await webDb.insertTemplate(PlanTemplatesCompanion.insert(
+        name: 'Test Template',
+        sessions: 5,
+        days: 30,
+      ));
+      final planId = await webDb.insertPlan(ClientPlansCompanion.insert(
+        clientId: clientId,
+        templateId: 1,
+        sessions: 5,
+        days: 30,
+        remaining: 5,
+        status: const Value('active'),
+      ));
+      await webDb.insertAttendance(AttendanceCompanion.insert(
+        clientId: clientId,
+        planId: Value(planId),
+        date: '1405/06/21',
+        status: 'present',
+      ));
+      await webDb.insertTransaction(TransactionsCompanion.insert(
+        clientId: Value(clientId),
+        type: 'income',
+        category: 'plan',
+        amount: 1000000,
+        date: '1405/06/21',
+      ));
+
+      await webService.deleteClient(clientId);
+
+      expect(await webDb.getClient(clientId), isNull);
+      expect(await webDb.select(webDb.clientPlans).get(), isEmpty,
+          reason: 'the orphaned plan must be deleted even with FK off');
+      expect(await webDb.select(webDb.attendance).get(), isEmpty);
+      expect(await webDb.select(webDb.transactions).get(), isEmpty,
+          reason: 'the orphaned ledger row must be deleted even with FK off');
+      await webDb.close();
+    });
+
+test('deleteClient cascades plans and attendance', () async {
       final clientId = await clientsService.createClient('Cascade');
       await db.insertTemplate(PlanTemplatesCompanion.insert(
         name: 'Test Template',

@@ -33,7 +33,11 @@ class ClientsRepository {
 
   Future<int> insertClient(ClientsCompanion insert) => db.insertClient(insert);
   Future<bool> updateClient(ClientsCompanion insert) => db.updateClient(insert);
-  Future<int> deleteClient(int id) => db.deleteClient(id);
+
+  /// Deletes the client together with all dependent rows (plans, attendance,
+  /// ledger transactions, tag links) so no orphaned data survives a client
+  /// delete on any platform.
+  Future<void> deleteClient(int id) => db.deleteClientCascade(id);
 
   Future<List<domain.Client>> searchClients(String query) async {
     final rows = await db.searchClients(query);

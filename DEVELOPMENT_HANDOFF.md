@@ -5,6 +5,28 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**CURRENT HEAD (2026-09-23) — cascade deletes (plan/client) + editable accounting ledger (implemented):**
+- **Plan delete now removes its attendance history**: `PlansService.deletePlan` calls the new
+  `db.deleteAttendanceForPlan(planId)` before deleting the row (it already removed the plan's
+  income transaction). Attendance history survives only for plans that still exist (active /
+  expired / frozen / queued). Tests: `plans_service_test.dart` +2 (delete removes plan history;
+  deleting one plan keeps the others' attendance).
+- **Client delete now cascades everything, on every platform**: new `AppDatabase.deleteClientCascade`
+  runs one transaction deleting the client's ledger rows, attendance, plans and tag links, then the
+  client. The web build never enables `PRAGMA foreign_keys`, so the old FK-cascade reliance silently
+  left orphaned plans ("still in use by the deleted client"), attendance and accounting rows — now
+  explicit. `ClientsRepository.deleteClient` routes through it. Tests: `clients_service_test.dart` +2
+  (full cascade incl. transactions/tags; a web-like FK-off memory DB proves orphans are still removed);
+  `transactions_service_test.dart` updated to assert client delete removes its ledger rows.
+- **Accounting ledger is now editable + deletable**: rows already had delete; an edit IconButton on
+  each row opens `AddTransactionSheet(initial: tx)` (prefilled type/category/date/client/amount/note,
+  title «ویرایش تراکنش», save button flips to «ذخیره»), pops with id/createdAt preserved, then
+  `TransactionService.updateTransaction`. `TransactionRepository.update` now preserves `planId` +
+  `createdAt` (previously `update().replace()` fell back to defaults and would silently wipe a plan's
+  income link when edited). Orphaned-client rows edit safely (dropdown falls back to «بدون مشتری» when
+  the linked client is gone). New AppStrings: `editTransaction`, `transactionUpdated`.
+- Verdict: `flutter analyze` = No issues found!; `flutter test` = 177/177 green.
+
 **CURRENT HEAD (2026-09-20, after Option A) — legacy/expired plans can now be priced into accounting (implemented):**
 - **«ثبت قیمت» button on every plan card** in `/clients/detail/:id` (status-
   agnostic: active / frozen / queued / expired). Opens a price + gym-share dialog

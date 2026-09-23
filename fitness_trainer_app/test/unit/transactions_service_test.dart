@@ -121,13 +121,15 @@ void main() {
     expect(forAli.single.amount, 100000);
   });
 
-  test('deleting a client nulls the client link but keeps the row', () async {
+  test('deleting a client removes its ledger rows', () async {
     final clientId = await addClient('سارا');
     await service.addTransaction(entry(clientId: clientId, amount: 100000));
-    await db.deleteClient(clientId);
+    await service.addTransaction(entry(amount: 50000));
+
+    await db.deleteClientCascade(clientId);
 
     final all = await service.getAllTransactions();
-    expect(all.single.amount, 100000);
+    expect(all.single.amount, 50000, reason: 'only the client-less row survives');
     expect(all.single.clientId, isNull);
   });
 
