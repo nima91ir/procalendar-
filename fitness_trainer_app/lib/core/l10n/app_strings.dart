@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fitness_trainer_app/features/accounting/domain/transaction_entry.dart';
+import 'package:fitness_trainer_app/features/attendance/domain/session_refund.dart';
 import '../utils/persian_numbers.dart';
 import '../utils/jalali_calendar.dart';
+import '../utils/thousands_input_formatter.dart';
 
 /// Lightweight localization (no i18n package).
 ///
@@ -152,6 +154,8 @@ class AppStrings {
   final String note;
   final String notProvided;
   final String bonusSessionsLabel;
+  final String sessionRefundedAsBonus;
+  final String sessionNotConsumed;
   final String activePlans;
   final String addPlan;
   final String planProgress;
@@ -447,6 +451,8 @@ class AppStrings {
     required this.note,
     required this.notProvided,
     required this.bonusSessionsLabel,
+    required this.sessionRefundedAsBonus,
+    required this.sessionNotConsumed,
     required this.activePlans,
     required this.addPlan,
     required this.planProgress,
@@ -614,6 +620,22 @@ class AppStrings {
       .replaceAll('{status}', statusLabel)
       .replaceAll('{date}', dateText);
   String recordRemoved(String dateText) => recordRemovedTemplate.replaceAll('{date}', dateText);
+
+  /// Snackbar text for a removed attendance record, naming where the refunded
+  /// session went: a removal may return the session to a plan, restore it as a
+  /// bonus, or refund nothing at all. [removedLabel] is the already-localized
+  /// date label that [recordRemoved] uses.
+  String sessionRemovalMessage(SessionRefund? refund, String removedLabel) {
+    switch (refund) {
+      case SessionRefund.bonus:
+        return sessionRefundedAsBonus;
+      case SessionRefund.none:
+        return sessionNotConsumed;
+      case SessionRefund.plan:
+      case null:
+        return recordRemoved(removedLabel);
+    }
+  }
   String clientDeleted(String name) => clientDeletedTemplate.replaceAll('{name}', name);
   String bonusSessionsCount(int count) =>
       bonusSessionCountTemplate.replaceAll('{count}', _digits('$count'));
@@ -694,15 +716,9 @@ class AppStrings {
         : _enWeekdays[index];
   }
 
-  static String _grouped(int value) {
-    final digits = value.abs().toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
-    }
-    return value < 0 ? '-$buffer' : buffer.toString();
-  }
+  /// Delegates to the shared helper so display and the price input fields
+  /// group digits identically.
+  static String _grouped(int value) => groupDigits(value);
 
   static AppStrings of(BuildContext context) {
     final code = Localizations.localeOf(context).languageCode;
@@ -838,6 +854,8 @@ class AppStrings {
     note: 'یادداشت',
     notProvided: 'وارد نشده',
     bonusSessionsLabel: 'جلسات اضافه',
+    sessionRefundedAsBonus: 'سابقه حذف شد و یک جلسه به جلسات اضافه منتقل شد',
+    sessionNotConsumed: 'سابقه حذف شد بدون تغییر در جلسات',
     activePlans: 'برنامه‌های فعال',
     addPlan: 'افزودن برنامه',
     planProgress: 'پیشرفت برنامه',
@@ -1119,6 +1137,8 @@ class AppStrings {
     note: 'Note',
     notProvided: 'Not provided',
     bonusSessionsLabel: 'Bonus sessions',
+    sessionRefundedAsBonus: 'Record deleted; the session moved to bonus sessions',
+    sessionNotConsumed: 'Record deleted without changing sessions',
     activePlans: 'Active plans',
     addPlan: 'Add plan',
     planProgress: 'Plan progress',

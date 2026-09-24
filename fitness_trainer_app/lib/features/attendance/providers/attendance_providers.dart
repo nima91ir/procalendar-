@@ -92,15 +92,17 @@ class AttendanceNotifier extends Notifier<AsyncValue<void>> {
     }
   }
 
-  /// Deletes a single attendance record and refunds its session.
+  /// Deletes a single attendance record and refunds its session, reporting
+  /// where the refund landed (null when no record matched the id).
   /// Re-throws so UI callers can react to failures.
-  Future<void> removeSessionById(int attendanceId) async {
+  Future<SessionRefund?> removeSessionById(int attendanceId) async {
     final service = ref.read(attendanceSessionServiceProvider);
     state = const AsyncValue.loading();
     try {
-      final clientId = await service.removeSessionById(attendanceId);
-      if (clientId != null) _invalidateFor(clientId);
+      final removal = await service.removeSessionById(attendanceId);
+      if (removal != null) _invalidateFor(removal.clientId);
       state = const AsyncValue.data(null);
+      return removal?.refund;
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;
@@ -108,14 +110,16 @@ class AttendanceNotifier extends Notifier<AsyncValue<void>> {
   }
 
   /// Deletes the latest record for a client/day (dashboard undo) and refunds
-  /// its session. Re-throws so UI callers can react to failures.
-  Future<void> removeLatestSession(int clientId, String date) async {
+  /// its session, reporting where the refund landed. Re-throws so UI callers
+  /// can react to failures.
+  Future<SessionRefund?> removeLatestSession(int clientId, String date) async {
     final service = ref.read(attendanceSessionServiceProvider);
     state = const AsyncValue.loading();
     try {
-      final removedClientId = await service.removeLatestSession(clientId, date);
-      if (removedClientId != null) _invalidateFor(removedClientId);
+      final removal = await service.removeLatestSession(clientId, date);
+      if (removal != null) _invalidateFor(removal.clientId);
       state = const AsyncValue.data(null);
+      return removal?.refund;
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;

@@ -53,9 +53,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<void> _undo(WidgetRef ref, BuildContext context, AppStrings s, String lang, int clientId) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(attendanceProvider.notifier).removeLatestSession(clientId, jalaliToday());
+      final refund = await ref.read(attendanceProvider.notifier).removeLatestSession(clientId, jalaliToday());
       if (!context.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(formatDateLong(jalaliToday(), lang)))));
+      messenger.showSnackBar(SnackBar(
+        content: Text(s.sessionRemovalMessage(refund, formatDateLong(jalaliToday(), lang))),
+      ));
     } catch (e) {
       if (!context.mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));

@@ -93,9 +93,14 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
     );
     if (!confirmed) return;
     try {
-      await ref.read(attendanceProvider.notifier).removeSessionById(record.id!);
+      final refund = await ref.read(attendanceProvider.notifier).removeSessionById(record.id!);
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(_localizedDate(record.date, s, lang)))));
+      // Says where the session went — it can be restored as a bonus session,
+      // or refunded nowhere at all. Staying silent there is what made removals
+      // look like they were mixing attendance and bonus sessions up.
+      messenger.showSnackBar(SnackBar(
+        content: Text(s.sessionRemovalMessage(refund, _localizedDate(record.date, s, lang))),
+      ));
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
@@ -358,8 +363,11 @@ class _DayAttendanceSheet extends ConsumerWidget {
                       onPressed: () async {
                         final messenger = ScaffoldMessenger.of(context);
                         try {
-                          await ref.read(attendanceProvider.notifier).removeSessionById(record.id!);
-                          if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordRemoved(dateLabel))));
+                          final refund = await ref.read(attendanceProvider.notifier).removeSessionById(record.id!);
+                          if (!context.mounted) return;
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(s.sessionRemovalMessage(refund, dateLabel))),
+                          );
                         } catch (e) {
                           if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
                         }

@@ -3,6 +3,7 @@ import 'package:fitness_trainer_app/core/database/database_providers.dart';
 import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/data/dashboard_service.dart';
+import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 
 final dashboardServiceProvider = Provider<DashboardService>((ref) {
@@ -13,23 +14,31 @@ final totalClientsProvider = FutureProvider.autoDispose<int>((ref) {
   return ref.watch(dashboardServiceProvider).getTotalClients();
 });
 
-final activePlansCountProvider = FutureProvider.autoDispose<int>((ref) {
+// Every plan-based counter below depends on [plansExpirySweepProvider]: a plan
+// whose duration has elapsed must not still be counted as active, and expiring
+// it can promote a queued plan (so `queued`/`frozen` move too).
+final activePlansCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  await ref.watch(plansExpirySweepProvider.future);
   return ref.watch(dashboardServiceProvider).getActivePlansCount();
 });
 
-final expiredPlansCountProvider = FutureProvider.autoDispose<int>((ref) {
+final expiredPlansCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  await ref.watch(plansExpirySweepProvider.future);
   return ref.watch(dashboardServiceProvider).getExpiredPlansCount();
 });
 
-final frozenPlansCountProvider = FutureProvider.autoDispose<int>((ref) {
+final frozenPlansCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  await ref.watch(plansExpirySweepProvider.future);
   return ref.watch(dashboardServiceProvider).getFrozenPlansCount();
 });
 
-final queuedPlansProvider = FutureProvider.autoDispose<int>((ref) {
+final queuedPlansProvider = FutureProvider.autoDispose<int>((ref) async {
+  await ref.watch(plansExpirySweepProvider.future);
   return ref.watch(dashboardServiceProvider).getQueuedPlansCount();
 });
 
-final lowSessionPlansProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
+final lowSessionPlansProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  await ref.watch(plansExpirySweepProvider.future);
   return ref.watch(dashboardServiceProvider).getLowSessionPlans();
 });
 
@@ -62,7 +71,8 @@ final clientTagFilterProvider = FutureProvider.autoDispose<Map<int, List<int>>>(
 
 /// Client ids that own at least one plan in [status]
 /// ('expired' | 'frozen' | 'queued'), for the dashboard drill-downs.
-final planStatusClientIdsProvider = FutureProvider.autoDispose.family<List<int>, String>((ref, status) {
+final planStatusClientIdsProvider = FutureProvider.autoDispose.family<List<int>, String>((ref, status) async {
+  await ref.watch(plansExpirySweepProvider.future);
   return ref.watch(dashboardServiceProvider).getClientIdsByPlanStatus(status);
 });
 

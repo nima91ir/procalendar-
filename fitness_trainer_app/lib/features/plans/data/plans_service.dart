@@ -1,18 +1,36 @@
 import 'package:drift/drift.dart';
-import 'package:shamsi_date/shamsi_date.dart';
 import 'package:fitness_trainer_app/features/plans/domain/client_plan.dart' as domain;
 import 'package:fitness_trainer_app/features/plans/data/plans_repository.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
+import 'package:fitness_trainer_app/core/utils/plan_dates.dart';
 
 class PlansService {
   final PlansRepository repository;
   final AppDatabase db;
   PlansService(this.repository, this.db);
 
-  Future<List<domain.ClientPlan>> getClientPlans(int clientId) => repository.getClientPlans(clientId);
-  Future<List<domain.ClientPlan>> getAllPlans() => repository.getAllPlans();
-  Future<domain.ClientPlan?> getActivePlan(int clientId) => repository.getActivePlan(clientId);
+  /// Reads the client's plans after expiring any plan whose duration has run
+  /// out. Expiry used to depend on sessions alone, so a plan whose `days` had
+  /// elapsed stayed `active` forever.
+  Future<List<domain.ClientPlan>> getClientPlans(int clientId) async {
+    await expireElapsedPlans(clientId: clientId);
+    return repository.getClientPlans(clientId);
+  }
+
+  /// Every plan across all clients, after the same expiry sweep — the
+  /// accounting per-plan section and the dashboard read from here.
+  Future<List<domain.ClientPlan>> getAllPlans() async {
+    await expireElapsedPlans();
+    return repository.getAllPlans();
+  }
+
+  /// The client's active plan, after the expiry sweep, so attendance can never
+  /// consume a session from a plan that has already run out of days.
+  Future<domain.ClientPlan?> getActivePlan(int clientId) async {
+    await expireElapsedPlans(clientId: clientId);
+    return repository.getActivePlan(clientId);
+  }
   Future<domain.ClientPlan?> getPlan(int planId) => repository.getPlan(planId);
   Future<domain.ClientPlan?> getFrozenPlan(int clientId) async {
     final plans = await repository.getClientPlans(clientId);
@@ -162,6 +180,55 @@ class PlansService {
     );
   }
 
+  /// Puts an untouched active plan back into the queue.
+  ///
+  /// Used when a refund reactivates the plan this one succeeded: the successor
+  /// never consumed a session, so it must not keep the active slot (two active
+  /// plans make [getActivePlan] ambiguous), and its start date is cleared
+  /// because its day count has not really begun. `queueOrder: 0` puts it ahead
+  /// of plans queued behind it.
+  Future<void> requeuePlan(int planId) async {
+    final plan = await repository.getPlan(planId);
+    if (plan == null || !plan.isActive) return;
+    await db.patchPlan(
+      planId,
+      ClientPlansCompanion(
+        status: const Value('queued'),
+        startDate: const Value(null),
+        queueOrder: const Value(0),
+      ),
+    );
+  }
+
+  /// Marks every `active` plan whose duration has elapsed as `expired` and
+  /// promotes the next queued plan for each affected client.
+  ///
+  /// [consumeSession] was the only code that ever expired a plan, and it did so
+  /// only when the *sessions* ran out — so a plan whose `days` had passed kept
+  /// running: it stayed `active` on the card and profile, kept consuming
+  /// sessions, and blocked the client's queued plans indefinitely.
+  ///
+  /// Sweeps one client with [clientId], or every client without it. Safe to
+  /// call on every read: it only writes when a plan actually ran out of days.
+  ///
+  /// Frozen plans are deliberately skipped — a frozen plan is paused, and the
+  /// app stores no freeze timestamp to measure elapsed days from.
+  Future<void> expireElapsedPlans({int? clientId}) async {
+    final rows = clientId == null
+        ? await db.select(db.clientPlans).get()
+        : await (db.select(db.clientPlans)..where((p) => p.clientId.equals(clientId))).get();
+    final affectedClients = <int>{};
+    for (final row in rows) {
+      if (row.status != 'active' || row.days <= 0) continue;
+      if (!planDaysElapsed(startDate: row.startDate, days: row.days)) continue;
+      await db.updatePlanStatus(row.id, 'expired');
+      affectedClients.add(row.clientId);
+    }
+    for (final affected in affectedClients) {
+      await _promoteQueuedPlan(affected);
+    }
+  }
+
   Future<void> _promoteQueuedPlan(int clientId) async {
     final queued = await (db.select(db.clientPlans)..where((p) => p.clientId.equals(clientId) & p.status.equals('queued'))..orderBy([(p) => OrderingTerm.asc(p.queueOrder)])).get();
     if (queued.isEmpty) return;
@@ -251,21 +318,13 @@ class PlansService {
   /// The gym's share of a plan's price, rounded down: `price * sharePercent / 100`.
   int planShareDeduction(domain.ClientPlan plan) => (plan.price * plan.sharePercent) ~/ 100;
 
-  /// Calculates remaining days for an active/frozen plan based on its
-  /// [startDate] and [days] fields vs today. Returns `null` for queued plans
-  /// or plans without a start date.
+  /// Remaining days for an active/frozen plan, or `null` for queued/expired
+  /// plans and for plans without a start date.
+  ///
+  /// The date maths lives in [planRemainingDays] so widgets (the client card,
+  /// the plan card) can show the same number without going through a service.
   int? getRemainingDays(domain.ClientPlan plan) {
-    if (plan.startDate == null || plan.startDate!.isEmpty) return null;
     if (plan.status != 'active' && plan.status != 'frozen') return null;
-    final parts = plan.startDate!.split('/');
-    if (parts.length != 3) return null;
-    final start = Jalali(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-    final end = start.addDays(plan.days);
-    final today = Jalali.fromDateTime(DateTime.now());
-    // Exact Julian-day difference. The previous code rebuilt `DateTime` from
-    // the Jalali components, which are then treated as Gregorian and drift by
-    // a day or two across months — e.g. اسفند ۳۰ became "March 2".
-    final diff = end.distanceFrom(today);
-    return diff > 0 ? diff : 0;
+    return planRemainingDays(startDate: plan.startDate, days: plan.days);
   }
 }

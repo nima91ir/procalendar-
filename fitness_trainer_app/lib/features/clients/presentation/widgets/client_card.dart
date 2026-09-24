@@ -5,10 +5,10 @@ import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/utils/plan_dates.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
-import 'package:fitness_trainer_app/features/clients/domain/client.dart' as domain;
 import 'package:fitness_trainer_app/features/plans/domain/client_plan.dart' as plandomain;
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
@@ -48,16 +48,6 @@ class ClientCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _adjustBonus(WidgetRef ref, BuildContext context, domain.Client client, int delta) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final next = (client.bonusSessions + delta).clamp(0, 9999);
-    if (next == client.bonusSessions) return;
-    await ref.read(clientsServiceProvider).updateClientBonus(client.id!, next);
-    ref.invalidateAppData();
-    if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(delta > 0 ? AppStrings.of(context).bonusAdded : AppStrings.of(context).bonusRemoved)));
-  }
-
   Future<void> _toggleFreeze(WidgetRef ref, BuildContext context, plandomain.ClientPlan plan) async {
     final messenger = ScaffoldMessenger.of(context);
     final notifier = ref.read(plansProvider.notifier);
@@ -70,6 +60,13 @@ class ClientCard extends ConsumerWidget {
     if (!context.mounted) return;
     final s = AppStrings.of(context);
     messenger.showSnackBar(SnackBar(content: Text(plan.isFrozen ? s.activate : s.freeze)));
+  }
+
+  /// Remaining days for a running plan; falls back to the plan's total
+  /// duration when there is no start date to measure from (queued plans).
+  String _planTimeLabel(AppStrings s, plandomain.ClientPlan plan) {
+    final daysLeft = planRemainingDays(startDate: plan.startDate, days: plan.days);
+    return daysLeft == null ? s.daysCount(plan.days) : s.remainingDays(daysLeft);
   }
 
   @override
@@ -169,7 +166,7 @@ class ClientCard extends ConsumerWidget {
                           const SizedBox(width: AppSpacing.sm),
                           Text(s.remainingDetail(plan.remaining, plan.sessions), style: AppTypography.bodySmall),
                           const SizedBox(width: AppSpacing.sm),
-                          Text(s.daysCount(plan.days), style: AppTypography.bodySmall),
+                          Text(_planTimeLabel(s, plan), style: AppTypography.bodySmall),
                           const SizedBox(width: AppSpacing.xs),
                           IconButton(
                             visualDensity: VisualDensity.compact,
@@ -187,28 +184,14 @@ class ClientCard extends ConsumerWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: AppSpacing.xs),
-                  Row(
-                    children: [
-                      Icon(Icons.card_giftcard, size: 14, color: t.warning),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(s.bonusSessionsCount(client.bonusSessions), style: AppTypography.bodySmall),
-                      ),
-                      _BonusStepper(
-                        tooltip: s.bonusRemoved,
-                        icon: Icons.remove_circle_outline,
-                        color: client.bonusSessions > 0 ? t.onSurfaceVar : t.surfaceVariant,
-                        onTap: client.bonusSessions > 0 ? () => _adjustBonus(ref, context, client, -1) : null,
-                      ),
-                      const SizedBox(width: 4),
-                      _BonusStepper(
-                        tooltip: s.bonusAdded,
-                        icon: Icons.add_circle_outline,
-                        color: t.success,
-                        onTap: () => _adjustBonus(ref, context, client, 1),
-                      ),
-                    ],
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pushNamed(context, '${AppRoutes.addPlan}/$clientId'),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: Text(s.addPlan),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   if (plan == null) ...[
@@ -231,28 +214,6 @@ class ClientCard extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Compact circular icon button used for quick bonus session +/−.
-class _BonusStepper extends StatelessWidget {
-  final String tooltip;
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onTap;
-
-  const _BonusStepper({required this.tooltip, required this.icon, required this.color, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      visualDensity: VisualDensity.compact,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-      tooltip: tooltip,
-      onPressed: onTap,
-      icon: Icon(icon, size: 20, color: color),
     );
   }
 }

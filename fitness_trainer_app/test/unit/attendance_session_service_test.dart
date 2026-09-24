@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:fitness_trainer_app/core/database/app_database.dart';
@@ -140,7 +141,8 @@ void main() {
       await sessionService.addSession(clientId, '1405/06/21', status: 'present');
       expect((await db.getPlan(planId))!.remaining, 4);
       final removed = await sessionService.removeLatestSession(clientId, '1405/06/21');
-      expect(removed, clientId);
+      expect(removed?.clientId, clientId);
+      expect(removed?.refund, SessionRefund.plan);
       expect((await db.getPlan(planId))!.remaining, 5);
       expect(await db.getAttendance(clientId, '1405/06/21'), isNull);
     });
@@ -176,7 +178,8 @@ void main() {
       final presentId = (await db.getAttendance(clientId, '1405/06/21'))!.id;
       await sessionService.addSession(clientId, '1405/06/21', status: 'absent');
       final removed = await sessionService.removeSessionById(presentId);
-      expect(removed, clientId);
+      expect(removed?.clientId, clientId);
+      expect(removed?.refund, SessionRefund.plan);
       final remaining = await db.select(db.attendance).get();
       expect(remaining.length, 1);
       expect(remaining.first.status, 'absent');
@@ -218,10 +221,12 @@ void main() {
       expect(refreshed.queueOrder, isNull);
     });
 
-    test('when the active successor is full, the refund becomes a bonus session', () async {
-      // A=2, B=2. Both records consume A; the second expires A and promotes B
-      // (full). Deleting the first record has nowhere to land: A is expired, B
-      // is already full -> the session is restored as a bonus.
+    test('an untouched successor goes back to the queue so the expired plan can return', () async {
+      // A=2, B=2. Both records consume A; the second expires A and promotes B,
+      // which consumed nothing. Deleting A's first record gives the session and
+      // the active slot back to A, and returns B to the queue: a client must
+      // never end up with two active plans, and no session may silently turn
+      // into a bonus one.
       final aId = await plansService.assignPlan(clientId, 1, 2, 30);
       final bId = await plansService.assignPlan(clientId, 1, 2, 30);
       await sessionService.addSession(clientId, '1405/06/20', status: 'present');
@@ -230,11 +235,50 @@ void main() {
       expect((await db.getPlan(aId))!.status, 'expired');
       expect((await db.getPlan(bId))!.status, 'active');
 
-      await sessionService.removeSessionById(firstRecordId);
+      final removal = await sessionService.removeSessionById(firstRecordId);
 
+      expect(removal?.refund, SessionRefund.plan);
+      final a = await db.getPlan(aId);
+      expect(a!.status, 'active', reason: 'A only ran out of sessions — its days are not over');
+      expect(a.remaining, 1);
+      expect(a.queueOrder, isNull);
+      final b = await db.getPlan(bId);
+      expect(b!.status, 'queued', reason: 'B consumed nothing, so it returns to the queue');
+      expect(b.remaining, 2);
+      expect(b.startDate, isNull, reason: 'B never really started');
+      expect((await db.getClient(clientId))!.bonusSessions, 0, reason: 'no phantom bonus session');
+    });
+
+    test('a session with nowhere to go is restored as a bonus session', () async {
+      // Same setup, but the recorded plan's days have elapsed as well, so it
+      // cannot be reactivated — the refund becomes a bonus session.
+      final aId = await plansService.assignPlan(clientId, 1, 2, 30);
+      final bId = await plansService.assignPlan(clientId, 1, 2, 30);
+      await sessionService.addSession(clientId, '1405/06/20', status: 'present');
+      final firstRecordId = (await db.getAttendance(clientId, '1405/06/20'))!.id;
+      await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      expect((await db.getPlan(aId))!.status, 'expired');
+      // Only A is aged: B is the live plan, it just has nothing to give back to.
+      await db.patchPlan(aId, ClientPlansCompanion(startDate: const Value('1400/01/01')));
+
+      final removal = await sessionService.removeSessionById(firstRecordId);
+
+      expect(removal?.refund, SessionRefund.bonus);
       expect((await db.getPlan(aId))!.status, 'expired');
       expect((await db.getPlan(bId))!.remaining, 2);
       expect((await db.getClient(clientId))!.bonusSessions, 1);
+    });
+
+    test('a record that consumed nothing refunds nothing', () async {
+      // No plan, no bonus sessions: the add has nothing to take. Removing the
+      // record must not hand out a bonus session that was never consumed.
+      final recordId = await sessionService.addSession(clientId, '1405/06/21', status: 'present');
+      expect((await db.getAttendanceById(recordId))!.planId, kNoSessionConsumed);
+
+      final removal = await sessionService.removeSessionById(recordId);
+
+      expect(removal?.refund, SessionRefund.none);
+      expect((await db.getClient(clientId))!.bonusSessions, 0);
     });
 
     test('removing a record refunds a frozen plan', () async {

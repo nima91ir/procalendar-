@@ -5,11 +5,15 @@ import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/utils/date_format.dart';
 import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
+import 'package:fitness_trainer_app/core/utils/plan_dates.dart';
+import 'package:fitness_trainer_app/core/utils/thousands_input_formatter.dart';
 import 'package:fitness_trainer_app/core/widgets/app_charts.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
+import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
 import 'package:fitness_trainer_app/features/tags/domain/tag.dart' as domain;
 import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
 import 'package:fitness_trainer_app/features/tags/presentation/widgets/client_tag_picker.dart';
@@ -38,6 +42,7 @@ class ClientDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tones;
     final s = AppStrings.of(context);
+    final lang = ref.watch(languageProvider);
     final clientsAsync = ref.watch(allClientsProvider);
     final plansAsync = ref.watch(clientPlansProvider(clientId));
     final templatesAsync = ref.watch(allTemplatesProvider);
@@ -80,6 +85,22 @@ class ClientDetailScreen extends ConsumerWidget {
       }
       ref.invalidate(clientTagsProvider(clientId));
       ref.invalidateAppData();
+    }
+
+    /// Moves the client's bonus-session counter by [delta] (clamped at 0).
+    /// The profile owns this now: the quick +/− stepper used to sit on the
+    /// client card, where a mis-tap silently changed the counter.
+    Future<void> adjustBonus(int current, int delta) async {
+      final messenger = ScaffoldMessenger.of(context);
+      final s = AppStrings.of(context);
+      final next = (current + delta).clamp(0, 9999);
+      if (next == current) return;
+      await ref.read(clientsServiceProvider).updateClientBonus(clientId, next);
+      ref.invalidateAppData();
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(delta > 0 ? s.bonusAdded : s.bonusRemoved)),
+      );
     }
 
     return Scaffold(
@@ -182,7 +203,34 @@ class ClientDetailScreen extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.sm),
                     _InfoRow(label: s.note, value: client.note.isNotEmpty ? client.note : s.notProvided),
                     const SizedBox(height: AppSpacing.sm),
-                    _InfoRow(label: s.bonusSessionsLabel, value: s.clientsWithBonus(client.bonusSessions)),
+                    // Same layout as _InfoRow, but with the +/− stepper that
+                    // used to live on the client card.
+                    Row(
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 80, maxWidth: 140),
+                          child: Text(s.bonusSessionsLabel, style: AppTypography.bodySmall),
+                        ),
+                        Expanded(
+                          child: Text(s.clientsWithBonus(client.bonusSessions), style: AppTypography.bodyLarge),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: s.bonusRemoved,
+                          onPressed: client.bonusSessions > 0 ? () => adjustBonus(client.bonusSessions, -1) : null,
+                          icon: Icon(
+                            Icons.remove_circle_outline,
+                            color: client.bonusSessions > 0 ? t.onSurfaceVar : t.surfaceVariant,
+                          ),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: s.bonusAdded,
+                          onPressed: () => adjustBonus(client.bonusSessions, 1),
+                          icon: Icon(Icons.add_circle_outline, color: t.success),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -192,19 +240,26 @@ class ClientDetailScreen extends ConsumerWidget {
               // unbounded, which threw "RenderFlex children have non-zero flex
               // but incoming width constraints are unbounded" and blanked the
               // whole client detail screen.
-              SectionHeader(
-                title: s.plansSection,
-                actionLabel: s.addPlan,
-                onAction: () => Navigator.pushNamed(context, '${AppRoutes.addPlan}/$clientId'),
-              ),
+              SectionHeader(title: s.plansSection),
               const SizedBox(height: AppSpacing.sm),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.pushNamed(context, '${AppRoutes.attendance}/$clientId'),
-                  icon: const Icon(Icons.calendar_month),
-                  label: Text(s.attendanceLabel),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.pushNamed(context, '${AppRoutes.addPlan}/$clientId'),
+                      icon: const Icon(Icons.add),
+                      label: Text(s.addPlan),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pushNamed(context, '${AppRoutes.attendance}/$clientId'),
+                      icon: const Icon(Icons.calendar_month),
+                      label: Text(s.attendanceLabel),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
               plansAsync.when(
@@ -222,6 +277,8 @@ class ClientDetailScreen extends ConsumerWidget {
                       final consumed = sessions > 0
                           ? ((sessions - remaining) / sessions).clamp(0.0, 1.0)
                           : 0.0;
+                      // Null for queued plans (no start date yet).
+                      final daysLeft = planRemainingDays(startDate: plan.startDate, days: plan.days);
                       return AppCard(
                         margin: const EdgeInsets.only(bottom: AppSpacing.md),
                         padding: const EdgeInsets.all(AppSpacing.md),
@@ -262,6 +319,32 @@ class ClientDetailScreen extends ConsumerWidget {
                                     ),
                                   ),
                                 ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Row(
+                              children: [
+                                Icon(Icons.event, size: 15, color: t.onSurfaceVar),
+                                const SizedBox(width: 4),
+                                Text('${s.startDateLabel}: ', style: AppTypography.bodySmall),
+                                Expanded(
+                                  child: Text(
+                                    plan.startDate == null || plan.startDate!.isEmpty
+                                        ? s.notProvided
+                                        : formatDateShort(plan.startDate!, lang),
+                                    style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.xs,
+                              children: [
+                                AppPill(label: s.remainingSessions(remaining), color: t.successSoft),
+                                if (daysLeft != null)
+                                  AppPill(label: s.remainingDays(daysLeft), color: t.primaryLight),
                               ],
                             ),
                             const Divider(height: AppSpacing.lg),
@@ -468,7 +551,11 @@ class _PlanPriceDialogState extends State<_PlanPriceDialog> {
   @override
   void initState() {
     super.initState();
-    _priceController = TextEditingController(text: '${widget.initialPrice}');
+    // Prefilled grouped so an existing price reads `1,000,000`, exactly like
+    // the live input formatting below.
+    _priceController = TextEditingController(
+      text: widget.initialPrice > 0 ? groupDigits(widget.initialPrice) : '',
+    );
     _shareController = TextEditingController(text: '${widget.initialShare}');
   }
 
@@ -490,6 +577,7 @@ class _PlanPriceDialogState extends State<_PlanPriceDialog> {
           TextField(
             controller: _priceController,
             keyboardType: TextInputType.number,
+            inputFormatters: const [ThousandsSeparatorInputFormatter()],
             decoration: InputDecoration(
               labelText: s.planPriceLabel,
               helperText: s.planPriceHint,

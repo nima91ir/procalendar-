@@ -22,6 +22,7 @@ final List<Object> _appDataProviders = [
   plansProvider,
   activePlanProvider,
   allPlansProvider,
+  plansExpirySweepProvider,
   clientAttendanceProvider,
   clientAttendanceMapProvider,
   planAttendanceProvider,

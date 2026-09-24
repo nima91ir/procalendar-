@@ -30,6 +30,17 @@ final allPlansProvider = FutureProvider.autoDispose<List<domain.ClientPlan>>((re
   return ref.watch(plansServiceProvider).getAllPlans();
 });
 
+/// Expires plans whose duration has elapsed, and promotes the queued plan that
+/// takes over from each of them.
+///
+/// The dashboard counters below it read the database directly and would
+/// otherwise keep reporting a finished plan as active. Riverpod runs the body
+/// once per invalidation while any counter is alive, so the whole dashboard
+/// sees a single consistent sweep.
+final plansExpirySweepProvider = FutureProvider.autoDispose<void>((ref) async {
+  await ref.watch(plansServiceProvider).expireElapsedPlans();
+});
+
 class PlansNotifier extends Notifier<List<domain.ClientPlan>> {
   @override
   List<domain.ClientPlan> build() => [];

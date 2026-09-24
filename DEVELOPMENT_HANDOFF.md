@@ -5,6 +5,84 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**CURRENT HEAD (2026-09-24) — plan expiry, remaining days/sessions, card & profile UX, attendance-refund truth (implemented, 8 requested items):**
+
+- **Plan expiry by elapsed days — a real bug, fixed.** `PlansService.consumeSession` was the
+  *only* code that ever set `status = 'expired'`, and only when **sessions** hit 0. Nothing
+  compared `startDate + days` with today (`getRemainingDays` computed the number for display
+  only), so a plan whose duration ran out stayed `active` forever: it kept consuming sessions,
+  kept showing as active on the card and profile, and blocked the client's queued plans.
+  New `PlansService.expireElapsedPlans({int? clientId})` marks every `active` plan with
+  `days > 0` and 0 days left as `expired`, then promotes the queued plan. Called on read from
+  `getClientPlans`, `getAllPlans` and `getActivePlan` (so attendance can never consume a finished
+  plan) and from the dashboard counters through the new `plansExpirySweepProvider`
+  (added to `_appDataProviders`). **Frozen plans are skipped on purpose** — freezing stores no
+  timestamp, so elapsed days cannot be measured for a paused plan. Window semantics: end =
+  `startDate + days`, so a 30-day plan reports 30 days left on its first day and 0 from day 31.
+  Date maths extracted to the pure `planRemainingDays` / `planDaysElapsed`
+  (`lib/core/utils/plan_dates.dart`); `PlansService.getRemainingDays` delegates to it, so widgets
+  use the same numbers without going through a service. No schema change.
+- **Remaining sessions + remaining days are now visible.** Client card pill: «X از Y» plus
+  *remaining* days (it used to show the plan's **total** days). Profile plan card: activation date
+  (`formatDateShort`), remaining sessions and remaining days as pills. Reuses existing `AppStrings`
+  keys (`remainingDays`, `remainingSessions`, `startDateLabel`) — no new strings needed.
+- **Bonus sessions moved off the client card** into the client profile (the «اطلاعات تماس»
+  section, as a label + counter + −/+ buttons). The card's quick stepper is gone and
+  `_BonusStepper` / `_adjustBonus` were deleted from `client_card.dart`; the card now carries an
+  «افزودن برنامه» button pointing at `/clients/add-plan/:id`.
+- **Add plan is a real button** in the profile (full-width `FilledButton`, next to the attendance
+  button) instead of the `SectionHeader` text action.
+- **Calendar swipe**: `AttendanceCalendar` wraps its grid in a `GestureDetector`
+  (`onHorizontalDragEnd`, ~200 px/s threshold) and mirrors the direction for RTL — swiping right
+  advances the month in the Persian app and left in English, matching the chevrons. Works in all
+  three usages (attendance screen, plan start-date picker, transaction date picker). Day taps and
+  vertical scrolling are unaffected (both covered by tests).
+- **Price fields group thousands while typing** (`1,000,000`): new
+  `ThousandsSeparatorInputFormatter` plus a shared `groupDigits`
+  (`lib/core/utils/thousands_input_formatter.dart`; `AppStrings._grouped` now delegates to it so
+  display and input can never disagree). Applied to the add-plan price field and the «ثبت قیمت»
+  dialog, which now also **prefills** grouped. Those fields show Latin digits and pin the caret to
+  the end.
+- **Attendance removal no longer looks like it “mixes” bonus sessions.**
+  1. *Real bug*: `addSession` stored `planId = null` both when it consumed a bonus **and** when it
+     consumed **nothing** (no plan sessions left *and* 0 bonus sessions), while `_refund` read
+     `null` as “bonus” — so deleting such a record **invented a bonus session**. New sentinel
+     `kNoSessionConsumed = 0` (plan ids start at 1, and `attendance.planId` has no FK, so 0 is safe
+     and survives export/import) records “consumed nothing”; `_refund` then refunds nothing.
+     **Legacy rows cannot be distinguished** (they carry `null` for both cases) and keep the old
+     refund-as-bonus behaviour — only new records are precise. Cosmetic side effect: the attendance
+     **CSV export** prints `0` for those rows (left alone, `backup_service.dart` is protected).
+  2. Removals now return `(clientId, SessionRefund)` and the snackbar says where the session went
+     (plan / bonus / nothing) through `AppStrings.sessionRemovalMessage`, so a refund that lands in
+     a bonus session is no longer silent.
+  3. New refund rule (per the user's decision): when the record's plan is `expired` but still has
+     **days left**, the session *and* the active slot go back to that plan (`reactivatePlan`), and
+     an untouched successor returns to the queue (`requeuePlan`, start date cleared) — a client must
+     never have two active plans. A successor that already consumed sessions keeps them, as before.
+     If the recorded plan's days are over too, the refund still becomes a bonus session.
+- Files touched: new `lib/core/utils/plan_dates.dart`, `lib/core/utils/thousands_input_formatter.dart`,
+  `lib/features/attendance/domain/session_refund.dart`; modified `plans_service.dart`,
+  `attendance_session_service.dart`, `attendance_providers.dart`, `plans_providers.dart`,
+  `dashboard_providers.dart`, `app_refresh.dart`, `client_card.dart`, `client_detail_screen.dart`,
+  `attendance_calendar.dart`, `past_attendance_screen.dart`, `dashboard_screen.dart`,
+  `add_plan_screen.dart`, `app_strings.dart` (2 new keys: `sessionRefundedAsBonus`,
+  `sessionNotConsumed` — fa + en + ctor param).
+- Tests: +28 → `flutter analyze` = No issues found!; `flutter test` = **227/227**. New:
+  `test/unit/plan_dates_test.dart` (4), `test/unit/thousands_input_formatter_test.dart` (7),
+  `test/widget/attendance_calendar_swipe_test.dart` (6),
+  `test/widget/client_detail_plans_test.dart` (3). Updated:
+  `attendance_session_service_test.dart` (new return type, sentinel case, successor-requeue case),
+  `plans_service_test.dart` (+5 sweep cases), `client_card_quick_actions_test.dart` (bonus stepper →
+  add-plan button, remaining-days assertion), `plan_creation_refresh_test.dart` (the add-plan button
+  now sits under the bottom nav bar on an 800x600 test window, so it needs `ensureVisible` first).
+- Housekeeping: `.kilo/` (the duplicate worktree that silently breaks scoped searches) had
+  reappeared and was deleted again. In this sandbox `Set-Location` into the workspace is denied even
+  though the folder is readable — run commands as
+  `cmd /c "cd /d D:\work\ZAHRA\PRO CALENDER\fitness_trainer_app && flutter ..."`.
+- **Not done / open**: nothing *notifies* about an expiring plan (it expires silently on the next
+  read); the dashboard's low-session list still counts sessions only; and a sweep only happens on
+  the next read/invalidation, so an app left open across midnight keeps the old status until then.
+
 **CURRENT HEAD (2026-09-24) — backup wording: JSON is the backup, CSV is not (implemented):**
 - **Why**: the card said "make a backup file **or** export CSV for Excel", which reads as two
   equivalent ways to back up. They are not equivalent. `exportJson` round-trips;
@@ -329,13 +407,16 @@ Verified against `HEAD = 5cb7483`:
 
 ### Deploy safety (also 2026-09-24)
 
-- **`main` STILL AUTO-DEPLOYS.** Verified 2026-09-24 against `origin`: its
-  `deploy.yml` declares `on: push: branches: [main]` as well as `workflow_dispatch`,
-  and the newest successful run was a `push` on `5cb7483`. The working-copy edit
-  removes the push trigger **and** adds `flutter analyze` + `flutter test` before
-  the build, but it is uncommitted — so as of now a push to `main` still publishes
-  *without* tests. Once committed, publishing becomes: Actions → *Deploy Flutter
-  Web to GitHub Pages* → Run workflow.
+- **CORRECTED 2026-09-24 for the tree at `6c2cd4c`: `main` does NOT auto-deploy any
+  more.** `git show HEAD:.github/workflows/deploy.yml` declares `on: workflow_dispatch:`
+  only — the `push` trigger is gone — and `.github/workflows/ci.yml`
+  (`on: push: branches: [main]`, plus PRs and manual) runs `flutter analyze` +
+  `flutter test` and **never publishes**. A push to `main` is verification-only, so
+  pushing a green commit is safe. The bullet that used to sit here — claiming
+  `on: push` was still live and the workflow edit uncommitted — was written before
+  that change was committed and is wrong. Publishing remains: Actions → *Deploy
+  Flutter Web to GitHub Pages* → Run workflow, and deploy still runs analyze + test
+  before the build, so a red suite cannot replace the live site.
 - Rollback target: tag **`live-2026-09-24`** = `5cb7483`, which the API confirms is
   the **currently deployed** commit, so the tag is correct. Pushed to `origin` on
   2026-09-24 (it was local-only before that — one deleted folder away from being

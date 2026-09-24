@@ -8,6 +8,7 @@ import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
+import 'package:fitness_trainer_app/core/utils/thousands_input_formatter.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/attendance/presentation/widgets/attendance_calendar.dart';
 import 'package:fitness_trainer_app/features/templates/presentation/add_edit_template_screen.dart';
@@ -418,6 +419,7 @@ class _PriceFields extends StatelessWidget {
         TextField(
           controller: priceController,
           keyboardType: TextInputType.number,
+          inputFormatters: const [ThousandsSeparatorInputFormatter()],
           decoration: InputDecoration(
             labelText: s.planPriceLabel,
             helperText: s.planPriceHint,

@@ -72,6 +72,10 @@ void main() {
     await settle(tester);
     expect(find.text('اطلاعات تماس'), findsOneWidget);
 
+    // The add-plan button sits low on the profile (under the bottom navigation
+    // bar on the default 800x600 test window), so bring it into view first.
+    await tester.ensureVisible(find.text('افزودن برنامه'));
+    await settle(tester);
     await tester.tap(find.text('افزودن برنامه'));
     await settle(tester);
     expect(find.text('انتخاب قالب برنامه'), findsOneWidget);

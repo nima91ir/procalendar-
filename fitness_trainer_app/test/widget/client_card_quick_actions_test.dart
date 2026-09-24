@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
+import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_repository.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_service.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/widgets/client_card.dart';
@@ -61,24 +62,26 @@ void main() {
       await settle(tester);
     }
 
-    testWidgets('shows bonus count and active plan remaining', (tester) async {
+    testWidgets('shows the active plan remaining sessions and remaining days', (tester) async {
       await pumpCard(tester);
-      expect(find.text('۲ جلسه اضافه'), findsOneWidget);
-      expect(find.text('۵ از ۵'), findsOneWidget);
+      expect(find.text(AppStrings.fa.remainingDetail(5, 5)), findsOneWidget);
+      expect(find.text(AppStrings.fa.remainingDays(30)), findsOneWidget);
       expect(find.byTooltip('متوقف'), findsOneWidget);
     });
 
-    testWidgets('and - change bonus sessions and persist', (tester) async {
+    testWidgets('offers an add-plan action', (tester) async {
       await pumpCard(tester);
-      await tester.tap(find.byTooltip('جلسه هدیه اضافه شد'));
-      await settle(tester);
-      expect((await db.getClient(clientId))!.bonusSessions, 3);
-      expect(find.text('۳ جلسه اضافه'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'افزودن برنامه'), findsOneWidget);
+    });
 
-      await tester.tap(find.byTooltip('جلسه هدیه حذف شد'));
-      await settle(tester);
+    testWidgets('no longer shows or changes bonus sessions', (tester) async {
+      await pumpCard(tester);
+      // The +/− stepper moved to the client profile: a mis-tap on the card used
+      // to change the counter without the user ever asking for it.
+      expect(find.text('۲ جلسه اضافه'), findsNothing);
+      expect(find.byTooltip('جلسه هدیه اضافه شد'), findsNothing);
+      expect(find.byTooltip('جلسه هدیه حذف شد'), findsNothing);
       expect((await db.getClient(clientId))!.bonusSessions, 2);
-      expect(find.text('۲ جلسه اضافه'), findsOneWidget);
     });
 
     testWidgets('freeze toggle freezes and activates the plan', (tester) async {

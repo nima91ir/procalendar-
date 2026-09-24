@@ -308,6 +308,66 @@ void main() {
       expect(plansService.getRemainingDays(plan!), 20);
     });
 
+    test('a plan whose days have elapsed is expired on read', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      // A 30-day window that ended years ago. Sessions alone used to expire a
+      // plan, so this one stayed `active` forever.
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, startDate: '1400/01/01');
+      expect((await db.getPlan(planId))!.status, 'active', reason: 'nothing has swept it yet');
+
+      final plans = await plansService.getClientPlans(clientId);
+
+      expect(plans.single.status, 'expired');
+      expect((await db.getPlan(planId))!.remaining, 5,
+          reason: 'unused sessions stay on the plan history');
+    });
+
+    test('expiring a plan by elapsed days promotes the queued plan', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final elapsedId = await plansService.assignPlan(clientId, 1, 5, 30, startDate: '1400/01/01');
+      final queuedId = await plansService.assignPlan(clientId, 1, 3, 30);
+      expect((await db.getPlan(queuedId))!.status, 'queued');
+
+      await plansService.expireElapsedPlans(clientId: clientId);
+
+      expect((await db.getPlan(elapsedId))!.status, 'expired');
+      final promoted = await db.getPlan(queuedId);
+      expect(promoted!.status, 'active');
+      expect(promoted.queueOrder, isNull);
+      expect(promoted.startDate, isNotNull, reason: 'the promoted plan starts today');
+    });
+
+    test('getActivePlan stops returning a plan that ran out of days', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, startDate: '1400/01/01');
+
+      expect(await plansService.getActivePlan(clientId), isNull);
+
+      expect((await db.getPlan(planId))!.status, 'expired',
+          reason: 'attendance must not consume a session from a finished plan');
+    });
+
+    test('a frozen plan is not expired by elapsed days', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30, startDate: '1400/01/01');
+      await plansService.freezePlan(planId);
+
+      await plansService.expireElapsedPlans(clientId: clientId);
+
+      expect((await db.getPlan(planId))!.status, 'frozen',
+          reason: 'freezing has no stored timestamp, so elapsed days cannot be '
+              'measured for a paused plan');
+    });
+
+    test('a plan that still has days left keeps running', () async {
+      final clientId = (await db.select(db.clients).get()).first.id;
+      final planId = await plansService.assignPlan(clientId, 1, 5, 30);
+
+      await plansService.expireElapsedPlans(clientId: clientId);
+
+      expect((await db.getPlan(planId))!.status, 'active');
+    });
+
     test('setPlanPrice records income for a legacy unpriced plan', () async {
       final clientId = (await db.select(db.clients).get()).first.id;
       // Legacy flow: assigned without a price, so no income row exists yet.

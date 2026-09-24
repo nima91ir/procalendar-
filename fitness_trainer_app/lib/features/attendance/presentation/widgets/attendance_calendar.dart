@@ -45,6 +45,23 @@ class AttendanceCalendar extends StatelessWidget {
   static String dateKey(int year, int month, int day) =>
       '$year/${month.toString().padLeft(2, '0')}/${day.toString().padLeft(2, '0')}';
 
+  /// Month change for a horizontal swipe over the grid.
+  ///
+  /// The direction is mirrored for RTL so that swiping "forward" always
+  /// advances the month, exactly like tapping the forward chevron: in LTR that
+  /// is a left swipe, in RTL a right swipe. Short drags (below the velocity
+  /// threshold) are ignored so a stray touch cannot jump a month.
+  void _onSwipe(BuildContext context, DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 200) return;
+    final forward = Directionality.of(context) == TextDirection.rtl ? velocity > 0 : velocity < 0;
+    if (forward) {
+      onNextMonth?.call();
+    } else {
+      onPreviousMonth?.call();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
@@ -61,79 +78,88 @@ class AttendanceCalendar extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: t.outlineVariant),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: onPreviousMonth,
-                icon: const Icon(Icons.chevron_right),
-                tooltip: s.prevMonth,
-              ),
-              Expanded(
-                child: Text(
-                  '${s.monthShort(month)} ${s.isPersian ? toPersian(year.toString()) : year}',
-                  style: AppTypography.headlineMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              IconButton(
-                onPressed: onNextMonth,
-                icon: const Icon(Icons.chevron_left),
-                tooltip: s.nextMonth,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: List.generate(7, (i) => s.weekdayShort(i + 1).substring(0, 1))
-                .map((d) => Expanded(child: Center(child: Text(d, style: AppTypography.labelMedium))))
-                .toList(),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ...List.generate(weeks, (week) {
-            return Row(
-              children: List.generate(7, (dayOfWeek) {
-                final dayIndex = week * 7 + dayOfWeek - firstDayWeekDay + 1;
-                if (dayIndex < 1 || dayIndex > daysInMonth) {
-                  return const Expanded(child: SizedBox(height: 48));
-                }
-                final key = AttendanceCalendar.dateKey(year, month, dayIndex);
-                final statuses = attendanceMap[key] ?? const <String>[];
-                return Expanded(
-                  child: _DayCell(
-                    day: dayIndex,
-                    statuses: statuses,
-                    isToday: key == todayKey,
-                    isPicked: onDaySelected != null && key == selectionKey,
-                    onTap: () {
-                      final pick = onDaySelected;
-                      if (pick != null) {
-                        pick(key);
-                      } else {
-                        onDayTapped(key);
-                      }
-                    },
-                  ),
-                );
-              }),
-            );
-          }),
-          const SizedBox(height: AppSpacing.sm),
-          // Legend is attendance-specific; the picker mode shows its own
-          // confirm controls below the grid.
-          if (onDaySelected == null)
+      // A horizontal swipe over the grid changes the month, mirroring the
+      // chevrons above it. Vertical drags are left to the surrounding scroll
+      // view, so the calendar never fights a scrolling list.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragEnd: (onPreviousMonth == null && onNextMonth == null)
+            ? null
+            : (details) => _onSwipe(context, details),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
               children: [
-                _LegendDot(color: t.today, label: s.todayLabel),
-                const SizedBox(width: AppSpacing.md),
-                _LegendDot(color: t.present, label: s.present),
-                const SizedBox(width: AppSpacing.md),
-                _LegendDot(color: t.absent, label: s.absent),
+                IconButton(
+                  onPressed: onPreviousMonth,
+                  icon: const Icon(Icons.chevron_right),
+                  tooltip: s.prevMonth,
+                ),
+                Expanded(
+                  child: Text(
+                    '${s.monthShort(month)} ${s.isPersian ? toPersian(year.toString()) : year}',
+                    style: AppTypography.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                IconButton(
+                  onPressed: onNextMonth,
+                  icon: const Icon(Icons.chevron_left),
+                  tooltip: s.nextMonth,
+                ),
               ],
             ),
-        ],
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: List.generate(7, (i) => s.weekdayShort(i + 1).substring(0, 1))
+                  .map((d) => Expanded(child: Center(child: Text(d, style: AppTypography.labelMedium))))
+                  .toList(),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ...List.generate(weeks, (week) {
+              return Row(
+                children: List.generate(7, (dayOfWeek) {
+                  final dayIndex = week * 7 + dayOfWeek - firstDayWeekDay + 1;
+                  if (dayIndex < 1 || dayIndex > daysInMonth) {
+                    return const Expanded(child: SizedBox(height: 48));
+                  }
+                  final key = AttendanceCalendar.dateKey(year, month, dayIndex);
+                  final statuses = attendanceMap[key] ?? const <String>[];
+                  return Expanded(
+                    child: _DayCell(
+                      day: dayIndex,
+                      statuses: statuses,
+                      isToday: key == todayKey,
+                      isPicked: onDaySelected != null && key == selectionKey,
+                      onTap: () {
+                        final pick = onDaySelected;
+                        if (pick != null) {
+                          pick(key);
+                        } else {
+                          onDayTapped(key);
+                        }
+                      },
+                    ),
+                  );
+                }),
+              );
+            }),
+            const SizedBox(height: AppSpacing.sm),
+            // Legend is attendance-specific; the picker mode shows its own
+            // confirm controls below the grid.
+            if (onDaySelected == null)
+              Row(
+                children: [
+                  _LegendDot(color: t.today, label: s.todayLabel),
+                  const SizedBox(width: AppSpacing.md),
+                  _LegendDot(color: t.present, label: s.present),
+                  const SizedBox(width: AppSpacing.md),
+                  _LegendDot(color: t.absent, label: s.absent),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
