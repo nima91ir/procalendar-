@@ -11,7 +11,10 @@ import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
+import 'package:fitness_trainer_app/core/utils/date_format.dart';
+import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/features/backup/data/backup_service.dart';
+import 'package:fitness_trainer_app/features/backup/domain/backup_reminder.dart';
 import 'package:fitness_trainer_app/features/backup/providers/backup_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
@@ -97,6 +100,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final json = await ref.read(backupServiceProvider).exportJson();
       final name = 'procalendar-backup-${BackupService.timestampSuffix()}.json';
       final saved = await saveTextFile(name, json);
+      // Remember when this happened so the dashboard reminder can go quiet.
+      // Only on a non-null result: the IO implementation returns null when the
+      // save was cancelled, and recording that would silence the nudge without
+      // a backup actually existing.
+      if (saved != null) {
+        await ref.read(settingsServiceProvider).setLastBackupDate(jalaliToday());
+        ref.invalidate(backupReminderProvider);
+      }
       messenger.showSnackBar(SnackBar(content: Text(s.backupSaved(saved ?? name))));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(s.backupFailed('$e'))));
@@ -175,6 +186,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final s = AppStrings.of(context);
     final themeMode = ref.watch(themeModeProvider);
     final language = ref.watch(languageProvider);
+    final tones = context.tones;
+    // Shown next to the backup buttons so the state is visible where the user
+    // would act on it, whether or not the dashboard banner was dismissed.
+    final lastBackup = ref.watch(backupReminderProvider).value?.lastBackup;
+    final backupDays = BackupReminder.daysSince(lastBackup, jalaliToday());
+    final backupOverdue =
+        backupDays != null && backupDays >= BackupReminder.intervalDays;
+    final lastBackupText = lastBackup == null
+        ? s.lastBackupNever
+        : backupDays == null
+            ? formatDateShort(lastBackup, language)
+            : '${formatDateShort(lastBackup, language)} · ${s.daysAgo(backupDays)}';
 
     return Scaffold(
       appBar: AppBar(title: Text(s.settingsTitle)),
@@ -274,6 +297,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(s.lastBackupLabel, style: AppTypography.bodySmall),
+                    Flexible(
+                      child: Text(
+                        lastBackupText,
+                        textAlign: TextAlign.end,
+                        style: AppTypography.bodySmall.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: backupOverdue ? tones.warning : tones.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
                 Text(s.backupDescription, style: AppTypography.bodySmall),
                 const SizedBox(height: AppSpacing.md),
                 OutlinedButton.icon(

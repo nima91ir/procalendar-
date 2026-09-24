@@ -1,0 +1,33 @@
+name: CI
+
+# Verification only - this workflow NEVER publishes. It exists so a broken commit
+# is caught on push/PR instead of being discovered by live users.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fitness_trainer_app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Pinned to match deploy.yml so CI and publishing agree.
+          flutter-version: '3.47.2'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test

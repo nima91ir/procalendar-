@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/features/backup/presentation/widgets/backup_reminder_banner.dart';
 import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
@@ -149,6 +150,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.xxl),
+            const BackupReminderBanner(),
             SectionHeader(
               title: s.todayAttendance,
               actionLabel: s.viewClients,

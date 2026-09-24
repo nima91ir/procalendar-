@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
+import 'package:fitness_trainer_app/core/platform/file_saver_provider.dart';
 import 'package:fitness_trainer_app/core/platform/file_transfer.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
+import 'package:fitness_trainer_app/features/backup/data/backup_service.dart';
 import 'package:fitness_trainer_app/features/backup/domain/backup_models.dart';
 import 'package:fitness_trainer_app/features/backup/providers/backup_providers.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
@@ -89,6 +91,28 @@ class _ImportBackupScreenState extends ConsumerState<ImportBackupScreen> {
         cancelLabel: s.cancel,
       );
       if (!ok || !mounted) return;
+
+      // Safety net: `replace` wipes every table first, so save what is there now
+      // before it is gone. If that file cannot be produced we abort rather than
+      // delete data with nothing to fall back on. `merge` never removes rows, so
+      // it does not need this.
+      final service = ref.read(backupServiceProvider);
+      try {
+        final current = await service.exportJson();
+        // Nothing stored yet means nothing is at risk, so skip the empty file.
+        if (service.previewCounts(current).total > 0) {
+          final name = 'procalendar-safety-${BackupService.timestampSuffix()}.json';
+          final saved = await ref.read(textFileSaverProvider)(name, current);
+          if (!mounted) return;
+          messenger.showSnackBar(
+            SnackBar(content: Text(s.safetyCopySaved(saved ?? name))),
+          );
+        }
+      } catch (_) {
+        if (!mounted) return;
+        messenger.showSnackBar(SnackBar(content: Text(s.safetyCopyFailed)));
+        return;
+      }
     }
 
     setState(() => _busy = true);

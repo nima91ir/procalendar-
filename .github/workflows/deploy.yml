@@ -1,7 +1,10 @@
 name: Deploy Flutter Web to GitHub Pages
+
+# MANUAL ONLY. This workflow used to run on every push to `main`, which meant a
+# routine commit could replace the live site with no rollback. Publishing is now
+# a deliberate action: Actions tab -> "Deploy Flutter Web to GitHub Pages" ->
+# Run workflow (or `gh workflow run "Deploy Flutter Web to GitHub Pages"`).
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -29,6 +32,14 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      # Tests gate publishing: the full suite must be green before the live site
+      # is replaced. Deliberately number-free — this said "177" and rotted.
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
 
       - name: Build web
         run: flutter build web --release --base-href /procalendar-/

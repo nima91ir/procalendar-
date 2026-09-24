@@ -258,6 +258,14 @@ class AppStrings {
   final String csvTransactions;
   final String backupSavedTemplate;
   final String backupFailedTemplate;
+  final String lastBackupLabel;
+  final String lastBackupNever;
+  final String lastBackupOnTemplate;
+  final String daysAgoTemplate;
+  final String backupReminderNeverBody;
+  final String backupReminderDueTitleTemplate;
+  final String backupReminderGo;
+  final String backupReminderLater;
   final String importTitle;
   final String importHint;
   final String chooseFile;
@@ -273,6 +281,8 @@ class AppStrings {
   final String replaceConfirmMessage;
   final String importFailedTemplate;
   final String noBackupContent;
+  final String safetyCopySavedTemplate;
+  final String safetyCopyFailed;
 
   // Plan assignment (add-plan screen & confirmations)
   final String selectPlanTemplate;
@@ -529,6 +539,14 @@ class AppStrings {
     required this.csvTransactions,
     required this.backupSavedTemplate,
     required this.backupFailedTemplate,
+    required this.lastBackupLabel,
+    required this.lastBackupNever,
+    required this.lastBackupOnTemplate,
+    required this.daysAgoTemplate,
+    required this.backupReminderNeverBody,
+    required this.backupReminderDueTitleTemplate,
+    required this.backupReminderGo,
+    required this.backupReminderLater,
     required this.importTitle,
     required this.importHint,
     required this.chooseFile,
@@ -544,6 +562,8 @@ class AppStrings {
     required this.replaceConfirmMessage,
     required this.importFailedTemplate,
     required this.noBackupContent,
+    required this.safetyCopySavedTemplate,
+    required this.safetyCopyFailed,
     required this.selectPlanTemplate,
     required this.approximateEndTemplate,
     required this.chooseThisTemplate,
@@ -604,12 +624,17 @@ class AppStrings {
   String tagClientCount(int count) => tagClientCountTemplate.replaceAll('{count}', _digits('$count'));
   String backupSaved(String file) => backupSavedTemplate.replaceAll('{file}', file);
   String backupFailed(String error) => backupFailedTemplate.replaceAll('{error}', error);
+  String lastBackupOn(String date) => lastBackupOnTemplate.replaceAll('{date}', date);
+  String daysAgo(int days) => daysAgoTemplate.replaceAll('{days}', _digits('$days'));
+  String backupReminderDueTitle(int days) =>
+      backupReminderDueTitleTemplate.replaceAll('{days}', _digits('$days'));
   String importSummary(int clients, int plans, int attendance) => importSummaryTemplate
       .replaceAll('{clients}', _digits('$clients'))
       .replaceAll('{plans}', _digits('$plans'))
       .replaceAll('{attendance}', _digits('$attendance'));
   String importDone(int count) => importDoneTemplate.replaceAll('{count}', _digits('$count'));
   String importFailed(String error) => importFailedTemplate.replaceAll('{error}', error);
+  String safetyCopySaved(String file) => safetyCopySavedTemplate.replaceAll('{file}', file);
   String approximateEnd(String date) => approximateEndTemplate.replaceAll('{date}', date);
   String planAddedWithStart(String date) => planAddedWithStartTemplate.replaceAll('{date}', date);
 
@@ -899,6 +924,15 @@ class AppStrings {
     exportCsv: 'خروجی CSV',
     csvClients: 'مشتریان',
     csvPlans: 'برنامه‌ها',
+    lastBackupLabel: 'آخرین پشتیبان‌گیری',
+    lastBackupNever: 'هنوز پشتیبان نگرفته‌اید',
+    lastBackupOnTemplate: 'آخرین پشتیبان: {date}',
+    daysAgoTemplate: '{days} روز پیش',
+    backupReminderNeverBody:
+        'اطلاعات شما فقط روی همین گوشی ذخیره شده است. با یک فایل پشتیبان می‌توانید همه‌چیز را روی دستگاه دیگری برگردانید.',
+    backupReminderDueTitleTemplate: '{days} روز از آخرین پشتیبان‌گیری گذشته است',
+    backupReminderGo: 'پشتیبان‌گیری',
+    backupReminderLater: 'بعداً',
     csvAttendance: 'حضور و غیاب',
     csvTransactions: 'تراکنش‌ها',
     backupSavedTemplate: 'فایل ذخیره شد: {file}',
@@ -917,6 +951,8 @@ class AppStrings {
     replaceConfirmTitle: 'جایگزینی اطلاعات',
     replaceConfirmMessage: 'تمام اطلاعات فعلی حذف و با محتوای پشتیبان جایگزین می‌شود. ادامه می‌دهید؟',
     importFailedTemplate: 'ورود ناموفق بود: {error}',
+    safetyCopySavedTemplate: 'پیش از جایگزینی، نسخه پشتیبان اطلاعات فعلی در فایل {file} ذخیره شد.',
+    safetyCopyFailed: 'جایگزینی انجام نشد: ذخیره نسخه پشتیبان اطلاعات فعلی ممکن نبود.',
     noBackupContent: 'ابتدا محتوای پشتیبان را وارد کنید',
     selectPlanTemplate: 'انتخاب قالب برنامه',
     approximateEndTemplate: 'پایان تقریبی دوره: {date}',
@@ -1175,6 +1211,15 @@ class AppStrings {
     csvTransactions: 'Transactions',
     backupSavedTemplate: 'File saved: {file}',
     backupFailedTemplate: 'Could not save file: {error}',
+    lastBackupLabel: 'Last backup',
+    lastBackupNever: 'No backup yet',
+    lastBackupOnTemplate: 'Last backup: {date}',
+    daysAgoTemplate: '{days} days ago',
+    backupReminderNeverBody:
+        'Your data is stored only on this phone. A backup file lets you restore everything on another device.',
+    backupReminderDueTitleTemplate: '{days} days since your last backup',
+    backupReminderGo: 'Back up',
+    backupReminderLater: 'Later',
     importTitle: 'Import backup',
     importHint: 'Paste the backup file contents (JSON) here',
     chooseFile: 'Choose file',
@@ -1190,6 +1235,8 @@ class AppStrings {
     replaceConfirmMessage: 'All current data will be deleted and replaced by the backup. Continue?',
     importFailedTemplate: 'Import failed: {error}',
     noBackupContent: 'Enter the backup contents first',
+    safetyCopySavedTemplate: 'Before replacing, your current data was saved to {file}.',
+    safetyCopyFailed: 'Replace cancelled: a safety copy of your current data could not be saved.',
     selectPlanTemplate: 'Select plan template',
     approximateEndTemplate: 'Approximate end date: {date}',
     chooseThisTemplate: 'Choose this template',

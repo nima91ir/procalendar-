@@ -5,6 +5,48 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**CURRENT HEAD (2026-09-24) — backup reminder banner + last-backup visibility (implemented):**
+- **Why**: the app has no server; every record lives in the user's own browser storage and
+  nothing in the product ever told the user to make a backup. Two known gaps were closed:
+  *no backup reminder* and *no way to see whether the data had ever been backed up*.
+- **`BackupReminder`** (`lib/features/backup/domain/backup_reminder.dart`, new): pure logic —
+  `intervalDays = 14`, `snoozeDays = 2`, `isDue({lastBackup, snoozedUntil, today})`,
+  `daysSince(...)`, `snoozeUntilFrom(now)`. The snooze comparison relies on zero-padded
+  Jalali `yyyy/MM/dd` keys sorting lexicographically = chronologically. `today` is injected
+  rather than read from the clock so the rules are unit-testable.
+- **Persistence — no schema change**: `SettingsService` gained `getLastBackupDate` /
+  `setLastBackupDate` / `getBackupSnoozeUntil` / `setBackupSnoozeUntil`, all riding the
+  existing `app_settings` key/value table. `schemaVersion` stays **7**.
+- **`BackupReminderBanner`** (`lib/features/backup/presentation/widgets/`, new) sits in the
+  dashboard `ListView` above the attendance section. It returns `SizedBox.shrink()` when not
+  due and carries its own bottom `margin`, so dashboard spacing is byte-identical while
+  hidden. «پشتیبانگیری» jumps to the Settings tab (index 4); «بعداً» snoozes for 2 days. It
+  reads `.value` from the provider, so a load/DB failure hides a reminder instead of breaking
+  the dashboard.
+- **`backupReminderProvider`** (`FutureProvider.autoDispose<BackupReminderState>`,
+  `lib/features/backup/providers/backup_providers.dart`) reads the two dates and applies
+  `BackupReminder`. Invalidated after a successful backup and after snoozing.
+- **Settings screen**: `_exportJson` records the backup date **only when `saveTextFile`
+  returns non-null** — the IO implementation returns null when the save is cancelled, and
+  recording that would silence the nudge without a backup file actually existing. The backup
+  card now shows «آخرین پشتیبانگیری» plus the date and «N روز پیش», switched to
+  `tones.warning` once overdue.
+- New AppStrings keys (fa + en + ctor param + both maps): `lastBackupLabel`,
+  `lastBackupNever`, `lastBackupOnTemplate`, `daysAgoTemplate`, `backupReminderNeverBody`,
+  `backupReminderDueTitleTemplate`, `backupReminderGo`, `backupReminderLater`; helper methods
+  `lastBackupOn(date)`, `daysAgo(days)`, `backupReminderDueTitle(days)` (Persian digits via
+  `_digits`). `jalali_calendar.dart` gained `jalaliToDateTime` / `jalaliFromDateTime` for date
+  **arithmetic** only — display still uses the Jalali key via `formatDateShort`.
+- Tests: `test/unit/backup_reminder_test.dart` (never backed up / 13 / 14 / 40 days,
+  unreadable + out-of-range keys, snooze in the future / today / past, `snoozeUntilFrom`) and
+  `test/widget/backup_reminder_banner_test.dart` (hidden when fresh, hidden exactly at the
+  boundary, shown when never, Persian-digit overdue title, «بعداً» hides it and persists
+  today+2). Verdict: `flutter analyze` = No issues found!; `flutter test` = **199/199** green
+  (was 181).
+- **Still open / explicitly deferred**: there is still no way for a user to tell *which
+  version* they are running — no build stamp, no version picker, no user-facing rollback.
+  Rollback remains operator-only and all-users-at-once. Deferred pending a decision.
+
 **CURRENT HEAD (2026-09-23) — cascade deletes (plan/client) + editable accounting ledger (implemented):**
 - **Plan delete now removes its attendance history**: `PlansService.deletePlan` calls the new
   `db.deleteAttendanceForPlan(planId)` before deleting the row (it already removed the plan's
@@ -151,7 +193,8 @@ reports (Jalali charts) show the split with a monthly Jalali chart.
 
 STATUS: **All slices DONE — green.**
 - `ClientPlans` table has `price` (default 0) and `sharePercent` (default 0);
-  schemaVersion 6 (v5 added price/share, v6 added `Transactions.planId`). `.g.dart`
+  schemaVersion 6 when this entry was written. **The current `schemaVersion` is 7.**
+  `.g.dart`
   regenerated. Auto-income rows link to their plan via `Transactions.planId` (FK
   setNull), and `deletePlan` deletes that plan's transactions first so the ledger
   and per-plan share stay in sync.
@@ -174,8 +217,20 @@ STATUS: **All slices DONE — green.**
   line chart. Route `/reports` accessible from accounting app bar.
 - **Accounting summary uses per-plan share**: `gymShare` = sum of per-plan deductions,
   `net` = income − gymShare − expense.
-- **Onboarding (new)**: first-launch carousel (4 slides) covering Clients, Plans, Attendance, Reports. Shown once via `shared_preferences` flag `onboarding_completed`. Slide text fully localized in `AppStrings` (`onboardingTitle1..4`, `onboardingBody1..4`, `onboardingSkip/Next/GetStarted`). Implemented in `lib/features/onboarding/presentation/onboarding_screen.dart` and gated in `main.dart` via `OnboardingGate`.
-- Verdict: `flutter analyze` clean; `flutter test` **129/129 pass** (onboarding included; core suite still 164/164).
+- ~~**Onboarding (new)**: first-launch carousel (4 slides)~~ **CORRECTED 2026-09-24:
+  this was never implemented.** The bullet below used to claim a first-launch
+  onboarding carousel persisted via `shared_preferences`, with keys
+  `onboardingTitle1..4` in `AppStrings` and a file at
+  `lib/features/onboarding/presentation/onboarding_screen.dart`. None of that exists
+  in this repository: there is no `lib/features/onboarding/`, the string
+  `onboarding` appears nowhere under `lib/`, `shared_preferences` is not a
+  dependency and is not referenced anywhere, and
+  `git log --all -- '*onboarding*'` returns no commit that ever added such a file.
+  The claim was probably written from the abandoned `.kilo` worktree. If onboarding
+  is wanted, it is **new work** — do not go hunting for missing files.
+- Verdict at the time: `flutter analyze` clean; `flutter test` 129/129 (core suite
+  164/164 earlier). **Current count is 177/177.** The "onboarding included" note was
+  wrong — see the correction above.
 
 ## Architecture / how the app is planned
 - **Data**: Drift (`lib/core/database/app_database.dart` + `.g.dart`). Tables:
@@ -197,18 +252,91 @@ STATUS: **All slices DONE — green.**
 - **Localization**: `AppStrings` (Persian + English, `lib/core/l10n/`); new keys
   for price, share, per-plan share, reports, month/day labels. Jalali utils in
   `lib/core/utils/jalali_calendar.dart` + `shamsi_date`.
-- **Backup**: `BackupService` JSON/CSV export/import; schema version exported in
-  JSON marker (test asserts `schemaVersion == 6`).
+- **Backup**: `BackupService` JSON/CSV export/import; schema version exported in the
+  JSON marker. The exporter writes the live `db.schemaVersion`, and the test now
+  asserts **7**, so it tracks the schema automatically (this line used to say 6).
 - **Demo data**: seeds 4 clients, 3 templates, 3 tags, 31 attendance records;
   4 plans with price/sharePercent (auto-income recorded); 2 expense transactions.
-- **Onboarding**: `lib/features/onboarding/presentation/onboarding_screen.dart` — 4-slide
-  carousel (Clients, Plans, Attendance, Reports) with page indicators, Skip/Next/Get Started.
-  Persists `onboarding_completed` in `shared_preferences`. Gated by `OnboardingGate` in `main.dart`.
+- **Onboarding**: **does not exist** — see the correction above. There is no
+  `OnboardingGate` in `main.dart`.
+
+---
+
+## ⚠️ CURRENT STATE — authoritative, verified 2026-09-24
+
+This log is append-only and contains stale snapshots. When it disagrees with the
+code, **the code wins**: `flutter analyze` + `flutter test` are the only authority.
+Verified against `HEAD = 5cb7483`:
+
+- `schemaVersion` = **7** (`lib/core/database/app_database.dart:101`).
+- `flutter analyze` → No issues found!; `flutter test` → **181/181 pass**
+  (was 177; the pre-restore safety net added 4).
+- `lib/features/` contains exactly: accounting, attendance, backup, clients,
+  dashboard, plans, reports, settings, tags, templates. **No onboarding.**
+- `shared_preferences` is not a dependency and is not referenced anywhere.
+- Backup/restore is in **better** shape than this log implies:
+  - `BackupService.previewCounts()` validates a file and returns row counts
+    **without writing**, and `import_backup_screen.dart` already calls it — a
+    dry-run preview already exists.
+  - `importJson` runs `_wipe()` + insert inside a single `db.transaction`, so a
+    `replace` restore is atomic.
+  - `_merge` inserts only missing ids, so restore-by-merge never overwrites
+    existing data.
+  - **Pre-restore safety net (added 2026-09-24):** a `replace` restore now saves
+    `procalendar-safety-<timestamp>.json` first and **aborts the restore if that
+    save fails**, so a wrong-file restore can no longer destroy the only copy. An
+    empty database skips the file (nothing is at risk); `merge` is untouched
+    because it never deletes anything.
+  - **Remaining gap:** no "last backup" tracking or reminder anywhere in the app.
+- The safety net is testable because the save goes through
+  `textFileSaverProvider` (`lib/core/platform/file_saver_provider.dart`). That
+  indirection is not decoration: a widget test runs on the VM, where
+  `file_transfer.dart` resolves to the **native** implementation and
+  `getApplicationDocumentsDirectory()` has no platform channel, so an
+  un-injectable save can never be covered by a test. Covered by
+  `test/widget/import_backup_safety_test.dart` (4 cases: copy saved before wiping,
+  empty-DB skip, failed save aborts and keeps the data, merge untouched).
+- **Known limitation:** on the web `saveTextFile` cannot confirm that the browser
+  actually delivered the file, so a *blocked* download is not detected. The net
+  catches failures, not a silently blocked download.
+- False/outdated claims corrected in place above: the onboarding feature (×2),
+  `schemaVersion 6`, and stale test counts.
+
+### Deploy safety (also 2026-09-24)
+
+- **`main` STILL AUTO-DEPLOYS.** Verified 2026-09-24 against `origin`: its
+  `deploy.yml` declares `on: push: branches: [main]` as well as `workflow_dispatch`,
+  and the newest successful run was a `push` on `5cb7483`. The working-copy edit
+  removes the push trigger **and** adds `flutter analyze` + `flutter test` before
+  the build, but it is uncommitted — so as of now a push to `main` still publishes
+  *without* tests. Once committed, publishing becomes: Actions → *Deploy Flutter
+  Web to GitHub Pages* → Run workflow.
+- Rollback target: tag **`live-2026-09-24`** = `5cb7483`, which the API confirms is
+  the **currently deployed** commit, so the tag is correct. Pushed to `origin` on
+  2026-09-24 (it was local-only before that — one deleted folder away from being
+  lost entirely).
+- **Rollback is operator-only and all-users-at-once.** There is no per-user version
+  choice and no update prompt anywhere in `lib/`. The deployed bundle carries no
+  commit stamp (`version.json` is only `1.0.0`/`1`), so you cannot tell from the
+  live site which commit is serving. Users with a cached tab keep the old build
+  until the service worker refreshes.
+- **Rolling back code does NOT roll back data.** Every user's data sits in their own
+  browser storage, so redeploying `5cb7483` just reads whatever state the bad
+  release left behind. The only real data rollback is restoring a backup JSON.
+- A failing build does not take the site down: when the `build` job fails the
+  `deploy` job never runs, so Pages keeps the previous artifact (the 2026-09-19
+  failure was followed by a success with no outage). The risk is a silently stale
+  site, not a broken one.
+- `.github/workflows/ci.yml` runs analyze + test on push/PR and **never deploys**.
+- The `.kilo/` duplicate worktree was deleted again. It is gitignored, so this
+  change is local-only. **Deleting it matters:** while present it shadows the real
+  files in searches (an `includePattern` of `fitness_trainer_app/lib/**` matches
+  only the `.kilo` copy).
 
 ## Commands
 - Run: `$env:PATH = "C:\flutter\bin;$env:PATH"; flutter run`
 - Analyze: `flutter analyze` (keep at "No issues found!")
-- Tests: `flutter test` (keep at 160/160; add tests for new behavior)
+- Tests: `flutter test` (keep at 199/199; add tests for new behavior)
 - Drift codegen: `dart run build_runner build --delete-conflicting-outputs`
 - Regenerate DB for a scratch run, etc. — careful with paths.
 

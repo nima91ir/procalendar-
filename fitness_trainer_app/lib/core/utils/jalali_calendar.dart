@@ -23,6 +23,33 @@ String addJalaliDays(String date, int days) {
   return '${target.year}/${target.month.toString().padLeft(2, '0')}/${target.day.toString().padLeft(2, '0')}';
 }
 
+/// Parses a Jalali `yyyy/MM/dd` key into a Gregorian [DateTime] at local
+/// midnight, or null when the key is unreadable.
+///
+/// This is for **arithmetic** only (e.g. "how many days ago?"). Display should
+/// keep using the Jalali key via [formatDateShort]/[formatJalaliLong].
+DateTime? jalaliToDateTime(String date) {
+  final parts = date.split('/');
+  if (parts.length != 3) return null;
+  final y = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  final d = int.tryParse(parts[2]);
+  if (y == null || m == null || d == null) return null;
+  try {
+    return Jalali(y, m, d).toDateTime();
+  } catch (_) {
+    // Out-of-range Jalali date (e.g. 1405/13/40) — treat as unreadable rather
+    // than letting a corrupt setting crash a screen.
+    return null;
+  }
+}
+
+/// Jalali `yyyy/MM/dd` key for an arbitrary [DateTime].
+String jalaliFromDateTime(DateTime date) {
+  final j = Jalali.fromDateTime(date);
+  return '${j.year}/${j.month.toString().padLeft(2, '0')}/${j.day.toString().padLeft(2, '0')}';
+}
+
 String formatJalali(String date) {
   final parts = date.split('/');
   if (parts.length != 3) return date;

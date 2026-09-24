@@ -35,6 +35,24 @@ class SettingsService {
   Future<String?> getLanguagePreference() => repository.getSetting('language');
   Future<void> setLanguagePreference(String code) => repository.setSetting('language', code);
 
+  // --- Backup-reminder bookkeeping -------------------------------------------
+  // Both values are Jalali `yyyy/MM/dd` keys, like every other date this app
+  // stores. Nothing here needs a schema change: they ride on the existing
+  // key/value `app_settings` table, so live databases at v7 are untouched.
+
+  static const _lastBackupKey = 'last_backup_date';
+  static const _snoozeKey = 'backup_snooze_until';
+
+  Future<String?> getLastBackupDate() => repository.getSetting(_lastBackupKey);
+
+  Future<void> setLastBackupDate(String jalaliDate) =>
+      repository.setSetting(_lastBackupKey, jalaliDate);
+
+  Future<String?> getBackupSnoozeUntil() => repository.getSetting(_snoozeKey);
+
+  Future<void> setBackupSnoozeUntil(String jalaliDate) =>
+      repository.setSetting(_snoozeKey, jalaliDate);
+
   Future<Map<String, String>> getAllSettings() async {
     final rows = await db.select(db.appSettings).get();
     return {for (var r in rows) r.key: r.value};
