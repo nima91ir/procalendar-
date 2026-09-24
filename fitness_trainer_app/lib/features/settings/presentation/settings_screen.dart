@@ -122,6 +122,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: AppSpacing.sm),
+          // Shown at the moment the user reaches for CSV, which is the one place
+          // they are most likely to mistake a spreadsheet for a backup. The CSV
+          // exports cannot be imported back, so say so before they choose.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 18, color: context.tones.warning),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    s.csvNotBackupNote,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: context.tones.warning,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.people_outline),
             title: Text(s.csvClients),

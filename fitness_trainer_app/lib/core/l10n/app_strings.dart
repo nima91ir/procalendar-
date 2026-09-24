@@ -249,6 +249,7 @@ class AppStrings {
   // Backup & export
   final String backupSection;
   final String backupDescription;
+  final String csvNotBackupNote;
   final String exportBackupJson;
   final String importBackupJson;
   final String exportCsv;
@@ -530,6 +531,7 @@ class AppStrings {
     required this.clientActionsTitle,
     required this.backupSection,
     required this.backupDescription,
+    required this.csvNotBackupNote,
     required this.exportBackupJson,
     required this.importBackupJson,
     required this.exportCsv,
@@ -918,10 +920,11 @@ class AppStrings {
     manageTags: 'مدیریت برچسب‌ها',
     clientActionsTitle: 'گزینه‌های مشتری',
     backupSection: 'پشتیبان‌گیری و خروجی',
-    backupDescription: 'از داده‌ها فایل پشتیبان بسازید یا فایل CSV برای اکسل بگیرید. هنگام ورود، ابتدا داده‌ها ادغام می‌شوند و در صورت نیاز می‌توانید همه را جایگزین کنید.',
+    backupDescription: 'پشتیبان‌گیری با فایل JSON انجام می‌شود؛ همان یک فایل همه‌چیز را برمی‌گرداند. فایل‌های CSV فقط برای اکسل هستند و قابل بازگردانی نیستند. هنگام ورود، داده‌ها ابتدا ادغام می‌شوند و در صورت نیاز می‌توانید همه را جایگزین کنید.',
+    csvNotBackupNote: 'این فایل‌ها فقط برای باز کردن در اکسل هستند، نه پشتیبان‌گیری؛ نمی‌توان آن‌ها را به برنامه برگرداند.',
     exportBackupJson: 'خروجی پشتیبان (JSON)',
     importBackupJson: 'ورود پشتیبان (JSON)',
-    exportCsv: 'خروجی CSV',
+    exportCsv: 'خروجی برای اکسل (CSV)',
     csvClients: 'مشتریان',
     csvPlans: 'برنامه‌ها',
     lastBackupLabel: 'آخرین پشتیبان‌گیری',
@@ -935,7 +938,7 @@ class AppStrings {
     backupReminderLater: 'بعداً',
     csvAttendance: 'حضور و غیاب',
     csvTransactions: 'تراکنش‌ها',
-    backupSavedTemplate: 'فایل ذخیره شد: {file}',
+    backupSavedTemplate: 'فایل ذخیره شد: {file} — یک نسخه از آن را جای دیگری هم نگه دارید (ایمیل یا فضای ابری).',
     backupFailedTemplate: 'ذخیره فایل ناموفق بود: {error}',
     importTitle: 'ورود پشتیبان',
     importHint: 'محتوای فایل پشتیبان (JSON) را اینجا بچسبانید',
@@ -1201,15 +1204,16 @@ class AppStrings {
     manageTags: 'Manage tags',
     clientActionsTitle: 'Client actions',
     backupSection: 'Backup & export',
-    backupDescription: 'Create a backup file or export CSV for Excel. Imports merge first; you can replace everything if needed.',
+    backupDescription: 'Back up with a JSON file — that one file restores everything. CSV files are for Excel only and cannot be restored. Imports merge first; you can replace everything if needed.',
+    csvNotBackupNote: 'These files are just for opening in Excel, not for backup — they cannot be imported back into the app.',
     exportBackupJson: 'Export backup (JSON)',
     importBackupJson: 'Import backup (JSON)',
-    exportCsv: 'Export CSV',
+    exportCsv: 'Export for Excel (CSV)',
     csvClients: 'Clients',
     csvPlans: 'Plans',
     csvAttendance: 'Attendance',
     csvTransactions: 'Transactions',
-    backupSavedTemplate: 'File saved: {file}',
+    backupSavedTemplate: 'File saved: {file} — keep a copy somewhere else too (email or cloud).',
     backupFailedTemplate: 'Could not save file: {error}',
     lastBackupLabel: 'Last backup',
     lastBackupNever: 'No backup yet',

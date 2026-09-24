@@ -5,6 +5,31 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**CURRENT HEAD (2026-09-24) — backup wording: JSON is the backup, CSV is not (implemented):**
+- **Why**: the card said "make a backup file **or** export CSV for Excel", which reads as two
+  equivalent ways to back up. They are not equivalent. `exportJson` round-trips;
+  `exportClientsCsv` / `exportPlansCsv` / `exportAttendanceCsv` / `exportTransactionsCsv` are
+  four one-way, table-per-file, **unlinked** reports, and there is **no CSV import** —
+  `importJson` validates an `"app": "procalendar"` header, so a CSV cannot be restored at all.
+  Reconstructing plans/attendance/client links from four spreadsheets would be guesswork, so
+  CSV is not a bug to fix: it is a report for Excel, not a lifeline.
+- Copy changes (fa + en, no new keys except one): `backupDescription` now states backup = JSON
+  and CSV cannot be restored; `exportCsv` became «خروجی برای اکسل (CSV)» / "Export for Excel
+  (CSV)" so the button no longer reads as a backup peer of the JSON button;
+  `backupSavedTemplate` gained "keep a copy somewhere else (email or cloud)" — a backup sitting
+  on the same phone is not a backup.
+- New key `csvNotBackupNote` (field + ctor param + fa + en), rendered as an amber
+  `Icons.info_outline` line at the top of the CSV bottom sheet (`settings_screen.dart`,
+  `_openCsvSheet`). Chosen because that is the decision point: the moment a user reaches for CSV
+  is the moment they are most likely to mistake a spreadsheet for a backup. Deliberately
+  advisory, not a blocker — all four CSV options still work.
+- No behaviour change, no schema change, no new provider, no dependency. `flutter analyze` =
+  No issues found!; `flutter test` = 199/199 (unchanged — copy + presentation only).
+- Verified by running the app and reading the rendered accessibility tree, not just by reading
+  code: the note appears above the four CSV choices and the relabelled button shows.
+- Known gap, not fixed: CSV still needs four separate exports. Deferred — bundling them means
+  four download prompts, and `saveTextFile` cannot detect a browser-blocked download.
+
 **CURRENT HEAD (2026-09-24) — backup reminder banner + last-backup visibility (implemented):**
 - **Why**: the app has no server; every record lives in the user's own browser storage and
   nothing in the product ever told the user to make a backup. Two known gaps were closed:
