@@ -322,6 +322,11 @@ class AppStrings {
   final String activePlanFallback;
   final String deleteSessionMessage;
 
+  // In-app update notice (web builds only; see AppUpdateBanner)
+  final String updateAvailable;
+  final String updateReload;
+  final String updateLater;
+
   const AppStrings({
     required this.isPersian,
     required this.welcomeTemplate,
@@ -601,6 +606,9 @@ class AppStrings {
     required this.contactLabel,
     required this.activePlanFallback,
     required this.deleteSessionMessage,
+    required this.updateAvailable,
+    required this.updateReload,
+    required this.updateLater,
   });
 
   String _digits(String value) => isPersian ? toPersian(value) : value;
@@ -727,6 +735,9 @@ class AppStrings {
 
   static const fa = AppStrings(
     isPersian: true,
+    updateAvailable: 'نسخه جدید آماده است',
+    updateReload: 'به‌روزرسانی',
+    updateLater: 'بعداً',
     welcomeTemplate: 'خوش آمدید، {name}',
     bonusClientsTemplate: '{count} مشتری دارای جلسات اضافه',
     remainingSessionsTemplate: '{count} جلسه باقی‌مانده',
@@ -1010,6 +1021,9 @@ class AppStrings {
 
   static const en = AppStrings(
     isPersian: false,
+    updateAvailable: 'A new version is available',
+    updateReload: 'Update',
+    updateLater: 'Later',
     welcomeTemplate: 'Welcome back, {name}',
     bonusClientsTemplate: '{count} client with bonus sessions',
     remainingSessionsTemplate: '{count} sessions left',

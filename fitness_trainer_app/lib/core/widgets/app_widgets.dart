@@ -269,17 +269,26 @@ class AppBottomSheet {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Material(
-        color: t.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
+      builder: (ctx) => Padding(
+        // Lift the sheet above the on-screen keyboard. `isScrollControlled`
+        // only raises the height cap; it does not move the sheet, so without
+        // this the submit button of every sheet sat behind the keyboard.
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+        child: Material(
+          color: t.surface,
+          clipBehavior: Clip.antiAlias,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
           ),
-          child: SingleChildScrollView(child: child),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(child: child),
+            ),
+          ),
         ),
       ),
     );

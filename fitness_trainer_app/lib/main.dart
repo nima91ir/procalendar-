@@ -5,10 +5,12 @@ import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
+import 'package:fitness_trainer_app/core/providers/app_update.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_theme.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
+import 'package:fitness_trainer_app/core/widgets/app_update_banner.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
 import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
@@ -252,6 +254,21 @@ class _MainShellState extends ConsumerState<MainShell>
     return navigator.maybePop();
   }
 
+  /// Coming back to the foreground is when a deploy most plausibly landed while
+  /// the app sat in the background, so re-run the version check then.
+  /// Invalidating [deployedBuildIdProvider] refetches; the pending-update flag
+  /// depends on it, so it recomputes too.
+  ///
+  /// Flutter fires `resumed` on every visibility change on web, so this is
+  /// skipped while an update is already on screen: there is nothing new to
+  /// learn, and re-running the check would needlessly rebuild the banner.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (ref.read(pendingUpdateProvider).value ?? false) return;
+    ref.invalidate(deployedBuildIdProvider);
+  }
+
   void _invalidateTabProviders(int index) {
     switch (index) {
       case 0:
@@ -300,9 +317,18 @@ class _MainShellState extends ConsumerState<MainShell>
             ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(
-        selectedIndex: currentIndex,
-        onTap: (index) => ref.read(tabIndexProvider.notifier).select(index),
+      // The update notice sits directly above the nav bar, so it is reachable
+      // from every tab rather than only the dashboard. It collapses to nothing
+      // when there is no update, leaving the bar exactly as it was.
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AppUpdateBanner(),
+          BottomNavBar(
+            selectedIndex: currentIndex,
+            onTap: (index) => ref.read(tabIndexProvider.notifier).select(index),
+          ),
+        ],
       ),
     );
   }

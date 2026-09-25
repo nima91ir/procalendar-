@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
 import 'package:fitness_trainer_app/core/widgets/form_card_screen.dart';
 import 'package:fitness_trainer_app/core/widgets/styled_text_field.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
@@ -71,7 +72,10 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
     }
     setState(() => _isLoading = true);
     try {
-      final bonus = int.tryParse(_bonusController.text) ?? 0;
+      // Persian digits must be normalised first: the app's UI is Persian, so
+      // typing `۵` is the natural input, and `int.tryParse` would return null
+      // and silently save 0 (wiping whatever bonus count was there).
+      final bonus = int.tryParse(toLatinDigits(_bonusController.text.trim())) ?? 0;
       final tagsService = ref.read(tagsServiceProvider);
       if (widget.clientId == null) {
         final newId = await ref.read(clientsServiceProvider).createClient(

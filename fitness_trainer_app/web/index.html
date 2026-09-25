@@ -17,8 +17,67 @@
   <link rel="manifest" href="manifest.json">
 
   <title>PRO CALENDAR</title>
+
+  <style>
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background-color: #FAFBF4;
+    }
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px;
+      color: #4A5A4A;
+    }
+    #loading .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(136, 163, 107, 0.28);
+      border-top-color: #88A36B;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    @media (prefers-color-scheme: dark) {
+      html,
+      body {
+        background-color: #161D15;
+      }
+      #loading {
+        color: #A9BC9E;
+      }
+    }
+  </style>
 </head>
 <body>
+  <!-- Replaced by the first Flutter frame. Without this the browser showed a
+       blank white page for the whole boot, which includes fetching the
+       sqlite3 wasm + drift worker and opening the database. -->
+  <div id="loading" dir="rtl">
+    <div class="spinner"></div>
+    <div>تقویم حرفه‌ای</div>
+  </div>
+
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('loading');
+      if (el) {
+        el.remove();
+      }
+    });
+  </script>
 </body>
 </html>

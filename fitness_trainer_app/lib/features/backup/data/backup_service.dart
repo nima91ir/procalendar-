@@ -261,10 +261,36 @@ class BackupService {
     return decoded;
   }
 
+  /// Table keys a real export always contains. A payload with none of them is
+  /// not a backup, and letting one through `replace` mode would wipe every
+  /// table while importing nothing at all.
+  static const _tableKeys = [
+    'clients',
+    'tags',
+    'clientTags',
+    'templates',
+    'plans',
+    'attendance',
+    'transactions',
+    'settings',
+  ];
+
   void _validateHeader(Map<String, dynamic> payload) {
-    final marker = payload['app'];
-    if (marker != null && marker != _appMarker) {
+    // `app` is mandatory. It used to be optional (`marker != null && ...`), so
+    // `{"schemaVersion":1}` passed every check and was accepted as a valid
+    // replace-mode backup that deleted all eight tables and restored nothing.
+    if (payload['app'] != _appMarker) {
       throw const FormatException('not a Pro Calendar backup');
+    }
+    // `schemaVersion` is a Drift number, so it cannot express "same schema,
+    // different row shape" — that is what `format` is for. A missing `format`
+    // is accepted so older exports stay restorable; only a *newer* one is
+    // refused, because this build cannot know its row shape.
+    final format = payload['format'];
+    if (format is int && format > _formatVersion) {
+      throw FormatException(
+        'backup format v$format is newer than supported v$_formatVersion',
+      );
     }
     final version = payload['schemaVersion'];
     if (version is! int) {
@@ -274,6 +300,9 @@ class BackupService {
       throw FormatException(
         'backup schema v$version is newer than supported v${db.schemaVersion}',
       );
+    }
+    if (!_tableKeys.any(payload.containsKey)) {
+      throw const FormatException('backup contains no known data tables');
     }
   }
 

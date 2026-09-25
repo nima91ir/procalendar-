@@ -41,8 +41,18 @@ jobs:
       - name: Test
         run: flutter test
 
+      # BUILD_ID is compiled into the app; the same sha is written into
+      # build/web/build-id.json below. The running page compares the two, and a
+      # mismatch is what makes the "new version available" banner appear — which
+      # is how a tab left open across a deploy finds out it is running stale
+      # code, since the service worker only swaps the app in on the next load.
       - name: Build web
-        run: flutter build web --release --base-href /procalendar-/
+        run: flutter build web --release --base-href /procalendar-/ --dart-define=BUILD_ID=${{ github.sha }}
+
+      # Must run AFTER the build: `flutter build web` regenerates build/web.
+      - name: Stamp the build id
+        run: |
+          echo "{\"buildId\":\"${{ github.sha }}\"}" > build/web/build-id.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

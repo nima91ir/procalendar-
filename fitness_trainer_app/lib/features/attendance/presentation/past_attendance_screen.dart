@@ -361,6 +361,18 @@ class _DayAttendanceSheet extends ConsumerWidget {
                     title: Text(isPresent ? s.present : s.absent),
                     trailing: IconButton(
                       onPressed: () async {
+                        // Removing a record refunds a plan or bonus session, so
+                        // it must be confirmed here as well. This sheet is the
+                        // one opened to *add* records, and its delete button
+                        // sits directly under the add buttons.
+                        final confirmed = await AppConfirmDialog.show(
+                          context,
+                          title: s.deleteSession,
+                          message: s.deleteSessionMessage,
+                          confirmLabel: s.delete,
+                          cancelLabel: s.cancel,
+                        );
+                        if (!confirmed || !context.mounted) return;
                         final messenger = ScaffoldMessenger.of(context);
                         try {
                           final refund = await ref.read(attendanceProvider.notifier).removeSessionById(record.id!);

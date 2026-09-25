@@ -5,6 +5,36 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**CURRENT HEAD (2026-09-24) — UI REDESIGN MOCKUPS, no app code touched (design-only deliverable):**
+- **Nothing in `lib/` changed.** `git status` is clean; the deliverable is one file:
+  `fitness_trainer_app/build/mockups/redesign/index.html` (gitignored because `build/` is, so it
+  will not be committed — copy it out if it must survive a `flutter clean`).
+- It is a **production-fidelity mockup** of 5 real screens (dashboard, clients, client profile,
+  attendance, accounting) with the app's real strings, Jalali dates, Persian digits and the real
+  sage palette / 6 accents from `app_accents.dart` + `app_tones.dart`. It renders the *same DOM*
+  under 8 art directions by swapping CSS custom properties, which is how it would actually be
+  built in Flutter (`AppTones.forAccent` + a direction token layer in `app_tokens.dart`).
+- Directions (8, the user pruned the list — B/F/H were removed, so the letters are not
+  contiguous): **A** Sage Refined · **C** Data Command · **D** Minimal Compact (replaced the
+  rejected Neo-Brutal) · **E** Midnight Neon · **G** iOS Native · **I** Kinetic (motion) ·
+  **J** Bento Grid · **K** Notion Style. Each has a note card explaining intent + its risk, and
+  every direction works in light **and** dark plus all 6 brand accents.
+- **J** reshapes only the dashboard into a 6-column widget grid (`[data-dir="j"] .body.dash` +
+  `.tiles{display:contents}`), so the four metric cards become real bento tiles; **K** is the
+  quiet "tool" look (hairlines, `#F1F1EF` tags, an emoji callout, checklist rows via
+  `.trow:has(.kv)`). Both need the `dash`/`callout` marker classes that are now in the markup.
+- Controls: pick a direction (5 phones), **گالری** (all side by side, zoomed), or **مقایسه همه**
+  (every screen of every direction). Compare mode forces the root direction to `a` so no
+  direction's rules leak into another block.
+- Motion in **I** only: animated mesh background, staggered block entrance, self-drawing progress
+  ring (`@property --v`), pulsing "today" cell, growing section underline, shimmer sweep on the
+  primary button, shimmer skeleton. All of it is inside `@media (prefers-reduced-motion)`
+  protection, so Windows "reduce motion" turns it off — the same rule the Flutter side must honour.
+- **Not done on purpose:** templates/settings screens, empty/error/loading states beyond one
+  skeleton, tablet/desktop layouts, and RTL-vs-LTR of the *review tool* itself (only the app
+  surfaces are RTL). No direction has been chosen — do not start implementing one until the user
+  picks, and keep `schemaVersion` 7 untouched whatever they pick.
+
 **CURRENT HEAD (2026-09-24) — plan expiry, remaining days/sessions, card & profile UX, attendance-refund truth (implemented, 8 requested items):**
 
 - **Plan expiry by elapsed days — a real bug, fixed.** `PlansService.consumeSession` was the
@@ -451,3 +481,119 @@ Verified against `HEAD = 5cb7483`:
   dumps, etc.) are throwaway — never delete or commit them.
 - After each completed task, update this file's status lines so the next
   session knows exactly what's done.
+
+## 2026-09-25 — audit follow-up fixes (4 source files, 1 web file)
+A full read-only audit was run first (UI/UX, performance, data layer, tests,
+CI, repo hygiene). The findings below were fixed immediately because each was a
+handful of lines and each stopped a user-visible bug; the larger items are
+listed at the end as still open.
+
+**Baseline re-verified after the changes: `flutter analyze` = "No issues
+found!", `flutter test` = 227/227.** The "199" quoted in `AGENTS.md` and in the
+Commands section above is stale — the real count is 227.
+
+- `features/clients/presentation/add_edit_client_screen.dart` — the bonus
+  sessions field now normalises through `toLatinDigits` before `int.tryParse`.
+  It was the only numeric field in the app that did not, so typing Persian
+  digits (`۵`) made `tryParse` return null and `?? 0` **silently saved 0**,
+  wiping the existing bonus count.
+- `features/attendance/presentation/past_attendance_screen.dart` — the delete
+  button inside `_DayAttendanceSheet` now goes through `AppConfirmDialog.show`,
+  matching the history list. It refunds a plan/bonus session and sat directly
+  under the present/absent add buttons with no separator.
+- `core/widgets/app_widgets.dart` (`AppBottomSheet.show`) — added
+  `MediaQuery.viewInsetsOf(ctx).bottom` padding and `SafeArea(top: false)`.
+  `isScrollControlled: true` only raises the height cap; it does not move the
+  sheet, so the submit button of **every** sheet sat behind the keyboard.
+- `features/backup/data/backup_service.dart` (`_validateHeader`) — `app` is now
+  mandatory. It was `marker != null && marker != _appMarker`, so a payload with
+  no `app` key passed and `{"schemaVersion":1}` was accepted as a valid
+  replace-mode backup that wiped all eight tables and restored nothing. Also
+  refuses a *newer* `format` (a missing one stays accepted so older exports
+  remain restorable, and `schemaVersion` is a Drift number that cannot express
+  a row-shape change — that is what `format` is for), and rejects a payload
+  containing none of the eight known table keys.
+- `features/attendance/presentation/widgets/attendance_calendar.dart`
+  (`_DayCell`) — a day holding BOTH an absence and an attendance rendered as
+  fully **green** (`isPresent = presentCount > 0`), and because the `×N` badge
+  branch sat above the check/cross branches, the fill colour was the only
+  remaining signal. Mixed days now use the `warningSoft` fill with `warning`
+  ink and a `warning` border, and the foreground is computed once (`fg`)
+  instead of being hardcoded to `Colors.white`. The legend still explains only
+  today/present/absent, so a mixed-day legend entry still needs a new
+  `AppStrings` key.
+- `web/index.html` — added a CSS spinner + app title removed by the
+  `flutter-first-frame` event. `main()` awaits `AppDatabase.create()` before
+  `runApp` and `index.html` had no loader, so the entire boot (including the
+  sqlite3 wasm + drift worker fetch) was a blank white page.
+
+### Still open from the audit (each needs its own task)
+- **Web safety copy is never verified.** `core/platform/file_transfer_web.dart`
+  returns the file name unconditionally after `anchor.click()`, so the
+  "safety copy failed -> abort the restore" guard in `import_backup_screen.dart`
+  can never fire on the destructive path.
+- **No test covers `onUpgrade` / `backfillMissingPlanIncome()`**, the only code
+  that writes to live users' ledgers during a migration, and nothing asserts
+  `schemaVersion == 7`.
+- **Performance:** `clientTagFilterProvider` is a serial N+1; the dashboard does
+  5 full scans of `clients` and 5 of `client_plans` and counts rows in Dart;
+  ~43 providers are invalidated per attendance tap; `_invalidateTabProviders`
+  in `main.dart` refetches data that cannot be stale.
+- **Accessibility:** zero `Semantics`, `textScaler` or `PopScope` anywhere in
+  `lib/`; the charts are pure `CustomPaint` with no labels.
+- **CI:** `ci.yml` has no `flutter build web`, so web-only compile errors first
+  surface at publish time (that already happened once, in `381c429`).
+
+## 2026-09-25 (later) — in-app update notice
+User decisions for this task: **no analytics** (the app promises users their data
+never leaves the device — see `backupReminderNeverBody` — so a telemetry ping
+would contradict that sentence); **yes** to an update notice; **tap** to reload
+rather than auto-reload (an automatic reload would discard a half-filled form);
+and **explicit permission to edit `deploy.yml`**.
+
+`flutter analyze` = "No issues found!", `flutter test` = **236/236** (227 + 4
+provider + 5 widget tests).
+
+**How it works.** `deploy.yml` now compiles with
+`--dart-define=BUILD_ID=${{ github.sha }}` and, *after* the build (because
+`flutter build web` regenerates `build/web`), writes the same sha to
+`build/web/build-id.json`. The running page fetches that file with a timestamp
+cache-buster, compares it with the id it was compiled with, and offers a reload
+when they differ. Comparing commit shas means **nothing has to be remembered per
+release** — no `pubspec.yaml` version bump, unlike a `version.json` comparison
+(that file has sat at `1.0.0+1` / `1` since launch). `schemaVersion` is untouched;
+this needs no database change at all.
+
+New files:
+- `core/platform/build_info.dart` (+ `_io` / `_web`) — conditional import on
+  `dart.library.html`, exactly the `file_transfer.dart` pattern, so native targets
+  get a no-op and the check stays web-only.
+- `core/providers/app_update.dart` — `kBuildId`, `currentBuildIdProvider`,
+  `deployedBuildIdProvider`, `pendingUpdateProvider`. Current and deployed are
+  separate providers purely so tests can override both, which is the only way to
+  exercise the decision on the VM.
+- `core/widgets/app_update_banner.dart` — renders nothing unless an update is
+  pending, so it is invisible under `flutter run` (no injected id) and on native.
+
+`main.dart` puts the banner in the same `bottomNavigationBar` slot as the nav bar
+(inside a `Column`), so it is reachable from every tab rather than only the
+dashboard, and collapses to nothing when hidden. It re-checks on
+`AppLifecycleState.resumed`, **skipping that re-check while an update is already
+on screen** — Flutter fires `resumed` on every visibility change on web, and
+re-running a check we do not need would only rebuild the banner.
+
+**Verified in a real browser, not just by unit tests.** Served a build compiled
+with `BUILD_ID=aaa` at a mirrored `/procalendar-/` path while `build-id.json` read
+`bbb`: the server log proved the fetch resolved to
+`/procalendar-/build-id.json?t=...` (correct under the base href) and returned 200,
+and the screenshot showed the banner above an otherwise unchanged nav bar. With
+the file changed to `aaa` and the page reloaded, the banner correctly did *not*
+appear. Both directions confirmed.
+
+Accepted trade-off: `resumed` fires per visibility change on web, so the check
+runs roughly once per tab focus switch (~20 bytes each). Deliberately not
+debounced.
+
+Test gap: the fetch in `build_info_web.dart` cannot run on the VM, so the widget
+tests override `deployedBuildIdProvider` instead; the browser run above is what
+covers the real fetch path.

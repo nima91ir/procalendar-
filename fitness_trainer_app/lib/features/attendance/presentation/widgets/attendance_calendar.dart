@@ -185,26 +185,45 @@ class _DayCell extends StatelessWidget {
     final t = context.tones;
     final presentCount = statuses.where((s) => s == 'present').length;
     final absentCount = statuses.length - presentCount;
-    final isPresent = presentCount > 0;
-    final isAbsent = !isPresent && absentCount > 0;
-    final selected = isPresent || isAbsent;
+    // A day can hold several records. Letting "any present" paint the whole
+    // cell green showed a day holding an absence *and* an attendance as fully
+    // present — the exact case the multi-record model exists for. Mixed days
+    // use the warning pair (contrast-safe in both themes) rather than a
+    // status colour, so they can never be read as all-present or all-absent.
+    final isMixed = presentCount > 0 && absentCount > 0;
+    final isPresent = presentCount > 0 && absentCount == 0;
+    final isAbsent = presentCount == 0 && absentCount > 0;
+    final selected = isPresent || isAbsent || isMixed;
     final count = statuses.length;
-    final color = isPresent
-        ? t.present
-        : isAbsent
-            ? t.absent
-            : isPicked
-                ? t.primaryLight
-                : t.surfaceVariant;
+    final color = isMixed
+        ? t.warningSoft
+        : isPresent
+            ? t.present
+            : isAbsent
+                ? t.absent
+                : isPicked
+                    ? t.primaryLight
+                    : t.surfaceVariant;
+    // The status fills are saturated (white ink), the warning fill is pale
+    // (warning ink), so the foreground cannot be a single constant.
+    final fg = isMixed
+        ? t.warning
+        : selected
+            ? Colors.white
+            : isToday
+                ? t.todayInk
+                : t.onSurface;
     // Today always shows in orange: filled when unmarked, and an orange ring
     // around the present/absent colour when attendance is already recorded.
     final borderColor = isPicked
         ? t.primary
         : isToday
             ? t.today
-            : selected
-                ? color
-                : t.outlineVariant;
+            : isMixed
+                ? t.warning
+                : selected
+                    ? color
+                    : t.outlineVariant;
     final ringWidth = isToday || isPicked ? 2.0 : 1.0;
 
     return Padding(
@@ -225,23 +244,19 @@ class _DayCell extends StatelessWidget {
               Text(
                 toPersian(day.toString()),
                 style: AppTypography.bodySmall.copyWith(
-                  color: selected
-                      ? Colors.white
-                      : isToday
-                          ? t.todayInk
-                          : t.onSurface,
+                  color: fg,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               if (selected && count > 1)
                 Text(
                   '×${toPersian(count.toString())}',
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.w700),
                 )
               else if (isPresent)
-                const Icon(Icons.check, size: 12, color: Colors.white)
+                Icon(Icons.check, size: 12, color: fg)
               else if (isAbsent)
-                const Icon(Icons.close, size: 12, color: Colors.white)
+                Icon(Icons.close, size: 12, color: fg)
               else if (isToday)
                 Icon(Icons.circle, size: 6, color: t.today)
               else
