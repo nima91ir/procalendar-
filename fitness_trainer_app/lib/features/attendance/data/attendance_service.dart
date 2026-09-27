@@ -17,6 +17,9 @@ class AttendanceService {
 
   Future<AttendanceRecord?> getAttendanceById(int id) => repository.getAttendanceById(id);
 
+  /// Every attendance record, unscoped (see [AttendanceRepository.getAllAttendance]).
+  Future<List<AttendanceRecord>> getAllAttendance() => repository.getAllAttendance();
+
   /// The latest record for a client/day (used by the dashboard undo).
   Future<AttendanceRecord?> getLatestAttendance(int clientId, String date) => repository.getAttendance(clientId, date);
 

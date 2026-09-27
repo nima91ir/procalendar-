@@ -1,80 +1,89 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'app_accents.dart';
 import 'app_colors.dart';
+import 'app_theme_spec.dart';
 import 'app_typography.dart';
 import 'app_tokens.dart';
 
 class AppTheme {
   static const fontFamily = AppTypography.fontFamily;
 
-  /// Green brand theme (light), kept for tests and back-compat.
-  static ThemeData get light => lightForAccent();
+  /// The default theme (light), kept for tests and back-compat.
+  static ThemeData get light => lightFor();
 
-  /// Green brand theme (dark), kept for tests and back-compat.
-  static ThemeData get dark => darkForAccent();
+  /// The default theme (dark), kept for tests and back-compat.
+  static ThemeData get dark => darkFor();
 
-  static ThemeData lightForAccent([AppAccent accent = AppAccent.green]) =>
-      _build(accent, Brightness.light);
+  static ThemeData lightFor([AppThemeSpec? theme]) =>
+      _build(theme ?? AppThemes.fallback, Brightness.light);
 
-  static ThemeData darkForAccent([AppAccent accent = AppAccent.green]) =>
-      _build(accent, Brightness.dark);
+  static ThemeData darkFor([AppThemeSpec? theme]) =>
+      _build(theme ?? AppThemes.fallback, Brightness.dark);
 
-  static ThemeData _build(AppAccent accent, Brightness brightness) {
-    final p = AccentPalettes.of(accent);
-    final primary = brightness == Brightness.dark ? p.darkPrimary : p.lightPrimary;
-    final onPrimary = brightness == Brightness.dark ? AppColors.onSurface : Colors.white;
+  /// Every component theme below reads the palette, so a theme repaints the
+  /// whole surface layer rather than only the cards. Status colours stay on
+  /// [AppColors] — they carry meaning, not brand.
+  static ThemeData _build(AppThemeSpec theme, Brightness brightness) {
     final isDark = brightness == Brightness.dark;
+    final p = isDark ? theme.dark : theme.light;
+    final primary = p.primary;
 
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
-      extensions: [AccentThemeData(accent: accent)],
+      extensions: [AppThemeData(theme: theme)],
+      // `secondary`/`secondaryContainer` are set from the palette too: several
+      // Material widgets (SegmentedButton among them) tint their selection from
+      // these, so leaving them at the M3 default painted teal segments on every
+      // theme. `tertiary` likewise, for anything that reaches for it.
       colorScheme: isDark
           ? ColorScheme.dark(
               primary: primary,
-              onPrimary: onPrimary,
-              surface: AppColors.darkSurface,
-              onSurface: AppColors.darkOnSurface,
-              outline: AppColors.darkOutline,
+              onPrimary: p.onPrimary,
+              secondary: p.primaryDark,
+              secondaryContainer: p.primaryLight,
+              tertiary: p.primaryDark,
+              tertiaryContainer: p.primaryLight,
+              surface: p.surface,
+              onSurface: p.onSurface,
+              outline: p.outline,
               error: AppColors.darkError,
             )
           : ColorScheme.light(
               primary: primary,
-              onPrimary: onPrimary,
-              surface: AppColors.surface,
-              onSurface: AppColors.onSurface,
-              outline: AppColors.outline,
+              onPrimary: p.onPrimary,
+              secondary: p.primaryDark,
+              secondaryContainer: p.primaryLight,
+              tertiary: p.primaryDark,
+              tertiaryContainer: p.primaryLight,
+              surface: p.surface,
+              onSurface: p.onSurface,
+              outline: p.outline,
               error: AppColors.error,
             ),
       fontFamily: fontFamily,
-      scaffoldBackgroundColor: isDark ? AppColors.darkSurface : AppColors.background,
+      scaffoldBackgroundColor: p.background,
       appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? AppColors.darkSurface : AppColors.surface,
-        foregroundColor: isDark ? AppColors.darkOnSurface : AppColors.onSurface,
+        backgroundColor: p.surface,
+        foregroundColor: p.onSurface,
         elevation: 0,
         centerTitle: true,
         systemOverlayStyle: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       ),
       cardTheme: CardThemeData(
-        color: isDark ? AppColors.darkCard : AppColors.surface,
+        color: p.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          side: BorderSide(
-            color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
-            width: 1,
-          ),
+          side: BorderSide(color: p.outlineVariant, width: 1),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? AppColors.darkCard : AppColors.surfaceVariant,
+        fillColor: p.surfaceVariant,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: BorderSide(
-            color: isDark ? AppColors.darkOutline : AppColors.outline,
-          ),
+          borderSide: BorderSide(color: p.outline),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -82,10 +91,21 @@ class AppTheme {
         ),
         contentPadding: const EdgeInsets.all(AppSpacing.lg),
       ),
+      // A 44 minimum height on the two primary-action button families.
+      //
+      // They rendered ~32 tall, well below the 44 guideline — and because
+      // Material pads the *tap* area behind that, the real target was larger
+      // than the button looked. Matching the two makes what you see and what you
+      // hit the same size, which is the point.
+      //
+      // TextButton is deliberately excluded: it is used inline (section headers,
+      // "show all" links), where a 44 minimum would stretch rows meant to stay
+      // dense. It is a tertiary control, not a primary action.
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: onPrimary,
+          foregroundColor: p.onPrimary,
+          minimumSize: const Size(0, 44),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
         ),
@@ -94,6 +114,7 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: primary,
           side: BorderSide(color: primary),
+          minimumSize: const Size(0, 44),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
         ),
@@ -106,14 +127,14 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         elevation: 0,
-        indicatorColor: isDark ? p.darkPrimaryLight : p.lightPrimaryLight,
-        backgroundColor: isDark ? AppColors.darkSurface : AppColors.surface,
+        indicatorColor: p.primaryLight,
+        backgroundColor: p.surface,
         labelTextStyle: WidgetStatePropertyAll(
           TextStyle(
             fontFamily: fontFamily,
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: isDark ? AppColors.darkOutline : AppColors.onSurfaceVar,
+            color: p.onSurfaceVar,
           ),
         ),
       ),
@@ -125,9 +146,7 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       ),
-      dividerTheme: DividerThemeData(
-        color: isDark ? AppColors.darkOutlineVariant : AppColors.outlineVariant,
-      ),
+      dividerTheme: DividerThemeData(color: p.outlineVariant),
     );
     return base;
   }

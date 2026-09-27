@@ -75,7 +75,7 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
       messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(status == 'present' ? s.present : s.absent, _localizedDate(day, s, lang)))));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+      messenger.showSnackBar(SnackBar(content: Text(s.errorText(e))));
     }
   }
 
@@ -103,7 +103,7 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
       ));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+      messenger.showSnackBar(SnackBar(content: Text(s.errorText(e))));
     }
   }
 
@@ -232,7 +232,9 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
                             borderRadius: BorderRadius.circular(AppRadius.sm),
                           ),
                           child: Text(
-                            toPersian(dateRecords.length.toString()),
+                            s.isPersian
+                                ? toPersian(dateRecords.length.toString())
+                                : dateRecords.length.toString(),
                             style: AppTypography.labelMedium.copyWith(color: t.onSurface),
                           ),
                         ),
@@ -320,7 +322,7 @@ class _DayAttendanceSheet extends ConsumerWidget {
                         await ref.read(attendanceProvider.notifier).addSession(clientId, date, status: 'present');
                         if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.present, dateLabel))));
                       } catch (e) {
-                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.errorText(e))));
                       }
                     },
                     icon: const Icon(Icons.add),
@@ -336,7 +338,7 @@ class _DayAttendanceSheet extends ConsumerWidget {
                         await ref.read(attendanceProvider.notifier).addSession(clientId, date, status: 'absent');
                         if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(s.absent, dateLabel))));
                       } catch (e) {
-                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+                        if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.errorText(e))));
                       }
                     },
                     icon: const Icon(Icons.add),
@@ -381,7 +383,7 @@ class _DayAttendanceSheet extends ConsumerWidget {
                             SnackBar(content: Text(s.sessionRemovalMessage(refund, dateLabel))),
                           );
                         } catch (e) {
-                          if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+                          if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(s.errorText(e))));
                         }
                       },
                       icon: Icon(Icons.delete_outline, color: t.error),
@@ -436,19 +438,19 @@ class _SessionSummaryCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           _SummaryRow(
             label: s.bonusSessions,
-            value: toPersian(bonusSessions.toString()),
+            value: s.isPersian ? toPersian(bonusSessions.toString()) : '$bonusSessions',
             color: bonusSessions > 0 ? t.warning : t.onSurfaceVar,
           ),
           const SizedBox(height: AppSpacing.sm),
           _SummaryRow(
             label: s.queuedPlansLabel,
-            value: toPersian(queuedCount.toString()),
+            value: s.isPersian ? toPersian(queuedCount.toString()) : '$queuedCount',
             color: queuedCount > 0 ? t.queued : t.onSurfaceVar,
           ),
           const SizedBox(height: AppSpacing.sm),
           _SummaryRow(
             label: s.recordedSessionsLabel,
-            value: toPersian(recordedCount.toString()),
+            value: s.isPersian ? toPersian(recordedCount.toString()) : '$recordedCount',
             color: t.primary,
           ),
         ],

@@ -5,6 +5,7 @@ import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
@@ -16,7 +17,7 @@ import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart'
 import 'package:fitness_trainer_app/features/clients/presentation/widgets/client_card.dart';
 import 'package:fitness_trainer_app/routing/routes.dart';
 
-enum _SortMode { name, newest, bonus }
+enum _SortMode { name, newest, bonus, lastVisit }
 
 class ClientsScreen extends ConsumerStatefulWidget {
   const ClientsScreen({super.key});
@@ -44,7 +45,12 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   /// list also reflects any create/update/delete from anywhere in the app.
   void _onSearch(String query) => setState(() => _query = query);
 
-  List<domain.Client> _applySort(List<domain.Client> clients) {
+  /// [lastVisit] is clientId -> most recent attendance date, used only by
+  /// [_SortMode.lastVisit]. Jalali `yyyy/MM/dd` keys compare as strings.
+  List<domain.Client> _applySort(
+    List<domain.Client> clients,
+    Map<int, String> lastVisit,
+  ) {
     final sorted = List<domain.Client>.of(clients);
     switch (_sort) {
       case _SortMode.name:
@@ -59,25 +65,172 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           final byBonus = (b.bonusSessions).compareTo(a.bonusSessions);
           return byBonus != 0 ? byBonus : (a.id ?? 0).compareTo(b.id ?? 0);
         });
+      case _SortMode.lastVisit:
+        sorted.sort((a, b) {
+          // Most recent first. A client who has never attended has no date and
+          // sorts last; ties fall back to id so the order stays stable.
+          final byDate = (lastVisit[b.id] ?? '').compareTo(lastVisit[a.id] ?? '');
+          return byDate != 0 ? byDate : (a.id ?? 0).compareTo(b.id ?? 0);
+        });
     }
     return sorted;
   }
 
-  String _quickFilterLabel(ClientQuickFilter filter, AppStrings s) {
-    switch (filter) {
-      case ClientQuickFilter.all:
-        return s.allLabel;
-      case ClientQuickFilter.expired:
-        return s.expiredPlans;
-      case ClientQuickFilter.frozen:
-        return s.frozenPlans;
-      case ClientQuickFilter.queued:
-        return s.queuedPlans;
-      case ClientQuickFilter.lowSession:
-        return s.lowSessionPlans;
-      case ClientQuickFilter.bonus:
-        return s.bonusSessions;
-    }
+  String _quickFilterLabel(ClientQuickFilter filter, AppStrings s) => switch (filter) {
+        ClientQuickFilter.all => s.filterAllClients,
+        ClientQuickFilter.notMarkedToday => s.filterToday,
+        ClientQuickFilter.stale => s.filterStale,
+        ClientQuickFilter.neverAttended => s.filterNeverAttended,
+        ClientQuickFilter.lowSession => s.lowSessionPlans,
+        ClientQuickFilter.noActivePlan => s.filterNoActivePlan,
+        ClientQuickFilter.expiringSoon => s.filterExpiringSoon,
+        ClientQuickFilter.needsAttention => s.filterNeedsAttention,
+        ClientQuickFilter.expired => s.expiredPlans,
+        ClientQuickFilter.frozen => s.frozenPlans,
+        ClientQuickFilter.queued => s.queuedPlans,
+        ClientQuickFilter.bonus => s.bonusSessions,
+      };
+
+  /// The three filters worth one tap: everything, today's list, and the plan
+  /// conversations that are due. The rest live in the sheet.
+  static const _presetFilters = [
+    ClientQuickFilter.all,
+    ClientQuickFilter.notMarkedToday,
+    ClientQuickFilter.needsAttention,
+  ];
+
+  /// The sheet's contents, grouped by the question each filter answers.
+  static const _timeFilterGroup = [
+    ClientQuickFilter.notMarkedToday,
+    ClientQuickFilter.stale,
+    ClientQuickFilter.neverAttended,
+  ];
+  static const _planFilterGroup = [
+    ClientQuickFilter.needsAttention,
+    ClientQuickFilter.lowSession,
+    ClientQuickFilter.noActivePlan,
+    ClientQuickFilter.expiringSoon,
+    ClientQuickFilter.expired,
+    ClientQuickFilter.frozen,
+    ClientQuickFilter.queued,
+    ClientQuickFilter.bonus,
+  ];
+
+  /// `امروز ثبت نشده · ۱۱۸`
+  ///
+  /// The count matters more than the name once the book is long. It comes from
+  /// the same resolver the list uses, so a chip can never advertise one number
+  /// and then show a different set.
+  String _chipLabel(
+    ClientQuickFilter filter,
+    AppStrings s,
+    Map<ClientQuickFilter, int>? counts,
+  ) {
+    final label = _quickFilterLabel(filter, s);
+    if (filter == ClientQuickFilter.all) return label;
+    final count = counts?[filter];
+    return count == null ? label : '$label · ${s.digits(count)}';
+  }
+
+  /// Every filter, in a sheet — the quick filters, then the tags.
+  ///
+  /// A sheet rather than another chip row: a dozen chips across two rows is a
+  /// wall of options, and the point of all this is to reach one client faster.
+  /// Tags belong here too, so the page carries a single filter row and the whole
+  /// selection is visible in one place.
+  Future<void> _showFilterSheet(BuildContext context, AppStrings s) async {
+    final counts = ref.read(clientFilterCountsProvider).value;
+    final current = ref.read(clientQuickFilterProvider);
+    final tags = ref.read(allTagsProvider).value ?? const <tagdomain.Tag>[];
+    await AppBottomSheet.show<void>(
+      context,
+      // Tag rows toggle in place without closing the sheet, so the sheet also
+      // has to rebuild itself — not just notify the page behind it.
+      StatefulBuilder(
+        builder: (sheetContext, setSheetState) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Text(s.filtersButton, style: AppTypography.headlineMedium),
+            ),
+            for (final group in [_timeFilterGroup, _planFilterGroup])
+              for (final filter in group)
+                ListTile(
+                  dense: true,
+                  title: Text(_quickFilterLabel(filter, s)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (counts?[filter] case final count?)
+                        Text(s.digits(count), style: AppTypography.bodySmall),
+                      if (current == filter) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        Icon(Icons.check, size: 18, color: sheetContext.tones.primary),
+                      ],
+                    ],
+                  ),
+                  onTap: () {
+                    ref.read(clientQuickFilterProvider.notifier).set(filter);
+                    Navigator.pop(sheetContext);
+                  },
+                ),
+            if (tags.isNotEmpty) ...[
+              const Divider(height: AppSpacing.xl),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(
+                  start: AppSpacing.lg,
+                  end: AppSpacing.lg,
+                  bottom: AppSpacing.sm,
+                ),
+                child: Text(s.tagsSection, style: AppTypography.bodySmall),
+              ),
+              // Chips, as tags are everywhere else in the app — and wrapped, so
+              // a long list can never hide a selected tag past the edge of the
+              // screen. That was the real hazard of the old page row: tags
+              // combine with AND, so an off-screen selection left a short list
+              // whose cause was invisible.
+              //
+              // Both rebuilds are needed: `setState` updates the list behind the
+              // sheet, `setSheetState` redraws the chip itself.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    FilterChip(
+                      label: Text(s.allLabel),
+                      selected: _selectedTagIds.isEmpty,
+                      onSelected: (_) {
+                        setState(_selectedTagIds.clear);
+                        setSheetState(() {});
+                      },
+                      selectedColor: sheetContext.tones.primaryLight,
+                      checkmarkColor: sheetContext.tones.onSurface,
+                    ),
+                    for (final tag in tags)
+                      FilterChip(
+                        label: Text(tag.emoji.isNotEmpty ? '${tag.emoji} ${tag.name}' : tag.name),
+                        selected: _selectedTagIds.contains(tag.id),
+                        onSelected: (_) {
+                          setState(() {
+                            if (!_selectedTagIds.remove(tag.id)) _selectedTagIds.add(tag.id!);
+                          });
+                          setSheetState(() {});
+                        },
+                        selectedColor: Color(tag.color),
+                        checkmarkColor: Colors.white,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteClient(domain.Client client) async {
@@ -109,7 +262,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
       await ref.read(attendanceProvider.notifier).addSession(clientId, jalaliToday(), status: status);
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+      messenger.showSnackBar(SnackBar(content: Text(s.errorText(e))));
     }
   }
 
@@ -198,10 +351,19 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     final quickFilter = ref.watch(clientQuickFilterProvider);
     final quickFilterIdsAsync = ref.watch(quickFilterClientIdsProvider);
     final tagFilterAsync = ref.watch(clientTagFilterProvider);
+    // Chip counts, so the size of a filter is visible before tapping it.
+    final filterCounts = ref.watch(clientFilterCountsProvider).value;
+    final lastVisitAsync = ref.watch(lastAttendanceByClientProvider);
     // A tag may be deleted while selected; drop stale ids so the filter never
     // silently empties the list.
     final validTagIds = (tagsAsync.value ?? const <tagdomain.Tag>[]).map((t) => t.id).toSet();
     final selectedTags = _selectedTagIds.where(validTagIds.contains).toSet();
+    // Names for the active-tags chip, so it says *what* is filtering the list
+    // rather than only that something is.
+    final selectedTagNames = (tagsAsync.value ?? const <tagdomain.Tag>[])
+        .where((tag) => selectedTags.contains(tag.id))
+        .map((tag) => tag.name)
+        .join('، ');
 
     return Scaffold(
       appBar: AppBar(
@@ -236,6 +398,14 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                   Text(s.sortBonus),
                 ]),
               ),
+              PopupMenuItem(
+                value: _SortMode.lastVisit,
+                child: Row(children: [
+                  Icon(Icons.schedule, size: 18, color: _sort == _SortMode.lastVisit ? t.primary : null),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(s.sortLastVisit),
+                ]),
+              ),
             ],
           ),
         ],
@@ -253,65 +423,68 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
               ),
             ),
           ),
-          tagsAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-            data: (tags) {
-              if (tags.isEmpty) return const SizedBox.shrink();
-              return SizedBox(
-                height: 48,
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: tags.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return Padding(
-                        padding: const EdgeInsets.only(left: AppSpacing.sm, right: AppSpacing.sm),
-                        child: FilterChip(
-                          label: Text(s.allLabel),
-                          selected: _selectedTagIds.isEmpty,
-                          onSelected: (_) => setState(_selectedTagIds.clear),
-                          selectedColor: t.primaryLight,
-                          checkmarkColor: t.onSurface,
-                        ),
-                      );
-                    }
-                    final tag = tags[index - 1];
-                    final isSelected = selectedTags.contains(tag.id);
-                    return Padding(
-                      padding: const EdgeInsets.only(left: AppSpacing.sm, right: AppSpacing.sm),
-                      child: FilterChip(
-                        label: Text(tag.emoji.isNotEmpty ? '${tag.emoji} ${tag.name}' : tag.name),
-                        selected: isSelected,
-                        onSelected: (_) => setState(() {
-                          if (isSelected) {
-                            _selectedTagIds.remove(tag.id);
-                          } else {
-                            _selectedTagIds.add(tag.id!);
-                          }
-                        }),
-                        selectedColor: Color(tag.color),
-                        checkmarkColor: Colors.white,
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-          if (quickFilter != ClientQuickFilter.all)
-            Padding(
+          // Filter bar — the one place a filter is chosen or cleared.
+          //
+          // Tags used to have their own, visually identical, chip row here. Two
+          // rows of the same-looking chips made two different things read as
+          // one; and once the tag list grew past the edge of the screen, a
+          // selected tag could scroll out of view, leaving a short (or empty)
+          // list with no visible cause — close enough to "my clients are gone".
+          // Tags now live in the filter sheet, and anything filtering the list,
+          // tags included, surfaces as a chip at the head of this row.
+          SizedBox(
+            height: 40,
+            child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Chip(
-                  avatar: const Icon(Icons.filter_alt_outlined, size: 18),
-                  label: Text(_quickFilterLabel(quickFilter, s)),
-                  onDeleted: () => ref.read(clientQuickFilterProvider.notifier).set(ClientQuickFilter.all),
+              scrollDirection: Axis.horizontal,
+              children: [
+                // Everything currently filtering the list leads the row, so it
+                // is the first thing seen and is always clearable.
+                if (selectedTags.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                    child: Chip(
+                      avatar: const Icon(Icons.local_offer_outlined, size: 18),
+                      label: Text('${s.tagsSection}: $selectedTagNames'),
+                      onDeleted: () => setState(_selectedTagIds.clear),
+                    ),
+                  ),
+                // A filter picked from the sheet is not one of the presets, so
+                // without this the bar would show nothing selected while the
+                // list sat filtered — no way to see what is applied, and no way
+                // to clear it.
+                if (quickFilter != ClientQuickFilter.all &&
+                    !_presetFilters.contains(quickFilter))
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                    child: Chip(
+                      avatar: const Icon(Icons.filter_alt_outlined, size: 18),
+                      label: Text(_quickFilterLabel(quickFilter, s)),
+                      onDeleted: () => ref
+                          .read(clientQuickFilterProvider.notifier)
+                          .set(ClientQuickFilter.all),
+                    ),
+                  ),
+                for (final filter in _presetFilters)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                    child: FilterChip(
+                      label: Text(_chipLabel(filter, s, filterCounts)),
+                      selected: quickFilter == filter,
+                      onSelected: (_) =>
+                          ref.read(clientQuickFilterProvider.notifier).set(filter),
+                      selectedColor: t.primaryLight,
+                      checkmarkColor: t.onSurface,
+                    ),
+                  ),
+                ActionChip(
+                  avatar: const Icon(Icons.tune, size: 18),
+                  label: Text(s.filtersButton),
+                  onPressed: () => _showFilterSheet(context, s),
                 ),
-              ),
+              ],
             ),
+          ),
           Expanded(
             child: clientsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -335,7 +508,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                         final ids = tagFilterAsync.value?[c.id] ?? const <int>[];
                         return selectedTags.every(ids.contains);
                       }).toList();
-                final clients = _applySort(tagFiltered);
+                final clients = _applySort(
+                  tagFiltered,
+                  lastVisitAsync.value ?? const <int, String>{},
+                );
                 final visibleClients = clients.where((c) => !_dismissedIds.contains(c.id)).toList();
                 if (visibleClients.isEmpty) {
                   if (quickFilter != ClientQuickFilter.all) {
@@ -401,7 +577,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                             // Delete failed: bring the row back.
                             if (mounted) {
                               setState(() => _dismissedIds.remove(client.id!));
-                              messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+                              messenger.showSnackBar(SnackBar(content: Text(s.errorText(e))));
                             }
                           }
                         },

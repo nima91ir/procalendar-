@@ -39,50 +39,55 @@ class AttendanceSessionService {
 
   AttendanceSessionService(this.attendanceService, this.plansService, this.clientsRepository);
 
-  /// Consumes one session: from the active plan when it still has sessions,
-  /// otherwise from the client's bonus sessions.
-  Future<void> consumeSession(int clientId) async {
-    final active = await plansService.getActivePlan(clientId);
-    if (active != null && active.id != null && active.remaining > 0) {
-      await plansService.consumeSession(active.id!);
-      return;
-    }
-    await _consumeBonusSession(clientId);
-  }
-
   /// Adds a record and consumes its session. The record stores where the
   /// session actually came from — a plan id, `null` for a bonus session, or
   /// [kNoSessionConsumed] when there was nothing left to consume — so the
   /// refund later returns it to the right place.
   Future<int> addSession(int clientId, String date, {String status = 'present'}) async {
-    final active = await plansService.getActivePlan(clientId);
-    final int? planId = (active != null && active.id != null && active.remaining > 0) ? active.id : null;
-    // Resolved before inserting so the record can state whether a bonus
-    // session was really available to consume.
-    final fromBonus = planId == null && await _hasBonusSession(clientId);
-    final recordId = await attendanceService.addAttendance(
-      clientId,
-      date,
-      status,
-      planId: planId ?? (fromBonus ? null : kNoSessionConsumed),
-    );
-    if (planId != null) {
-      await plansService.consumeSession(planId);
-    } else if (fromBonus) {
-      await _consumeBonusSession(clientId);
-    }
-    return recordId;
+    // The record and the session it consumed must land together. Otherwise an
+    // interruption between the two writes leaves the record with nothing
+    // deducted — a free session that nothing afterwards can detect.
+    //
+    // The db is taken from [attendanceService] (which already holds it)
+    // instead of adding a constructor parameter, so this class keeps the
+    // signature every call site and test already uses.
+    return attendanceService.db.transaction(() async {
+      final active = await plansService.getActivePlan(clientId);
+      final int? planId = (active != null && active.id != null && active.remaining > 0) ? active.id : null;
+      // Resolved before inserting so the record can state whether a bonus
+      // session was really available to consume.
+      final fromBonus = planId == null && await _hasBonusSession(clientId);
+      final recordId = await attendanceService.addAttendance(
+        clientId,
+        date,
+        status,
+        planId: planId ?? (fromBonus ? null : kNoSessionConsumed),
+      );
+      if (planId != null) {
+        await plansService.consumeSession(planId);
+      } else if (fromBonus) {
+        await _consumeBonusSession(clientId);
+      }
+      return recordId;
+    });
   }
 
   /// Removes a single record by id and refunds the session it consumed.
   /// Returns the client id (for provider invalidation) plus where the refund
   /// landed, or null when no record matched the id.
   Future<SessionRemoval?> removeSessionById(int attendanceId) async {
-    final record = await attendanceService.getAttendanceById(attendanceId);
-    if (record == null) return null;
-    await attendanceService.deleteAttendanceById(attendanceId);
-    final refund = await _refund(record);
-    return (clientId: record.clientId, refund: refund);
+    // Atomic: the delete and its refund must land together. If the delete
+    // committed and the refund did not, the client silently loses a session
+    // they paid for — and the record that would explain it is already gone.
+    // This also covers the refund paths that write twice (reactivate the old
+    // plan, then requeue its untouched successor).
+    return attendanceService.db.transaction(() async {
+      final record = await attendanceService.getAttendanceById(attendanceId);
+      if (record == null) return null;
+      await attendanceService.deleteAttendanceById(attendanceId);
+      final refund = await _refund(record);
+      return (clientId: record.clientId, refund: refund);
+    });
   }
 
   /// Removes the *latest* record for a client/day (the dashboard undo) and

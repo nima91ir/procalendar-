@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
-import 'package:fitness_trainer_app/core/theme/app_accents.dart';
+import 'package:fitness_trainer_app/core/theme/app_theme_spec.dart';
 import 'package:fitness_trainer_app/features/settings/data/settings_service.dart';
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
@@ -56,37 +56,34 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
   }
 }
 
-/// Selected brand accent, persisted in `app_settings`. `MaterialApp` watches
-/// it so switching accent re-tints every screen instantly.
-final accentProvider = NotifierProvider<AccentNotifier, AppAccent>(AccentNotifier.new);
+/// Selected app theme, persisted in `app_settings`. `MaterialApp` watches it, so
+/// switching a theme re-tints every screen instantly.
+///
+/// The stored id is resolved through [AppThemes.byId], which falls back to the
+/// default rather than throwing — a value written by a newer build, or a theme
+/// that was renamed, can never leave the app with no palette at all.
+final themeProvider = NotifierProvider<ThemeNotifier, AppThemeSpec>(ThemeNotifier.new);
 
-class AccentNotifier extends Notifier<AppAccent> {
+class ThemeNotifier extends Notifier<AppThemeSpec> {
   @override
-  AppAccent build() {
+  AppThemeSpec build() {
     _load();
-    return AppAccent.green;
+    return AppThemes.fallback;
   }
 
   Future<void> _load() async {
     try {
-      final stored = await ref.read(settingsServiceProvider).getAccentPreference();
-      if (stored != null) {
-        for (final accent in AppAccent.values) {
-          if (accent.name == stored) {
-            state = accent;
-            return;
-          }
-        }
-      }
+      final stored = await ref.read(settingsServiceProvider).getThemeIdPreference();
+      if (stored != null) state = AppThemes.byId(stored);
     } catch (_) {
-      // Database not ready; keep the default accent.
+      // Database not ready; keep the default theme.
     }
   }
 
-  Future<void> setAccent(AppAccent accent) async {
-    if (accent == state) return;
-    state = accent;
-    await ref.read(settingsServiceProvider).setAccentPreference(accent.name);
+  Future<void> setTheme(AppThemeSpec theme) async {
+    if (theme.id == state.id) return;
+    state = theme;
+    await ref.read(settingsServiceProvider).setThemeIdPreference(theme.id);
   }
 }
 

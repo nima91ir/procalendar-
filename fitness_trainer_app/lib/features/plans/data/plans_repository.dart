@@ -5,9 +5,16 @@ class PlansRepository {
   final AppDatabase db;
   PlansRepository(this.db);
 
+  /// The client's plans, ordered for reading rather than by insertion.
+  ///
+  /// The rows come back in id order, so the *oldest* expired plan sat at the top
+  /// of the client profile and the plan the client is actually on was pushed to
+  /// the bottom. Ordering happens here rather than in the query so
+  /// `app_database.dart` stays untouched, and so every caller gets the same
+  /// order.
   Future<List<domain.ClientPlan>> getClientPlans(int clientId) async {
     final rows = await db.getClientPlans(clientId);
-    return rows.map((r) => domain.ClientPlan(
+    final plans = rows.map((r) => domain.ClientPlan(
       id: r.id,
       clientId: r.clientId,
       templateId: r.templateId,
@@ -21,6 +28,28 @@ class PlansRepository {
       queueOrder: r.queueOrder,
       createdAt: r.createdAt,
     )).toList();
+    plans.sort(_byRelevance);
+    return plans;
+  }
+
+  /// What the client is on now first, then what is waiting, then history.
+  static int _statusRank(domain.ClientPlan plan) => switch (plan.status) {
+        'active' => 0,
+        'frozen' => 1,
+        'queued' => 2,
+        _ => 3, // expired
+      };
+
+  static int _byRelevance(domain.ClientPlan a, domain.ClientPlan b) {
+    final byStatus = _statusRank(a).compareTo(_statusRank(b));
+    if (byStatus != 0) return byStatus;
+    // Queue position is the meaningful order while waiting.
+    if (a.status == 'queued') {
+      return (a.queueOrder ?? 0).compareTo(b.queueOrder ?? 0);
+    }
+    // Otherwise newest first: Jalali `yyyy/MM/dd` keys compare chronologically
+    // as plain strings, and a missing start date sorts last.
+    return (b.startDate ?? '').compareTo(a.startDate ?? '');
   }
 
   Future<domain.ClientPlan?> getActivePlan(int clientId) async {

@@ -65,7 +65,7 @@ class _AddEditTemplateScreenState extends ConsumerState<AddEditTemplateScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.errorText(e))));
     } finally {
       setState(() => _isLoading = false);
     }

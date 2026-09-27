@@ -214,20 +214,31 @@ class ClientDetailScreen extends ConsumerWidget {
                         Expanded(
                           child: Text(s.clientsWithBonus(client.bonusSessions), style: AppTypography.bodyLarge),
                         ),
+                        // 44x44 with `shrinkWrap` so the tap area is the visible
+                        // box, and a gap between them: these two sit side by side
+                        // and do opposite things, so an invisible overlapping
+                        // target is the worst case for a mis-tap.
                         IconButton(
-                          visualDensity: VisualDensity.compact,
                           tooltip: s.bonusRemoved,
                           onPressed: client.bonusSessions > 0 ? () => adjustBonus(client.bonusSessions, -1) : null,
                           icon: Icon(
                             Icons.remove_circle_outline,
                             color: client.bonusSessions > 0 ? t.onSurfaceVar : t.surfaceVariant,
                           ),
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                         ),
+                        const SizedBox(width: AppSpacing.xs),
                         IconButton(
-                          visualDensity: VisualDensity.compact,
                           tooltip: s.bonusAdded,
                           onPressed: () => adjustBonus(client.bonusSessions, 1),
                           icon: Icon(Icons.add_circle_outline, color: t.success),
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                         ),
                       ],
                     ),
@@ -374,7 +385,7 @@ class ClientDetailScreen extends ConsumerWidget {
                                       );
                                     } catch (e) {
                                       messenger.showSnackBar(
-                                        SnackBar(content: Text('${s.errorPrefix}$e')),
+                                        SnackBar(content: Text(s.errorText(e))),
                                       );
                                     }
                                   },

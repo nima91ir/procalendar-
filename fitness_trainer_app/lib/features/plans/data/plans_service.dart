@@ -45,50 +45,55 @@ class PlansService {
   /// at promotion time, because queuing implies "starts when the current plan
   /// finishes".
   Future<int> assignPlan(int clientId, int templateId, int sessions, int days, {int price = 0, int sharePercent = 0, String? startDate}) async {
-    final active = await repository.getActivePlan(clientId);
-    final frozen = await repository.getFrozenPlan(clientId);
-    late int planId;
-    if (active != null || frozen != null) {
-      final queuedCount = await repository.countQueuedPlans(clientId);
-      planId = await repository.insertPlan(ClientPlansCompanion.insert(
-        clientId: clientId,
-        templateId: templateId,
-        startDate: const Value.absent(),
-        sessions: sessions,
-        days: days,
-        price: Value(price),
-        sharePercent: Value(sharePercent),
-        remaining: sessions,
-        status: const Value('queued'),
-        queueOrder: Value(queuedCount + 1),
-      ));
-    } else {
-      final today = jalaliToday();
-      planId = await repository.insertPlan(ClientPlansCompanion.insert(
-        clientId: clientId,
-        templateId: templateId,
-        startDate: Value(startDate ?? today),
-        sessions: sessions,
-        days: days,
-        price: Value(price),
-        sharePercent: Value(sharePercent),
-        remaining: sessions,
-        status: const Value('active'),
-        queueOrder: const Value.absent(),
-      ));
-    }
-    if (price > 0) {
-      await db.insertTransaction(TransactionsCompanion(
-        clientId: Value(clientId),
-        planId: Value(planId),
-        type: const Value('income'),
-        category: const Value('plan'),
-        amount: Value(price),
-        date: Value(jalaliToday()),
-        note: const Value(''),
-      ));
-    }
-    return planId;
+    // The plan row and the income row it generates must land together: a plan
+    // committed without its income silently understates the ledger, which is
+    // exactly the state `backfillMissingPlanIncome` exists to repair.
+    return db.transaction(() async {
+      final active = await repository.getActivePlan(clientId);
+      final frozen = await repository.getFrozenPlan(clientId);
+      late int planId;
+      if (active != null || frozen != null) {
+        final queuedCount = await repository.countQueuedPlans(clientId);
+        planId = await repository.insertPlan(ClientPlansCompanion.insert(
+          clientId: clientId,
+          templateId: templateId,
+          startDate: const Value.absent(),
+          sessions: sessions,
+          days: days,
+          price: Value(price),
+          sharePercent: Value(sharePercent),
+          remaining: sessions,
+          status: const Value('queued'),
+          queueOrder: Value(queuedCount + 1),
+        ));
+      } else {
+        final today = jalaliToday();
+        planId = await repository.insertPlan(ClientPlansCompanion.insert(
+          clientId: clientId,
+          templateId: templateId,
+          startDate: Value(startDate ?? today),
+          sessions: sessions,
+          days: days,
+          price: Value(price),
+          sharePercent: Value(sharePercent),
+          remaining: sessions,
+          status: const Value('active'),
+          queueOrder: const Value.absent(),
+        ));
+      }
+      if (price > 0) {
+        await db.insertTransaction(TransactionsCompanion(
+          clientId: Value(clientId),
+          planId: Value(planId),
+          type: const Value('income'),
+          category: const Value('plan'),
+          amount: Value(price),
+          date: Value(jalaliToday()),
+          note: const Value(''),
+        ));
+      }
+      return planId;
+    });
   }
 
   Future<void> freezePlan(int planId) async {
@@ -113,42 +118,61 @@ class PlansService {
     await repository.updatePlanStatus(planId, 'active');
   }
 
+  /// Deletes a plan together with the income and attendance history attached
+  /// to it, and promotes the next queued plan when the deleted one was running.
+  ///
+  /// Wrapped in a transaction: these are three deletes plus a possible
+  /// promotion. A failure between them used to leave orphaned ledger or
+  /// attendance rows whose plan no longer exists, or a deleted running plan
+  /// with its queue never promoted.
   Future<void> deletePlan(int planId) async {
-    final plan = await repository.getPlan(planId);
-    // Remove the auto-income recorded for this plan before deleting it
-    // (deleting first would let the FK null out the `planId` link). A plan
-    // delete reverses its income so the ledger and the per-plan share section
-    // stay in sync.
-    await db.deleteTransactionsForPlan(planId);
-    // Attendance history belongs to the plan: deleting a plan removes the
-    // records that consumed its sessions. History is only kept for plans that
-    // still exist (active / expired / frozen / queued).
-    await db.deleteAttendanceForPlan(planId);
-    await repository.deletePlan(planId);
-    // Deleting the running plan must promote the next queued plan, otherwise
-    // the client ends up with queued plans stranded behind nothing.
-    if (plan != null && plan.status == 'active') {
-      await _promoteQueuedPlan(plan.clientId);
-    }
+    await db.transaction(() async {
+      final plan = await repository.getPlan(planId);
+      // Remove the auto-income recorded for this plan before deleting it
+      // (deleting first would let the FK null out the `planId` link). A plan
+      // delete reverses its income so the ledger and the per-plan share section
+      // stay in sync.
+      await db.deleteTransactionsForPlan(planId);
+      // Attendance history belongs to the plan: deleting a plan removes the
+      // records that consumed its sessions. History is only kept for plans that
+      // still exist (active / expired / frozen / queued).
+      await db.deleteAttendanceForPlan(planId);
+      await repository.deletePlan(planId);
+      // Deleting the running plan must promote the next queued plan, otherwise
+      // the client ends up with queued plans stranded behind nothing.
+      if (plan != null && plan.status == 'active') {
+        await _promoteQueuedPlan(plan.clientId);
+      }
+    });
   }
 
   /// Plans created from [templateId], used to propagate template edits.
   Future<List<domain.ClientPlan>> getPlansUsingTemplate(int templateId) =>
       repository.getPlansUsingTemplate(templateId);
 
+  /// Consumes one session from [planId], expiring the plan and promoting the
+  /// next queued one when that was the last session.
+  ///
+  /// Wrapped in a transaction: this is up to three separate writes, and a
+  /// failure between them used to leave a plan `active` with `remaining: 0`,
+  /// which nothing else repairs — the day-based expiry sweep only looks at
+  /// elapsed days, so the client's queued plans stayed blocked. Either all
+  /// three land or none do.
   Future<void> consumeSession(int planId) async {
-    final plan = await repository.getPlan(planId);
-    if (plan == null || plan.status != 'active') return;
-    final newRemaining = plan.remaining - 1;
-    if (newRemaining <= 0) {
-      // Settle at 0 so a later refund (record delete/undo) restores exactly
-      // one session; the expired badge does not rely on the old marker value.
-      await repository.updatePlanRemaining(planId, 0);
-      await repository.updatePlanStatus(planId, 'expired');
-      await _promoteQueuedPlan(plan.clientId);
-    } else {
-      await repository.updatePlanRemaining(planId, newRemaining);
-    }
+    await db.transaction(() async {
+      final plan = await repository.getPlan(planId);
+      if (plan == null || plan.status != 'active') return;
+      final newRemaining = plan.remaining - 1;
+      if (newRemaining <= 0) {
+        // Settle at 0 so a later refund (record delete/undo) restores exactly
+        // one session; the expired badge does not rely on the old marker value.
+        await repository.updatePlanRemaining(planId, 0);
+        await repository.updatePlanStatus(planId, 'expired');
+        await _promoteQueuedPlan(plan.clientId);
+      } else {
+        await repository.updatePlanRemaining(planId, newRemaining);
+      }
+    });
   }
 
   /// Gives one session back to a plan (used when an attendance record is
@@ -217,16 +241,30 @@ class PlansService {
     final rows = clientId == null
         ? await db.select(db.clientPlans).get()
         : await (db.select(db.clientPlans)..where((p) => p.clientId.equals(clientId))).get();
-    final affectedClients = <int>{};
-    for (final row in rows) {
-      if (row.status != 'active' || row.days <= 0) continue;
-      if (!planDaysElapsed(startDate: row.startDate, days: row.days)) continue;
-      await db.updatePlanStatus(row.id, 'expired');
-      affectedClients.add(row.clientId);
-    }
-    for (final affected in affectedClients) {
-      await _promoteQueuedPlan(affected);
-    }
+    final elapsed = [
+      for (final row in rows)
+        if (row.status == 'active' &&
+            row.days > 0 &&
+            planDaysElapsed(startDate: row.startDate, days: row.days))
+          row,
+    ];
+    // This runs on every read of the plan lists and of the active plan, so the
+    // common case must not open a write transaction. Only once a plan has
+    // actually run out of days do the writes below take the lock — together,
+    // because expiring without promoting leaves the client with no active plan
+    // and a queued plan behind nothing, and the next sweep skips rows it has
+    // already expired, so that state never self-heals.
+    if (elapsed.isEmpty) return;
+    await db.transaction(() async {
+      final affectedClients = <int>{};
+      for (final row in elapsed) {
+        await db.updatePlanStatus(row.id, 'expired');
+        affectedClients.add(row.clientId);
+      }
+      for (final affected in affectedClients) {
+        await _promoteQueuedPlan(affected);
+      }
+    });
   }
 
   Future<void> _promoteQueuedPlan(int clientId) async {
@@ -268,51 +306,56 @@ class PlansService {
   /// feature get their revenue entered retroactively via [setPlanPrice].
   /// Setting a price of 0 removes the income row recorded for the plan.
   Future<void> setPlanPrice(int planId, int price, int sharePercent) async {
-    final plan = await repository.getPlan(planId);
-    if (plan == null) return;
-    if (price < 0) price = 0;
-    var share = sharePercent;
-    if (share < 0) share = 0;
-    if (share > 100) share = 100;
-    await db.patchPlan(
-      planId,
-      ClientPlansCompanion(price: Value(price), sharePercent: Value(share)),
-    );
-    // Income belongs to the period the plan ran: use its start date, falling
-    // back to today for queued plans without one.
-    final incomeDate = (plan.startDate != null && plan.startDate!.isNotEmpty)
-        ? plan.startDate!
-        : jalaliToday();
-    final linked = await db.getTransactionsForPlan(planId);
-    final income =
-        linked.where((t) => t.type == 'income' && t.category == 'plan').firstOrNull;
-    if (price > 0) {
-      if (income == null) {
-        await db.insertTransaction(TransactionsCompanion(
-          clientId: Value(plan.clientId),
-          planId: Value(planId),
-          type: const Value('income'),
-          category: const Value('plan'),
-          amount: Value(price),
-          date: Value(incomeDate),
-          note: const Value(''),
-        ));
-      } else if (income.amount != price || income.date != incomeDate) {
-        await db.updateTransaction(TransactionsCompanion(
-          id: Value(income.id),
-          clientId: Value(plan.clientId),
-          planId: Value(planId),
-          type: const Value('income'),
-          category: const Value('plan'),
-          amount: Value(price),
-          date: Value(incomeDate),
-          note: Value(income.note),
-          createdAt: Value(income.createdAt),
-        ));
+    // The price on the plan and the matching ledger row must not drift apart:
+    // a patch that committed without its income row (or vice versa) makes the
+    // accounting summary disagree with the plan card.
+    await db.transaction(() async {
+      final plan = await repository.getPlan(planId);
+      if (plan == null) return;
+      if (price < 0) price = 0;
+      var share = sharePercent;
+      if (share < 0) share = 0;
+      if (share > 100) share = 100;
+      await db.patchPlan(
+        planId,
+        ClientPlansCompanion(price: Value(price), sharePercent: Value(share)),
+      );
+      // Income belongs to the period the plan ran: use its start date, falling
+      // back to today for queued plans without one.
+      final incomeDate = (plan.startDate != null && plan.startDate!.isNotEmpty)
+          ? plan.startDate!
+          : jalaliToday();
+      final linked = await db.getTransactionsForPlan(planId);
+      final income =
+          linked.where((t) => t.type == 'income' && t.category == 'plan').firstOrNull;
+      if (price > 0) {
+        if (income == null) {
+          await db.insertTransaction(TransactionsCompanion(
+            clientId: Value(plan.clientId),
+            planId: Value(planId),
+            type: const Value('income'),
+            category: const Value('plan'),
+            amount: Value(price),
+            date: Value(incomeDate),
+            note: const Value(''),
+          ));
+        } else if (income.amount != price || income.date != incomeDate) {
+          await db.updateTransaction(TransactionsCompanion(
+            id: Value(income.id),
+            clientId: Value(plan.clientId),
+            planId: Value(planId),
+            type: const Value('income'),
+            category: const Value('plan'),
+            amount: Value(price),
+            date: Value(incomeDate),
+            note: Value(income.note),
+            createdAt: Value(income.createdAt),
+          ));
+        }
+      } else if (income != null) {
+        await db.deleteTransaction(income.id);
       }
-    } else if (income != null) {
-      await db.deleteTransaction(income.id);
-    }
+    });
   }
 
   /// The gym's share of a plan's price, rounded down: `price * sharePercent / 100`.

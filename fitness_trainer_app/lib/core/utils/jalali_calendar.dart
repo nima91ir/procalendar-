@@ -59,17 +59,26 @@ String formatJalali(String date) {
   return '$y/$m/$d';
 }
 
+/// Persian Jalali month names, 1-12. Shared with `AppStrings.monthShort` so
+/// the two can never drift apart.
 const monthNames = [
   'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
   'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+];
+
+/// Persian weekday names, 1 = Saturday ... 7 = Friday. Shared with
+/// `AppStrings.weekdayShort`; it previously kept a second copy that spelled
+/// پنج‌شنبه without the zero-width non-joiner, so the same day could render
+/// two different ways depending on which formatter ran.
+const weekdayNames = [
+  'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'
 ];
 
 String formatJalaliLong(String date) {
   final parts = date.split('/');
   if (parts.length != 3) return date;
   final j = Jalali(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-  final dayNames = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
-  final dayName = dayNames[j.weekDay - 1];
+  final dayName = weekdayNames[j.weekDay - 1];
   final monthName = monthNames[j.month - 1];
   return '$dayName ${toPersian(j.day.toString())} $monthName ${toPersian(j.year.toString())}';
 }

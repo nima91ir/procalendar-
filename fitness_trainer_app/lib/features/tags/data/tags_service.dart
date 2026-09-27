@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/l10n/validation_error.dart';
 import 'package:fitness_trainer_app/features/tags/domain/tag.dart' as domain;
 import 'package:fitness_trainer_app/features/tags/data/tags_repository.dart';
 
@@ -9,7 +10,7 @@ class TagsService {
 
   Future<List<domain.Tag>> getAllTags() => repository.getAllTags();
   Future<int> createTag(String name, {String emoji = '', int color = 0xFF88A36B}) async {
-    if (name.trim().isEmpty) throw ArgumentError('نام برچسب نمی‌تواند خالی باشد');
+    if (name.trim().isEmpty) throw const ValidationError(ValidationField.tagName);
     return repository.insertTag(TagsCompanion.insert(
       name: name.trim(),
       emoji: Value(emoji),
@@ -18,7 +19,7 @@ class TagsService {
   }
 
   Future<void> updateTag(int id, String name, {String emoji = '', int color = 0xFF88A36B}) async {
-    if (name.trim().isEmpty) throw ArgumentError('نام برچسب نمی‌تواند خالی باشد');
+    if (name.trim().isEmpty) throw const ValidationError(ValidationField.tagName);
     await repository.updateTag(TagsCompanion.insert(
       id: Value(id),
       name: name.trim(),
@@ -32,4 +33,8 @@ class TagsService {
   Future<void> removeTagFromClient(int clientId, int tagId) => repository.removeTagFromClient(clientId, tagId);
   Future<List<int>> getClientTagIds(int clientId) => repository.getClientTagIds(clientId);
   Future<int> countClientsWithTag(int tagId) => repository.countClientsWithTag(tagId);
+
+  /// Every client↔tag link in a single query (see [TagsRepository.getAllClientTags]).
+  Future<List<({int clientId, int tagId})>> getAllClientTags() =>
+      repository.getAllClientTags();
 }

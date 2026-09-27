@@ -33,4 +33,14 @@ class TagsRepository {
   Future<void> removeTagFromClient(int clientId, int tagId) => db.removeTagFromClient(clientId, tagId);
   Future<List<int>> getClientTagIds(int clientId) => db.getClientTagIds(clientId);
   Future<int> countClientsWithTag(int tagId) => db.countClientsWithTag(tagId);
+
+  /// Every client↔tag link in a single query.
+  ///
+  /// Callers that need the links for *all* clients (the tag filters) used to
+  /// await one `getClientTagIds` per client, which is an N+1 that re-ran on
+  /// every mutation anywhere in the app.
+  Future<List<({int clientId, int tagId})>> getAllClientTags() async {
+    final rows = await db.getAllClientTags();
+    return [for (final r in rows) (clientId: r.clientId, tagId: r.tagId)];
+  }
 }

@@ -60,6 +60,7 @@ class TemplatesScreen extends ConsumerWidget {
                               onPressed: () {
                                 Navigator.pushNamed(context, '${AppRoutes.editTemplate}/${template.id}');
                               },
+                              tooltip: s.editTemplateTitle,
                               icon: const Icon(Icons.edit),
                             ),
                             IconButton(
@@ -80,6 +81,7 @@ class TemplatesScreen extends ConsumerWidget {
                                   ref.invalidate(allTemplatesProvider);
                                 }
                               },
+                              tooltip: s.deleteTemplateTitle,
                               icon: Icon(Icons.delete_outline, color: t.error),
                             ),
                           ],

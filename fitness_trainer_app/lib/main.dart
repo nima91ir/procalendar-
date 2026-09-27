@@ -95,13 +95,25 @@ class ProCalendarApp extends ConsumerWidget {
 
 @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final accent = ref.watch(accentProvider);
+    final theme = ref.watch(themeProvider);
     final lang = ref.watch(languageProvider);
     return MaterialApp(
       title: lang == 'fa' ? AppStrings.fa.appTitle : AppStrings.en.appTitle,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightForAccent(accent),
-      darkTheme: AppTheme.darkForAccent(accent),
+      // Follow the system font size, but only so far. Several widgets are
+      // deliberately fixed-height (the 44px calendar day cells, the client
+      // avatar tile), and at extreme system scales their text clipped instead
+      // of growing. Capping keeps larger text readable *and* unclipped; the
+      // alternative was a layout audit of every fixed size in the app.
+      builder: (context, child) => MediaQuery.withClampedTextScaling(
+        minScaleFactor: 0.8,
+        maxScaleFactor: 1.3,
+        child: child!,
+      ),
+      theme: AppTheme.lightFor(theme),
+      darkTheme: AppTheme.darkFor(theme),
+      // The palette theme and the light/dark mode are independent: a theme
+      // supplies both its light and dark palette, and this decides which is used.
       themeMode: ref.watch(themeModeProvider),
       locale: Locale(lang),
       home: const MainShell(),
@@ -302,6 +314,17 @@ class _MainShellState extends ConsumerState<MainShell>
     final currentIndex = ref.watch(tabIndexProvider);
     ref.listen<int>(tabIndexProvider, (previous, next) {
       if (previous != next) _invalidateTabProviders(next);
+    });
+    // A drill-down asked to land on the tab's *root* rather than on whatever it
+    // was last showing. Deferred one frame so the tab switch has been applied
+    // and the index read below is already the target tab.
+    ref.listen<int>(tabRootRequestProvider, (previous, next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _tabNavigators[ref.read(tabIndexProvider)]
+            .currentState
+            ?.popUntil((route) => route.isFirst);
+      });
     });
 
     return Scaffold(

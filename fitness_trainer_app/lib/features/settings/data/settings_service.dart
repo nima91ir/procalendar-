@@ -26,8 +26,17 @@ class SettingsService {
   Future<String?> getTrainerName() => repository.getSetting('trainer_name');
   Future<void> setTrainerName(String name) => repository.setSetting('trainer_name', name);
 
+  /// Light/dark **mode**: `system` | `light` | `dark`.
   Future<String?> getThemePreference() => repository.getSetting('theme');
   Future<void> setThemePreference(String theme) => repository.setSetting('theme', theme);
+
+  /// Palette **theme id** (see `AppThemes`).
+  ///
+  /// Deliberately a different key from the one above. The light/dark mode
+  /// already owns `theme`, and sharing it would make picking a theme silently
+  /// reset light/dark — or worse, have the mode overwrite the theme.
+  Future<String?> getThemeIdPreference() => repository.getSetting('theme_id');
+  Future<void> setThemeIdPreference(String id) => repository.setSetting('theme_id', id);
 
   Future<String?> getAccentPreference() => repository.getSetting('accent');
   Future<void> setAccentPreference(String accent) => repository.setSetting('accent', accent);

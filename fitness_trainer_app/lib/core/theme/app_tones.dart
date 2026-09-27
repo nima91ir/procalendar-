@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'app_accents.dart';
 import 'app_colors.dart';
+import 'app_theme_spec.dart';
 
 /// Brightness-aware semantic colors.
 ///
@@ -77,22 +77,32 @@ class AppTones {
 
   static AppTones of(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final accent =
-        Theme.of(context).extension<AccentThemeData>()?.accent ??
-            AppAccent.green;
-    return forAccent(accent, dark);
+    final theme =
+        Theme.of(context).extension<AppThemeData>()?.theme ?? AppThemes.fallback;
+    return forTheme(theme, dark);
   }
 
-  /// The exact palette for an accent + brightness. Surfaces and semantic
-  /// status colours are accent-independent (copied from the built-in light
-  /// or dark const) — only the primary family and gradient vary.
-  static AppTones forAccent(AppAccent accent, bool dark) {
-    final p = AccentPalettes.of(accent);
+  /// The exact palette for a theme + brightness.
+  ///
+  /// The theme supplies the surfaces, the ink and the brand primary. Status
+  /// colours (success/warning/error and their soft variants) stay on the shared
+  /// base on purpose: they carry meaning, so letting a theme repaint them would
+  /// change what the UI *says*, not just how it looks.
+  static AppTones forTheme(AppThemeSpec theme, bool dark) {
     final base = dark ? darkPalette : lightPalette;
+    final p = dark ? theme.dark : theme.light;
     return base.copyWith(
-      primary: dark ? p.darkPrimary : p.lightPrimary,
-      primaryDark: dark ? p.darkPrimaryDark : p.lightPrimaryDark,
-      primaryLight: dark ? p.darkPrimaryLight : p.lightPrimaryLight,
+      primary: p.primary,
+      primaryDark: p.primaryDark,
+      primaryLight: p.primaryLight,
+      onPrimary: p.onPrimary,
+      surface: p.surface,
+      surfaceVariant: p.surfaceVariant,
+      background: p.background,
+      onSurface: p.onSurface,
+      onSurfaceVar: p.onSurfaceVar,
+      outline: p.outline,
+      outlineVariant: p.outlineVariant,
       gradientPrimary: p.gradientPrimary,
     );
   }
@@ -163,26 +173,34 @@ class AppTones {
     Color? primary,
     Color? primaryDark,
     Color? primaryLight,
+    Color? onPrimary,
+    Color? surface,
+    Color? surfaceVariant,
+    Color? background,
+    Color? onSurface,
+    Color? onSurfaceVar,
+    Color? outline,
+    Color? outlineVariant,
     List<Color>? gradientPrimary,
   }) {
     return AppTones(
       primary: primary ?? this.primary,
       primaryDark: primaryDark ?? this.primaryDark,
       primaryLight: primaryLight ?? this.primaryLight,
-      onPrimary: onPrimary,
+      onPrimary: onPrimary ?? this.onPrimary,
       success: success,
       successSoft: successSoft,
       warning: warning,
       warningSoft: warningSoft,
       error: error,
       errorSoft: errorSoft,
-      surface: surface,
-      surfaceVariant: surfaceVariant,
-      background: background,
-      onSurface: onSurface,
-      onSurfaceVar: onSurfaceVar,
-      outline: outline,
-      outlineVariant: outlineVariant,
+      surface: surface ?? this.surface,
+      surfaceVariant: surfaceVariant ?? this.surfaceVariant,
+      background: background ?? this.background,
+      onSurface: onSurface ?? this.onSurface,
+      onSurfaceVar: onSurfaceVar ?? this.onSurfaceVar,
+      outline: outline ?? this.outline,
+      outlineVariant: outlineVariant ?? this.outlineVariant,
       today: today,
       todaySoft: todaySoft,
       todayInk: todayInk,

@@ -1,0 +1,34 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Validate mockup HTML",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"-m",
+				"http.server",
+				"8765",
+				"--directory",
+				"D:\\work\\ZAHRA\\PRO CALENDER\\fitness_trainer_app\\build\\mockups\\redesign"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "mockup"
+		},
+		{
+			"label": "Serve mockups",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"-m",
+				"http.server",
+				"8765",
+				"--directory",
+				"D:\\work\\ZAHRA\\PRO CALENDER\\fitness_trainer_app\\build\\mockups\\redesign"
+			],
+			"isBackground": true,
+			"group": "mockup"
+		}
+	]
+}

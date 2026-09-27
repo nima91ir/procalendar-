@@ -5,6 +5,210 @@ attendance, accounting, Jalali calendar, JSON/CSV backup. Flutter app lives in
 `fitness_trainer_app/`. This file tells the next session what exists and what's
 next. It is the only long-form source of truth besides `AGENTS.md`.
 
+**CURRENT HEAD (2026-09-26) — FULL-APP ۷ UX-LAW PROTOTYPE, no app code touched (design-only deliverable):**
+- New standalone file: `fitness_trainer_app/build/mockups/redesign/ux-laws-all-pages.html`
+  (~106 KB, 3 script blocks). This supersedes `ux-laws-lab.html`, which only covered the
+  dashboard. Structure, Persian strings and paths were extracted from the real
+  `routes.dart`, `main.dart` and `app_strings.dart` — **all 15 routes render**:
+  `dashboard`, `clients`, `client-detail`, `client-add`, `client-edit`, `add-plan`,
+  `attendance`, `templates`, `template-add`, `template-edit`, `tags`, `accounting`,
+  `reports`, `settings`, `import`. Each tab keeps its own navigation stack, so
+  «مشاهدهٔ پرونده» → «ویرایش» → back behaves like the real shell.
+- Also implemented: 7 bottom sheets (`client`, `tx`, `tag`, `price`, `day`, `csv`, `end`)
+  and 8 dialogs (`confirmPlan`, `replace`, `delPlan`, `delRec`, `delTx`, `delClient`,
+  `delTag`, `delTpl`). All were clicked open and confirmed to render, with zero
+  page errors.
+- **The seven laws are individually toggleable and each one is measured from the rendered
+  DOM** (`measure()` re-runs on every paint, paired with `ResizeObserver` +
+  `document.fonts.ready`). Seven live metrics: Hick = action count, Fitts = smallest
+  hit area, Miller = chunk count, von Restorff = distinct-element count, Jacob = nav-item
+  count, Peak-End = closing affordance, Proximity = between-group gap. Verified deltas
+  with all laws on: actions 43 → 19 on the clients list, smallest target 30 → 44px,
+  chunks 0 → 3, group gap 12 → 36px. Turning each law off individually produced a
+  measurable structural change on every page.
+- **Four real bugs were found and fixed during validation** — all worth remembering:
+  1. `const top = …` collided with the built-in `window.top` (non-configurable), which
+     aborted the whole script block and cascaded into `$ is not defined`. Renamed to
+     `topRoute`. **Check new top-level identifiers against the window's own globals.**
+  2. A stray `}` inside a `.map(r => …)` template broke script 2 (`Unexpected token '}'`).
+     `node --check` on each extracted `<script>` block finds these instantly; the browser
+     only reports them as an opaque page error.
+  3. **A `<button>` nested inside another `<button>`** on the add-plan page made the HTML
+     parser auto-close the outer element, so the whole page fell apart and the bottom nav
+     disappeared. The card is now a `<div>` wrapper with an inner row button. *Any* nested
+     interactive element does this — check `screen.children` after rendering, not the source.
+  4. `String(d).padStart(2,'۰')` produced `۰1` (Persian zero, Latin one). It must be
+     `fa(String(d).padStart(2,'0'))`. A sweep for `/[0-9]/` in leaf text nodes now finds
+     nothing on any of the 15 pages.
+- Accessibility work: a `wireLabels()` pass after each render links every visible
+  `<label>` to the control that follows it, so no input is left without an accessible
+  name (search, backup textarea, all form fields). Every button has a name, no duplicate
+  IDs, and the muted/chevron greys were darkened to clear WCAG AA on white — `--muted`
+  `#6b786e` → `#5f6b5a`, chevrons `#8a9686` → `#67735f`. Contrast now passes AA on all
+  15 pages (text sitting on a gradient is excluded — the checker cannot resolve those).
+- Responsive: no horizontal overflow at 320/360/380/420/480/560/768/820/900/1024/1280/1600px;
+  the law bar reflows 2 → 3 → 4 → 7 columns. Three layout bugs were found and fixed:
+  `grid-template-columns:1fr` in the ≤820px query overflowed because a `1fr` track's
+  automatic minimum is `auto` (now `minmax(0,1fr)`); the sticky offset was hardcoded
+  `top:80px` while the topbar wraps to 120–170px on narrow viewports, sliding the phone
+  and panels underneath it (now a `--topbar-h` custom property measured by a
+  `ResizeObserver`); and `scroll-padding-top` was set on `html` by hand rather than
+  derived from the real topbar height.
+- **Navigation-stack bug worth remembering:** `goto` was calling `go()`, which *resets*
+  the tab stack, so the appbar back button was dead code and «برگشت» never worked. It now
+  pushes for same-tab navigation and switches tabs (resetting) for cross-tab links, so
+  «قالب‌ها» → «ویرایش قالب» → back works and the back button appears only when there is
+  somewhere to go.
+- **Fidelity pass against the real running app (`http://localhost:10179/`, 2026-09-26).** The
+  running app was driven in a browser and the semantics tree read, which caught six places the
+  prototype had drifted from the real screens. All are now fixed:
+  1. **Settings had an invented «اطلاعات مربی» section.** The real screen has exactly five:
+     ظاهر برنامه / زبان / برچسب‌ها / پشتیبان‌گیری و خروجی / ابزار توسعه. Removed, and the
+     Hick focal copy changed from «شش بخش» to «پنج بخش» to match.
+  2. **Two Persian strings were truncated.** The real backup note ends «… هنگام ورود، داده‌ها
+     ابتدا ادغام می‌شوند و در صورت نیاز می‌توانید همه را جایگزین کنید.» and the dev-tools note
+     ends «… تا داشبورد، برنامه‌ها و مصرف جلسات بررسی شود.» Both restored verbatim.
+  3. **The clients list row was wrong.** The real row is name + phone + `plan · X از Y · N روز
+     باقی‌مانده` followed by four named actions: حضور و غیاب / گزینه‌های مشتری / متوقف
+     (only when a plan is active) / افزودن برنامه. The prototype had حاضر/غایب buttons and a ⋮ —
+     those belong to the **dashboard** row, which is a different component. Split into
+     `clientRowPlain` (list) and `dashRowPlain` (dashboard).
+  4. **Tag filters are multi-select checkboxes, not single-select chips.** Real: four
+     `checkbox` chips (همه + tags) that union. Changed `S.tag` (single id) → `S.tags` (a Set);
+     the filter matches clients holding *any* selected tag. The chips row was also missing from
+     the **clients** screen (it was only on the dashboard) — added. Verified 8 → 3 (one tag)
+     → 6 (two tags) → 8 (همه).
+  5. **Client detail appbar was missing «حذف مشتری»** (real: برگشتن + name + ویرایش + حذف
+     مشتری), and **«جلسه هدیه حذف شد» is `disabled` at zero bonus** in the real app.
+  6. **Attendance is missing two real details**: the calendar legend (امروز / حاضر / غایب) and
+     weekday names on the history groups — the real app shows «پنج‌شنبه ۱۴۰۵/۰۶/۰۳», not a raw
+     date. Also the dashboard backup banner has a **«بعداً» dismiss** button, now present and
+     wired to `S.bannerLater`. The reports chart also gained the real Jalali month labels.
+- Re-validated after the fidelity pass: all 15 routes × both law modes = 30 combinations with
+  zero console errors, 5 nav items, ≥44px minimum target with Fitts on, no Latin digits, no
+  duplicate IDs, no unnamed buttons, no unlabeled inputs, no clipped scroll, and **WCAG AA
+  contrast on every non-gradient text node**. A 20-step interaction smoke test (mark, undo,
+  freeze, bonus, day sheet, plan confirm, banner dismiss, tag filter, back, reset) runs clean
+  and `reset` restores the seed data.
+- One contrast bug worth remembering: a `[style*="color:#78856f"]{color:#e8f0e2!important}`
+  override added for the hero gradient also matched the same inline colour on a *light* card,
+  dropping those captions to 1.17:1. Scope such overrides to the gradient's own container
+  (`.hero …`) and keep a separate light-background rule.
+- **SIDE-BY-SIDE A/B (2026-09-26, user request).** The page now renders **two phones of the
+  same route**: the right pane is «امروزیِ اپ» (all seven laws forced OFF) and the left pane is
+  «با ۷ قانون» (whatever is toggled). Both panes share one dataset and one navigation stack,
+  so a sheet, a mark, or a back press is visible in both at once. Making this work needed
+  three structural changes:
+  - `paneHTML(laws)` renders one phone under an arbitrary law set by swapping the module-level
+    `LAW` object in and out around the (synchronous) template build, restoring it in a
+    `finally`. All the `LAW.hick ? A : B` branches inside the screen renderers then produce
+    the right variant for free — no per-screen duplication.
+  - **The Fitts and Proximity CSS had to move from `html[data-…="on"] .phone …` to
+    `.phone[data-…="on"] …`**, because a document-level attribute can only describe one state
+    for both panes. `T()` also had to read `LAW.fitts` directly instead of the DOM attribute.
+  - `wireLabels()`, `measure()` and the search-field focus restore all had to be re-pointed at
+    both mounts (`#mountBefore` / `#mountAfter`); the search handler now captures which pane
+    the user was typing in and restores focus there, otherwise typing jumps panes.
+- **The live metrics panel now A/Bs the two visible panes directly** instead of comparing
+  against a stored baseline: `measure('#mountBefore')` vs `measure('#mountAfter')`, with
+  unchanged rows dimmed (`.metric.same`). With all laws on, every one of the 15 routes reports
+  3–6 of 7 metrics differing; «حالت امروزیِ اپ» makes all 7 identical, which is the proof the
+  comparison is real and not hardcoded.
+- Verified: all 15 routes × both law modes × both panes = **60 combinations**, zero console
+  errors, same appbar title in both panes, 5 nav items each, ≥44px targets on the laws pane,
+  no Latin digits, no duplicate IDs, no unnamed buttons, no unlabeled inputs, no clipped
+  scroll, and WCAG AA contrast on every non-gradient text node in **both** panes. Side by side
+  from 1024px up, stacked below, no horizontal overflow 320→1920px.
+- **Domain rules that must survive any future real implementation** (also in the page footer):
+  **multi-attendance per day is legal** — the day sheet lists 2 records for `۱۴۰۵/۰۶/۰۳` for
+  the same client and each is individually removable; it is never a single on/off toggle.
+  And **expired plans stay listed as history** — only an explicit delete removes them.
+- Verified after the work: `git status` over `lib/`, `pubspec.yaml`, `android/`, `ios/`,
+  `test/`, `assets/` and `analysis_options.yaml` returns **0 changed files**. No Flutter
+  analyze/test run was needed because no application code changed.
+- Serve with the background task "Serve mockups" (`python -m http.server 8765
+  --directory …\build\mockups\redesign`) and open
+  `http://127.0.0.1:8765/ux-laws-all-pages.html`. **Screenshots in this browser come out
+  blank or at the wrong scale** — trust `getBoundingClientRect()` / `getComputedStyle()`
+  assertions instead; that is how every number above was verified.
+
+**PREVIOUS HEAD (2026-09-26) — ۷ UX-LAW PROTOTYPE, no app code touched (design-only deliverable):**
+- New standalone file: `fitness_trainer_app/build/mockups/redesign/ux-laws-lab.html`. Separate from
+  the theme lab and the logo lab; touches no Flutter, `lib/`, Android/iOS assets, Drift,
+  `schemaVersion`, or settings.
+- It runs **two live copies of the same dashboard data side by side**: «قبل» mirrors the current
+  structure (4 hero stat tiles, backup banner, 8 tag chips, three small buttons per client row,
+  two section headers) and «بعد» is the same app with the seven laws applied. Both are real,
+  working screens — mark present/absent, undo from the snackbar, filter by tag, expand a group,
+  open the row bottom sheet, and end the session, all in either pane.
+- The seven laws are individually toggleable, so each one's effect is separable: Hick (one
+  «قدم بعدی» decision, row = one target, fine choices move into the sheet), Fitts (real hit-area
+  growth: 30px → 44px minimum via `.phone[data-fitts="on"]`, primary action in the thumb zone),
+  Jacob (same 5-destination `NavigationBar`, same chips, same bottom sheet + snackbar pattern),
+  Miller (list chunked into نیازمند اقدام / امروز ثبت شد / باقی مشتریان, capped at 3 with
+  «نمایش بیشتر»), Peak-End (celebration on mark + a «پایان جلسه» summary sheet, undo always
+  reachable), Proximity (label beside value, gap between groups 97px vs 0px within a group),
+  von Restorff (exactly one high-contrast card per screen; the rest recede).
+- **The metrics panel is measured, not asserted.** `measure()` reads the rendered DOM on every
+  paint and reports choice count, smallest hit area, chunk count, distinct-element count, and
+  the within-group vs between-group gaps. A `ResizeObserver` on both panes plus `document.fonts.ready`
+  re-measure, so the numbers are never stale. Current all-laws delta: actions 36 → 16, min target
+  30 → 44px, chunks 0 → 3, distinct elements 0 → 1, group gap 0 → 97px, total targets 44 → 24.
+- **Two bugs found and fixed during validation** (worth remembering for future mockups): cards
+  inside the flex-column `.scroll` were being compressed — fixed with `.scroll>*{flex:0 0 auto}`;
+  and every law toggle was double-firing because both a per-button listener and the document-level
+  delegation flipped `LAWS[id]`, cancelling itself out. Only the delegated handler should exist.
+- Two measurement bugs were also corrected: the Restorff metric needed an `ideal1` comparator
+  (1 distinct element is the goal, not "fewer"), and the proximity gaps must be measured between
+  rendered row rectangles, not from `nextElementSibling` (which returned 0 for both).
+- Validation: no console errors, no duplicate IDs, no unnamed buttons, no parser errors, no
+  horizontal overflow at 360/480/768/1024/1280/1600px, and body-text contrast passes WCAG AA
+  (muted 4.63:1, sage-dark 6.59:1, danger 5.87:1). No Flutter analyze/test run was needed because
+  no application code changed.
+- If any of this is later implemented for real, two app rules must survive it: **multi-attendance
+  per day is legal** (so the row sheet must allow more than one record, not a single toggle), and
+  **expired plans stay listed as history** (so the low-session section is not a cleanup task).
+
+**CURRENT HEAD (2026-09-25) — UI THEME LAB, no app code touched (design-only deliverable):**
+- The new standalone file is `fitness_trainer_app/build/mockups/redesign/ten-new-themes.html`.
+  It is separate from the earlier `ten-new-concepts.html` and does not touch `lib/`, Flutter,
+  Drift, `schemaVersion`, or app settings.
+- It presents **10 light-first visual themes** over one canonical app scene: Soft Light, Compact
+  Data, Kinetic Pop, Editorial Paper, Frosted Sky, Blueprint Grid, Soft Utility, Sport Duotone,
+  Color Block, and Mono Utility. Theme differences include density, corners, surface depth,
+  typography treatment, color-block hierarchy, and motion—not only palette swaps.
+- Controls: screen (`dashboard`, `clients`, `attendance`, `finance`), density (`roomy`, `compact`),
+  motion (`off`, `gentle`, `full`), replay, zoom, theme selection, favorites, and a two-theme
+  compare tray. Attendance buttons show a local mockup toast; no persistence or data mutation.
+- Motion honors `prefers-reduced-motion`; it is optional and never runs as the app's only feedback.
+- Validation completed in Chrome via a local HTTP server: 10 themes, 4 screens, density and motion
+  toggles, real-button attendance feedback, no duplicate IDs/parser errors, and no horizontal
+  overflow at 375/768/1440px. Design references are embedded in the file: Material 3 Expressive,
+  Navigation Bar, and Nielsen Norman mobile UX. No Flutter analyze/test run was needed because
+  no application code changed.
+
+**CURRENT HEAD (2026-09-25) — ۲۰ LOGO LAB, no app code touched (design-only deliverable):**
+- New standalone editor: `fitness_trainer_app/build/mockups/redesign/twenty-logo-lab.html`.
+  It is separate from the theme lab and does not touch Flutter, `lib/`, Android/iOS assets,
+  Drift, `schemaVersion`, or settings.
+- The editor contains **20 functional mark directions** tied to the app's real jobs: clients,
+  plans, attendance, progress, accounting, and backup/continuity. Each direction is generated as
+  editable inline SVG rather than as a screenshot, so the mark remains crisp at launcher sizes.
+- Editable controls: six app-aligned palettes, custom background/primary/dark/accent colors,
+  solid/gradient/duotone background, dots/grid/rays/orbit pattern, solid/outline/duotone treatment,
+  mark scale, preview mask, monogram, lockup visibility, safe-zone and 10% grid overlays.
+- Export actions: SVG, PNG 1024, iOS 1024 PNG, Android adaptive foreground/background/monochrome
+  layers, complete kit, and a `flutter_launcher_icons` configuration snippet. Exports are local
+  browser downloads only; no package or project file is changed automatically.
+- Platform constraints are represented in the UI: iOS square/full-bleed preview, Android circle and
+  adaptive previews, central safe zone, and monochrome layer. Apple HIG and Android adaptive icon
+  guidance are embedded in the footer; Android uses a 108dp layer / 66dp safe-zone model.
+- Validation completed in Chrome: all 20 cards select, all SVGs render, palette/background/pattern/
+  treatment/scale/shape toggles update, export controls and config snippet are present, no parser
+  errors, no unnamed buttons/duplicate IDs, and no horizontal overflow at 375/768/1440px.
+- No Flutter analyze/test run was needed because no application code changed. The user must choose
+  a mark before any real launcher asset is generated or installed.
+
 **CURRENT HEAD (2026-09-24) — UI REDESIGN MOCKUPS, no app code touched (design-only deliverable):**
 - **Nothing in `lib/` changed.** `git status` is clean; the deliverable is one file:
   `fitness_trainer_app/build/mockups/redesign/index.html` (gitignored because `build/` is, so it

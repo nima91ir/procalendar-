@@ -4,7 +4,7 @@
     "start_url": ".",
     "display": "standalone",
     "background_color": "#161D15",
-    "theme_color": "#1F2A1E",
+    "theme_color": "#161D15",
     "description": "Personal Trainer Management App - PRO CALENDAR",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,

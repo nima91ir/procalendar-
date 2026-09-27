@@ -183,7 +183,8 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
-    final presentCount = statuses.where((s) => s == 'present').length;
+    final s = AppStrings.of(context);
+    final presentCount = statuses.where((st) => st == 'present').length;
     final absentCount = statuses.length - presentCount;
     // A day can hold several records. Letting "any present" paint the whole
     // cell green showed a day holding an absence *and* an attendance as fully
@@ -242,7 +243,7 @@ class _DayCell extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                toPersian(day.toString()),
+                s.isPersian ? toPersian(day.toString()) : '$day',
                 style: AppTypography.bodySmall.copyWith(
                   color: fg,
                   fontWeight: FontWeight.w700,
@@ -250,7 +251,7 @@ class _DayCell extends StatelessWidget {
               ),
               if (selected && count > 1)
                 Text(
-                  '×${toPersian(count.toString())}',
+                  '×${s.isPersian ? toPersian(count.toString()) : count}',
                   style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.w700),
                 )
               else if (isPresent)

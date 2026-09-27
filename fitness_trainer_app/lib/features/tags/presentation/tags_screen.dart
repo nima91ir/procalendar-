@@ -54,6 +54,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                         children: [
                           IconButton(
                             onPressed: () => _showEditDialog(context, tag),
+                            tooltip: s.editTagTitle,
                             icon: const Icon(Icons.edit),
                           ),
                           IconButton(
@@ -74,6 +75,7 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                                 ref.invalidateAppData();
                               }
                             },
+                            tooltip: s.deleteTagTitle,
                             icon: Icon(Icons.delete_outline, color: t.error),
                           ),
                         ],

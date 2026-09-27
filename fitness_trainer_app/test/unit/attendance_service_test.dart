@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/l10n/validation_error.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_service.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_repository.dart';
@@ -24,6 +25,11 @@ Future<AppDatabase> createTestDb() async {
     db.execute('PRAGMA foreign_keys = ON');
   }));
 }
+
+/// Services throw a language-neutral [ValidationError] so the message can be
+/// localized in the UI layer; the field is what identifies which rule failed.
+Matcher rejectsWith(ValidationField field) =>
+    throwsA(isA<ValidationError>().having((e) => e.field, 'field', field));
 
 void main() {
   group('Attendance Service', () {
@@ -155,8 +161,8 @@ void main() {
     });
 
     test('createClient rejects empty name', () async {
-      expect(() => clientsService.createClient(''), throwsA(isA<ArgumentError>()));
-      expect(() => clientsService.createClient('   '), throwsA(isA<ArgumentError>()));
+      expect(() => clientsService.createClient(''), rejectsWith(ValidationField.clientName));
+      expect(() => clientsService.createClient('   '), rejectsWith(ValidationField.clientName));
     });
 
     test('createClient inserts client with defaults', () async {
@@ -231,7 +237,7 @@ void main() {
 
     test('updateClient rejects empty name', () async {
       final id = await clientsService.createClient('Valid');
-      expect(() => clientsService.updateClient(id, ''), throwsA(isA<ArgumentError>()));
+      expect(() => clientsService.updateClient(id, ''), rejectsWith(ValidationField.clientName));
     });
   });
 
@@ -260,12 +266,12 @@ void main() {
     });
 
     test('createTemplate rejects empty name', () async {
-      expect(() => templatesService.createTemplate('', 3, 7), throwsA(isA<ArgumentError>()));
+      expect(() => templatesService.createTemplate('', 3, 7), rejectsWith(ValidationField.templateName));
     });
 
     test('createTemplate rejects non-positive sessions or days', () async {
-      expect(() => templatesService.createTemplate('Test', 0, 7), throwsA(isA<ArgumentError>()));
-      expect(() => templatesService.createTemplate('Test', 3, 0), throwsA(isA<ArgumentError>()));
+      expect(() => templatesService.createTemplate('Test', 0, 7), rejectsWith(ValidationField.templateCounts));
+      expect(() => templatesService.createTemplate('Test', 3, 0), rejectsWith(ValidationField.templateCounts));
     });
 
     test('updateTemplate modifies existing template', () async {
@@ -308,7 +314,7 @@ void main() {
     });
 
     test('createTag rejects empty name', () async {
-      expect(() => tagsService.createTag(''), throwsA(isA<ArgumentError>()));
+      expect(() => tagsService.createTag(''), rejectsWith(ValidationField.tagName));
     });
 
     test('updateTag modifies existing tag', () async {

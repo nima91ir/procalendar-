@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/dev/demo_data.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
-import 'package:fitness_trainer_app/core/theme/app_accents.dart';
+import 'package:fitness_trainer_app/core/theme/app_theme_spec.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/platform/file_transfer.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
@@ -59,7 +59,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStrings.of(context).errorPrefix}$e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.of(context).errorText(e))));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -87,7 +87,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) _loadSettings();
       messenger.showSnackBar(SnackBar(content: Text(summary)));
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text('${AppStrings.of(context).errorPrefix}$e')));
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(AppStrings.of(context).errorText(e))));
+    } finally {
+      if (mounted) setState(() => _seeding = false);
+    }
+  }
+
+  /// Debug-only: rebuilds the database as roughly a year of real use (120
+  /// clients, ~10k attendance records) so the app can be judged against a
+  /// realistic amount of data instead of four clients.
+  ///
+  /// DESTRUCTIVE — it clears the data tables first, so it confirms up front.
+  /// `app_settings` is deliberately left alone, so the chosen language and
+  /// theme survive the rebuild.
+  Future<void> _seedLargeDemoData() async {
+    final s = AppStrings.of(context);
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: s.replaceConfirmTitle,
+      message: s.seedLargeDemoDataConfirm,
+      confirmLabel: s.replaceData,
+      cancelLabel: s.cancel,
+    );
+    if (!confirmed || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _seeding = true);
+    try {
+      final summary = await ref.read(demoDataServiceProvider).seedLarge();
+      if (!mounted) return;
+      // Everything changed, so refresh the whole data graph rather than
+      // listing providers one by one.
+      ref.invalidateAppData();
+      _loadSettings();
+      messenger.showSnackBar(SnackBar(content: Text(summary)));
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(AppStrings.of(context).errorText(e))));
     } finally {
       if (mounted) setState(() => _seeding = false);
     }
@@ -255,24 +290,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s.accentColorLabel, style: AppTypography.bodySmall),
+                Text(s.themeLabel, style: AppTypography.bodySmall),
                 const SizedBox(height: AppSpacing.md),
                 Wrap(
                   spacing: AppSpacing.md,
                   runSpacing: AppSpacing.sm,
                   children: [
-                    for (final accent in AppAccent.values)
-                      _AccentChoice(
-                        accent: accent,
-                        label: _accentLabel(s, accent),
-                        selected: accent == ref.watch(accentProvider),
-                        onTap: () => ref.read(accentProvider.notifier).setAccent(accent),
+                    for (final theme in AppThemes.all)
+                      _ThemeChoice(
+                        theme: theme,
+                        // Each theme carries its own name in both languages, so
+                        // adding one is a single entry in `AppThemes.all` and
+                        // never a trip through the localisation file.
+                        label: ref.watch(languageProvider) == 'fa'
+                            ? theme.nameFa
+                            : theme.nameEn,
+                        selected: theme.id == ref.watch(themeProvider).id,
+                        onTap: () => ref.read(themeProvider.notifier).setTheme(theme),
                       ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                Text(s.themeLabel, style: AppTypography.bodySmall),
-                const SizedBox(height: AppSpacing.md),
                 SegmentedButton<ThemeMode>(
                   showSelectedIcon: false,
                   segments: [
@@ -376,10 +414,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: AppSpacing.md),
                   _seeding
                       ? const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator()))
-                      : OutlinedButton.icon(
-                          onPressed: _seedDemoData,
-                          icon: const Icon(Icons.science_outlined),
-                          label: Text(s.seedDemoData),
+                      : Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _seedDemoData,
+                              icon: const Icon(Icons.science_outlined),
+                              label: Text(s.seedDemoData),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _seedLargeDemoData,
+                              icon: const Icon(Icons.dataset_outlined),
+                              label: Text(s.seedLargeDemoData),
+                            ),
+                          ],
                         ),
                 ],
               ),
@@ -393,25 +442,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
 enum _CsvKind { clients, plans, attendance, transactions }
 
-String _accentLabel(AppStrings s, AppAccent accent) {
-  return switch (accent) {
-    AppAccent.green => s.accentGreen,
-    AppAccent.blue => s.accentBlue,
-    AppAccent.purple => s.accentPurple,
-    AppAccent.rose => s.accentRose,
-    AppAccent.orange => s.accentOrange,
-    AppAccent.teal => s.accentTeal,
-  };
-}
-
-class _AccentChoice extends StatelessWidget {
-  final AppAccent accent;
+/// One theme in the picker.
+///
+/// The swatch shows the theme's own background and accent — its light palette,
+/// never the one currently active — so every option previews itself. Colour
+/// alone is not the only signal: the selected one also carries a check mark, so
+/// the choice is not conveyed by colour alone.
+class _ThemeChoice extends StatelessWidget {
+  final AppThemeSpec theme;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _AccentChoice({
-    required this.accent,
+  const _ThemeChoice({
+    required this.theme,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -420,7 +464,7 @@ class _AccentChoice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
-    final color = AccentPalettes.of(accent).lightPrimary;
+    final p = theme.light;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -430,19 +474,28 @@ class _AccentChoice extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: color,
+                color: p.background,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: selected ? t.primaryDark : t.outline,
                   width: selected ? 3 : 1,
                 ),
               ),
-              child: selected
-                  ? Icon(Icons.check, size: 20, color: color.computeLuminance() > 0.5 ? t.onSurface : Colors.white)
-                  : null,
+              child: Center(
+                child: selected
+                    ? Icon(Icons.check, size: 20, color: p.onSurface)
+                    : Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: p.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+              ),
             ),
             const SizedBox(height: 4),
             Text(label, style: AppTypography.labelMedium),

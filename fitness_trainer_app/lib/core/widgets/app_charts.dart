@@ -203,6 +203,9 @@ class AppLineChart extends StatelessWidget {
           lineColor: line,
           fillColor: fillColor ?? line.withValues(alpha: 0.14),
           highlightColor: t.onSurface,
+          // Derived from the active accent rather than a fixed hex, so the
+          // gridlines follow the chosen theme instead of staying default green.
+          gridColor: line.withValues(alpha: 0.10),
         ),
       ),
     );
@@ -214,12 +217,14 @@ class _LineChartPainter extends CustomPainter {
   final Color lineColor;
   final Color fillColor;
   final Color highlightColor;
+  final Color gridColor;
 
   _LineChartPainter({
     required this.points,
     required this.lineColor,
     required this.fillColor,
     required this.highlightColor,
+    required this.gridColor,
   });
 
   @override
@@ -241,7 +246,7 @@ class _LineChartPainter extends CustomPainter {
         range == 0 ? chartTop + chartHeight / 2 : chartBottom - ((v - min) / range) * chartHeight;
 
     final gridPaint = Paint()
-      ..color = const Color(0x1A88A36B)
+      ..color = gridColor
       ..strokeWidth = 1;
     for (var i = 0; i <= 3; i++) {
       final y = chartTop + chartHeight * i / 3;
@@ -283,5 +288,6 @@ class _LineChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _LineChartPainter oldDelegate) =>
       oldDelegate.points != points ||
       oldDelegate.lineColor != lineColor ||
-      oldDelegate.fillColor != fillColor;
+      oldDelegate.fillColor != fillColor ||
+      oldDelegate.gridColor != gridColor;
 }

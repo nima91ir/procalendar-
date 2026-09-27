@@ -182,6 +182,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             ),
             IconButton(
               onPressed: () => Navigator.pop(context),
+              tooltip: s.close,
               icon: const Icon(Icons.close),
             ),
           ]),

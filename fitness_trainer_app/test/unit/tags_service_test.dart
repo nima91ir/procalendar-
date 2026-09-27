@@ -3,8 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/l10n/validation_error.dart';
 import 'package:fitness_trainer_app/features/tags/data/tags_service.dart';
 import 'package:fitness_trainer_app/features/tags/data/tags_repository.dart';
+
+/// Services throw a language-neutral [ValidationError] so the message can be
+/// localized in the UI layer; the field is what identifies which rule failed.
+Matcher rejectsWith(ValidationField field) =>
+    throwsA(isA<ValidationError>().having((e) => e.field, 'field', field));
 
 Future<AppDatabase> createTestDb() async {
   final tempDir = await Directory.systemTemp.createTemp('fitness_test_');
@@ -38,7 +44,7 @@ void main() {
     });
 
     test('createTag rejects empty name', () async {
-      expect(() => tagsService.createTag(''), throwsA(isA<ArgumentError>()));
+      expect(() => tagsService.createTag(''), rejectsWith(ValidationField.tagName));
     });
 
     test('updateTag modifies existing tag', () async {

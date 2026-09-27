@@ -10,7 +10,6 @@ class AppCard extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final VoidCallback? onTap;
-  final Color? accentColor;
 
   const AppCard({
     super.key,
@@ -18,7 +17,6 @@ class AppCard extends StatelessWidget {
     this.padding,
     this.margin,
     this.onTap,
-    this.accentColor,
   });
 
 @override

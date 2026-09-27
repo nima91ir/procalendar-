@@ -4,6 +4,7 @@ import 'package:fitness_trainer_app/features/attendance/domain/session_refund.da
 import '../utils/persian_numbers.dart';
 import '../utils/jalali_calendar.dart';
 import '../utils/thousands_input_formatter.dart';
+import 'validation_error.dart';
 
 /// Lightweight localization (no i18n package).
 ///
@@ -34,10 +35,17 @@ class AppStrings {
   final String confirm;
   final String delete;
   final String edit;
+  final String close;
   final String save;
   final String saved;
   final String errorPrefix;
   final String loading;
+
+  // Validation messages raised by services as `ValidationError`s. Keyed by
+  // `ValidationField` so the copy lives here instead of inside the service.
+  final String nameRequired;
+  final String clientMissing;
+  final String countsMustBePositive;
 
   // Navigation
   final String appTitle;
@@ -124,6 +132,8 @@ class AppStrings {
   final String devTools;
   final String devToolsDescription;
   final String seedDemoData;
+  final String seedLargeDemoData;
+  final String seedLargeDemoDataConfirm;
   final String databaseFailedTitle;
 
   // Dashboard
@@ -140,6 +150,14 @@ class AppStrings {
   final String present;
   final String absent;
   final String lowSessionPlans;
+
+  /// Dashboard summary row: how many clients have a plan running out.
+  ///
+  /// Counts *clients*, not plans, because a client list is what the row opens.
+  /// The two numbers diverge as soon as one client holds two nearly-finished
+  /// plans, and a count that disagrees with the list it opens is worse than no
+  /// count at all.
+  final String lowSessionClientsTemplate;
   final String viewClients;
   final String sessionsLeft;
   final String addClient;
@@ -175,6 +193,33 @@ class AppStrings {
   // Clients screen
   final String searchHint;
   final String allLabel;
+
+  /// The filter bar's "no filter" chip. Distinct from [allLabel] on purpose:
+  /// the tag row already has a chip reading "All", and two identically labelled
+  /// chips on one screen is exactly the kind of ambiguity this pass is for.
+  final String filterAllClients;
+
+  // Client-list filters, chosen on the Clients page itself. The time-based ones
+  // all answer "who needs me now?" rather than describing the client, because
+  // with no schedule stored, recency is the only honest signal available.
+  /// Nobody has recorded them today yet — the daily to-do.
+  final String filterToday;
+  /// Last visit was two weeks ago or more.
+  final String filterStale;
+  /// On the books, never once attended.
+  final String filterNeverAttended;
+  /// No running plan, so nothing to consume a session from.
+  final String filterNoActivePlan;
+  /// Running plan runs out of days within a week.
+  final String filterExpiringSoon;
+  /// Sessions nearly gone, no active plan, or about to run out.
+  final String filterNeedsAttention;
+  /// Button that opens the full filter sheet.
+  final String filtersButton;
+  /// Sort option: most recent visit first.
+  final String sortLastVisit;
+  /// `{marked} of {total} marked today`, for the dashboard summary line.
+  final String todayMarkedTemplate;
   final String sortBy;
   final String sortName;
   final String sortNewest;
@@ -288,6 +333,8 @@ class AppStrings {
   final String noBackupContent;
   final String safetyCopySavedTemplate;
   final String safetyCopyFailed;
+  final String safetyCopyUnverifiedTitle;
+  final String safetyCopyUnverifiedMessage;
 
   // Plan assignment (add-plan screen & confirmations)
   final String selectPlanTemplate;
@@ -346,10 +393,14 @@ class AppStrings {
     required this.confirm,
     required this.delete,
     required this.edit,
+    required this.close,
     required this.save,
     required this.saved,
     required this.errorPrefix,
     required this.loading,
+    required this.nameRequired,
+    required this.clientMissing,
+    required this.countsMustBePositive,
     required this.appTitle,
     required this.navDashboard,
     required this.navClients,
@@ -430,6 +481,8 @@ class AppStrings {
     required this.devTools,
     required this.devToolsDescription,
     required this.seedDemoData,
+    required this.seedLargeDemoData,
+    required this.seedLargeDemoDataConfirm,
     required this.databaseFailedTitle,
     required this.dashboardTitle,
     required this.totalClients,
@@ -444,6 +497,7 @@ class AppStrings {
     required this.present,
     required this.absent,
     required this.lowSessionPlans,
+    required this.lowSessionClientsTemplate,
     required this.viewClients,
     required this.sessionsLeft,
     required this.addClient,
@@ -475,6 +529,16 @@ class AppStrings {
     required this.statusExpired,
     required this.searchHint,
     required this.allLabel,
+    required this.filterAllClients,
+    required this.filterToday,
+    required this.filterStale,
+    required this.filterNeverAttended,
+    required this.filterNoActivePlan,
+    required this.filterExpiringSoon,
+    required this.filterNeedsAttention,
+    required this.filtersButton,
+    required this.sortLastVisit,
+    required this.todayMarkedTemplate,
     required this.sortBy,
     required this.sortName,
     required this.sortNewest,
@@ -577,6 +641,8 @@ class AppStrings {
     required this.noBackupContent,
     required this.safetyCopySavedTemplate,
     required this.safetyCopyFailed,
+    required this.safetyCopyUnverifiedTitle,
+    required this.safetyCopyUnverifiedMessage,
     required this.selectPlanTemplate,
     required this.approximateEndTemplate,
     required this.chooseThisTemplate,
@@ -614,7 +680,21 @@ class AppStrings {
   String _digits(String value) => isPersian ? toPersian(value) : value;
 
   String welcomeWith(String name) => welcomeTemplate.replaceAll('{name}', name);
-  String bonusClients(int count) => bonusClientsTemplate.replaceAll('{count}', _digits('$count'));
+  /// `{count} مشتری دارای جلسات اضافه` — used by the dashboard's bonus row.
+  ///
+  /// The `{plural}` token exists because English inflects the noun and Persian
+  /// does not: the English template carries it, the Persian one has no token at
+  /// all, so one call reads correctly in both. Without it these rows rendered
+  /// "3 client" and "1 clients".
+  String bonusClients(int count) => bonusClientsTemplate
+      .replaceAll('{count}', _digits('$count'))
+      .replaceAll('{plural}', count == 1 ? '' : 's');
+
+  /// Deliberately the same shape as [bonusClients], so the dashboard's two
+  /// summary rows are built identically and stay visually in step.
+  String lowSessionClients(int count) => lowSessionClientsTemplate
+      .replaceAll('{count}', _digits('$count'))
+      .replaceAll('{plural}', count == 1 ? '' : 's');
   String remainingSessions(int count) => remainingSessionsTemplate.replaceAll('{count}', _digits('$count'));
   String clientsWithBonus(int count) => clientsWithBonusTemplate.replaceAll('{count}', _digits('$count'));
   String remainingDetail(int remaining, int sessions) => remainingDetailTemplate
@@ -682,6 +762,14 @@ class AppStrings {
   String remainingDays(int count) =>
       remainingDaysTemplate.replaceAll('{count}', _digits('$count'));
 
+  /// Dashboard summary: `۲ از ۱۲۰ امروز ثبت شد`.
+  String todayMarked(int marked, int total) => todayMarkedTemplate
+      .replaceAll('{marked}', _digits('$marked'))
+      .replaceAll('{total}', _digits('$total'));
+
+  /// A plain number in the app's digits, e.g. a filter chip's count.
+  String digits(int value) => _digits('$value');
+
   String gymShareDeduction(int amount) =>
       gymShareDeductionTemplate.replaceAll('{amount}', money(amount));
 
@@ -719,10 +807,27 @@ class AppStrings {
   /// Day-of-week label for a Jalali weekday (1 = Saturday ... 7 = Friday).
   String weekdayShort(int weekday) {
     final index = weekday.clamp(1, 7) - 1;
-    return isPersian
-        ? const ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'][index]
-        : _enWeekdays[index];
+    return isPersian ? weekdayNames[index] : _enWeekdays[index];
   }
+
+  /// Localized message for a [ValidationField] a service rejected input with.
+  String validation(ValidationField field) => switch (field) {
+        ValidationField.clientName => nameRequired,
+        ValidationField.clientMissing => clientMissing,
+        ValidationField.tagName => nameRequired,
+        ValidationField.templateName => nameRequired,
+        ValidationField.templateCounts => countsMustBePositive,
+      };
+
+  /// Renders a caught error for a snackbar/dialog.
+  ///
+  /// Services throw [ValidationError] (a key, no prose) so their text can be
+  /// localized here. Anything else — database failures, `FormatException` from
+  /// a rejected backup file — has no localized form, so it keeps its own
+  /// `toString()` after the same prefix. Previously every site interpolated
+  /// `$e` directly, which leaked the Persian text a service had baked in.
+  String errorText(Object error) =>
+      '$errorPrefix${error is ValidationError ? validation(error.field) : error}';
 
   /// Delegates to the shared helper so display and the price input fields
   /// group digits identically.
@@ -755,10 +860,14 @@ class AppStrings {
     confirm: 'تأیید',
     delete: 'حذف',
     edit: 'ویرایش',
+    close: 'بستن',
     save: 'ذخیره',
     saved: 'ذخیره شد',
     errorPrefix: 'خطا: ',
     loading: 'در حال بارگذاری...',
+    nameRequired: 'نام نمی‌تواند خالی باشد',
+    clientMissing: 'مشتری یافت نشد',
+    countsMustBePositive: 'جلسات و روزها باید بزرگتر از صفر باشند',
     appTitle: 'تقویم حرفه‌ای',
     navDashboard: 'داشبورد',
     navClients: 'مشتریان',
@@ -839,6 +948,8 @@ class AppStrings {
     devTools: 'ابزار توسعه',
     devToolsDescription: 'چند مشتری، قالب، برچسب و دو هفته حضور و غیاب اضافه می‌کند تا داشبورد، برنامه‌ها و مصرف جلسات بررسی شود.',
     seedDemoData: 'افزودن داده نمونه',
+    seedLargeDemoData: 'ساخت داده پرحجم (۱۲۰ مشتری، یک سال)',
+    seedLargeDemoDataConfirm: 'همهٔ مشتریان، برنامه‌ها، سوابق حضور و تراکنش‌های فعلی حذف و با دادهٔ پرحجم جایگزین می‌شوند. ادامه می‌دهید؟',
     databaseFailedTitle: 'راه‌اندازی پایگاه داده ناموفق بود',
     dashboardTitle: 'تقویم حرفه‌ای',
     totalClients: 'تعداد مشتریان',
@@ -853,6 +964,7 @@ class AppStrings {
     present: 'حاضر',
     absent: 'غایب',
     lowSessionPlans: 'برنامه‌های رو به اتمام',
+    lowSessionClientsTemplate: '{count} مشتری با برنامهٔ رو به اتمام',
     viewClients: 'مشاهده مشتریان',
     sessionsLeft: 'جلسه باقی‌مانده',
     addClient: 'افزودن مشتری',
@@ -884,6 +996,16 @@ class AppStrings {
     statusExpired: 'پایان‌یافته',
     searchHint: 'جستجوی مشتری...',
     allLabel: 'همه',
+    filterAllClients: 'همهٔ مشتریان',
+    filterToday: 'امروز ثبت نشده',
+    filterStale: '۱۴ روز نیامده',
+    filterNeverAttended: 'هرگز نیامده',
+    filterNoActivePlan: 'بدون برنامهٔ فعال',
+    filterExpiringSoon: 'تا ۷ روز تمام می‌شود',
+    filterNeedsAttention: 'نیاز به توجه',
+    filtersButton: 'فیلترها',
+    sortLastVisit: 'آخرین مراجعه',
+    todayMarkedTemplate: 'امروز {marked} از {total} ثبت شد',
     sortBy: 'مرتب‌سازی',
     sortName: 'نام',
     sortNewest: 'جدیدترین',
@@ -985,6 +1107,8 @@ class AppStrings {
     importFailedTemplate: 'ورود ناموفق بود: {error}',
     safetyCopySavedTemplate: 'پیش از جایگزینی، نسخه پشتیبان اطلاعات فعلی در فایل {file} ذخیره شد.',
     safetyCopyFailed: 'جایگزینی انجام نشد: ذخیره نسخه پشتیبان اطلاعات فعلی ممکن نبود.',
+    safetyCopyUnverifiedTitle: 'نسخه پشتیبان کامل ذخیره شد؟',
+    safetyCopyUnverifiedMessage: 'مرورگر دانلود نسخه پشتیبان را شروع کرده، اما برنامه نمی‌تواند مطمئن شود که کامل شده است. پیش از ادامه، از فهرست دانلودهای مرورگر مطمئن شوید که فایل کامل ذخیره شده است؛ اگر جایگزینی ناقص بماند، همین فایل تنها راه بازگشت اطلاعات است.',
     noBackupContent: 'ابتدا محتوای پشتیبان را وارد کنید',
     selectPlanTemplate: 'انتخاب قالب برنامه',
     approximateEndTemplate: 'پایان تقریبی دوره: {date}',
@@ -1025,7 +1149,7 @@ class AppStrings {
     updateReload: 'Update',
     updateLater: 'Later',
     welcomeTemplate: 'Welcome back, {name}',
-    bonusClientsTemplate: '{count} client with bonus sessions',
+    bonusClientsTemplate: '{count} client{plural} with bonus sessions',
     remainingSessionsTemplate: '{count} sessions left',
     clientsWithBonusTemplate: '{count} bonus sessions',
     remainingDetailTemplate: '{remaining} of {sessions} sessions',
@@ -1041,10 +1165,14 @@ class AppStrings {
     confirm: 'OK',
     delete: 'Delete',
     edit: 'Edit',
+    close: 'Close',
     save: 'Save',
     saved: 'Saved',
     errorPrefix: 'Error: ',
     loading: 'Loading...',
+    nameRequired: 'Name cannot be empty',
+    clientMissing: 'Client not found',
+    countsMustBePositive: 'Sessions and days must be greater than zero',
     appTitle: 'Pro Calendar',
     navDashboard: 'Dashboard',
     navClients: 'Clients',
@@ -1125,6 +1253,8 @@ class AppStrings {
     devTools: 'Dev tools',
     devToolsDescription: 'Adds sample clients, templates, tags and two weeks of attendance so the dashboard, plans and session usage can be reviewed.',
     seedDemoData: 'Seed demo data',
+    seedLargeDemoData: 'Build large dataset (120 clients, one year)',
+    seedLargeDemoDataConfirm: 'Every current client, plan, attendance record and transaction will be deleted and replaced with the large dataset. Continue?',
     databaseFailedTitle: 'Database setup failed',
     dashboardTitle: 'Pro Calendar',
     totalClients: 'Total clients',
@@ -1139,6 +1269,7 @@ class AppStrings {
     present: 'Present',
     absent: 'Absent',
     lowSessionPlans: 'Low-session plans',
+    lowSessionClientsTemplate: '{count} client{plural} with a plan running out',
     viewClients: 'View clients',
     sessionsLeft: 'sessions left',
     addClient: 'Add client',
@@ -1170,6 +1301,16 @@ class AppStrings {
     statusExpired: 'Expired',
     searchHint: 'Search clients...',
     allLabel: 'All',
+    filterAllClients: 'All clients',
+    filterToday: 'Not marked today',
+    filterStale: 'Away 14+ days',
+    filterNeverAttended: 'Never attended',
+    filterNoActivePlan: 'No active plan',
+    filterExpiringSoon: 'Expires within 7 days',
+    filterNeedsAttention: 'Needs attention',
+    filtersButton: 'Filters',
+    sortLastVisit: 'Last visit',
+    todayMarkedTemplate: '{marked} of {total} marked today',
     sortBy: 'Sort',
     sortName: 'Name',
     sortNewest: 'Newest',
@@ -1275,6 +1416,8 @@ class AppStrings {
     noBackupContent: 'Enter the backup contents first',
     safetyCopySavedTemplate: 'Before replacing, your current data was saved to {file}.',
     safetyCopyFailed: 'Replace cancelled: a safety copy of your current data could not be saved.',
+    safetyCopyUnverifiedTitle: 'Did the safety copy finish saving?',
+    safetyCopyUnverifiedMessage: 'Your browser has started downloading the safety copy, but the app cannot tell whether it completed. Before continuing, check your browser downloads to be sure the file is complete — if the replace goes wrong, that file is the only way back.',
     selectPlanTemplate: 'Select plan template',
     approximateEndTemplate: 'Approximate end date: {date}',
     chooseThisTemplate: 'Choose this template',

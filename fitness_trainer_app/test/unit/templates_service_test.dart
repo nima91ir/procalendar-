@@ -3,8 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/l10n/validation_error.dart';
 import 'package:fitness_trainer_app/features/templates/data/templates_service.dart';
 import 'package:fitness_trainer_app/features/templates/data/templates_repository.dart';
+
+/// Services throw a language-neutral [ValidationError] so the message can be
+/// localized in the UI layer; the field is what identifies which rule failed.
+Matcher rejectsWith(ValidationField field) =>
+    throwsA(isA<ValidationError>().having((e) => e.field, 'field', field));
 
 Future<AppDatabase> createTestDb() async {
   final tempDir = await Directory.systemTemp.createTemp('fitness_test_');
@@ -40,12 +46,12 @@ void main() {
     });
 
     test('createTemplate rejects empty name', () async {
-      expect(() => templatesService.createTemplate('', 3, 7), throwsA(isA<ArgumentError>()));
+      expect(() => templatesService.createTemplate('', 3, 7), rejectsWith(ValidationField.templateName));
     });
 
     test('createTemplate rejects non-positive sessions or days', () async {
-      expect(() => templatesService.createTemplate('Test', 0, 7), throwsA(isA<ArgumentError>()));
-      expect(() => templatesService.createTemplate('Test', 3, 0), throwsA(isA<ArgumentError>()));
+      expect(() => templatesService.createTemplate('Test', 0, 7), rejectsWith(ValidationField.templateCounts));
+      expect(() => templatesService.createTemplate('Test', 3, 0), rejectsWith(ValidationField.templateCounts));
     });
 
     test('updateTemplate modifies existing template', () async {

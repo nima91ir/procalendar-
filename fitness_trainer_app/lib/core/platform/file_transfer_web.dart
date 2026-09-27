@@ -5,6 +5,15 @@ import 'dart:html' as html;
 
 bool get isFilePickerSupported => true;
 
+/// Whether [saveTextFile] returning a value proves the file exists.
+///
+/// It does **not** on the web: `anchor.click()` only *starts* a download, and
+/// no browser API reports whether the user accepted, finished, or cancelled it.
+/// A non-null result therefore means "asked", not "saved". Callers that depend
+/// on the file actually existing — the destructive-restore safety copy in
+/// `import_backup_screen` — must warn instead of trusting it.
+const bool kFileSaveIsVerifiable = false;
+
 /// Triggers a browser download. Returns the file name (there is no path).
 Future<String?> saveTextFile(String fileName, String contents) async {
   final blob = html.Blob([utf8.encode(contents)], 'application/octet-stream');

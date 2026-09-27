@@ -107,6 +107,21 @@ class _ImportBackupScreenState extends ConsumerState<ImportBackupScreen> {
           messenger.showSnackBar(
             SnackBar(content: Text(s.safetyCopySaved(saved ?? name))),
           );
+          // On the web that "saved" only means the download was *started* —
+          // no browser API reports whether it landed. Since the next step wipes
+          // the very data this file exists to protect, make the user confirm
+          // they can see it before going ahead. On native the write is already
+          // proven, so this costs nothing there.
+          if (!kFileSaveIsVerifiable) {
+            final proceed = await AppConfirmDialog.show(
+              context,
+              title: s.safetyCopyUnverifiedTitle,
+              message: s.safetyCopyUnverifiedMessage,
+              confirmLabel: s.confirm,
+              cancelLabel: s.cancel,
+            );
+            if (!proceed || !mounted) return;
+          }
         }
       } catch (_) {
         if (!mounted) return;
@@ -123,6 +138,9 @@ class _ImportBackupScreenState extends ConsumerState<ImportBackupScreen> {
       ref.invalidateAppData();
       ref.invalidate(trainerNameProvider);
       ref.invalidate(themeModeProvider);
+      // The palette theme lives in `app_settings` too, so a restore can change
+      // it — without this it would only take effect after a restart.
+      ref.invalidate(themeProvider);
       ref.invalidate(languageProvider);
       navigator.pop();
       messenger.showSnackBar(SnackBar(content: Text(s.importDone(result.added.total))));

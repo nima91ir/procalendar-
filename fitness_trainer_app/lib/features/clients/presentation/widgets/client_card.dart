@@ -123,19 +123,34 @@ class ClientCard extends ConsumerWidget {
                           ],
                         ),
                       ),
+                      // 44x44 with `shrinkWrap`: the tap area *is* the visible
+                      // box. `VisualDensity.compact` used to shrink the visuals
+                      // to 36x32 while Material still claimed a padded ~40px hit
+                      // area, so the two buttons' invisible areas overlapped and
+                      // an imprecise tap landed on the neighbour.
                       IconButton(
-                        visualDensity: VisualDensity.compact,
                         tooltip: s.attendanceLabel,
-                        icon: Icon(Icons.calendar_month_outlined, size: 20, color: t.onSurfaceVar),
+                        icon: Icon(Icons.calendar_month_outlined, size: 22, color: t.onSurfaceVar),
                         onPressed: () => Navigator.pushNamed(context, '${AppRoutes.attendance}/$clientId'),
-                      ),
-                      if (onShowActions != null)
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          tooltip: s.clientActionsTitle,
-                          icon: Icon(Icons.more_vert, size: 20, color: t.onSurfaceVar),
-                          onPressed: onShowActions,
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(44, 44),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
+                      ),
+                      if (onShowActions != null) ...[
+                        // A real gap, so the two hit areas abut rather than
+                        // overlap.
+                        const SizedBox(width: AppSpacing.xs),
+                        IconButton(
+                          tooltip: s.clientActionsTitle,
+                          icon: Icon(Icons.more_vert, size: 22, color: t.onSurfaceVar),
+                          onPressed: onShowActions,
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   if (plan != null) ...[
@@ -164,23 +179,56 @@ class ClientCard extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sm),
-                          Text(s.remainingDetail(plan.remaining, plan.sessions), style: AppTypography.bodySmall),
+                          // Both trailing texts are Flexible with ellipsis.
+                          // Only the template name could shrink before, so the
+                          // fixed pair drove the row past its width and produced
+                          // a striped overflow — longest in English, where these
+                          // strings are wordier. Found while verifying the touch
+                          // targets; it predates that change.
+                          Flexible(
+                            child: Text(
+                              s.remainingDetail(plan.remaining, plan.sessions),
+                              style: AppTypography.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                           const SizedBox(width: AppSpacing.sm),
-                          Text(_planTimeLabel(s, plan), style: AppTypography.bodySmall),
-                          const SizedBox(width: AppSpacing.xs),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                            tooltip: plan.isFrozen ? s.activate : s.freeze,
-                            onPressed: () => _toggleFreeze(ref, context, plan),
-                            icon: Icon(
-                              plan.isFrozen ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                              size: 20,
-                              color: plan.isFrozen ? t.warning : t.onSurfaceVar,
+                          Flexible(
+                            child: Text(
+                              _planTimeLabel(s, plan),
+                              style: AppTypography.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    // Freeze moved out of the pill onto its own labelled row.
+                    //
+                    // It used to be an icon buried among the pill's text: 20x20
+                    // from `padding: EdgeInsets.zero` plus tight constraints,
+                    // while still claiming a padded hit area that reached into
+                    // the text beside it. An interactive control inside a label
+                    // is exactly where mis-taps come from, so the pill is now
+                    // information only.
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        // The theme sets a 44 minimum height; `shrinkWrap` stops
+                        // Material padding an invisible tap target beyond it.
+                        style: OutlinedButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => _toggleFreeze(ref, context, plan),
+                        icon: Icon(
+                          plan.isFrozen ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                          size: 18,
+                          color: plan.isFrozen ? t.warning : t.onSurfaceVar,
+                        ),
+                        label: Text(plan.isFrozen ? s.activate : s.freeze),
                       ),
                     ),
                   ],
@@ -188,6 +236,11 @@ class ClientCard extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
+                      // Same as the freeze row above, so the card's two actions
+                      // stay the same height.
+                      style: OutlinedButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                       onPressed: () => Navigator.pushNamed(context, '${AppRoutes.addPlan}/$clientId'),
                       icon: const Icon(Icons.add, size: 18),
                       label: Text(s.addPlan),

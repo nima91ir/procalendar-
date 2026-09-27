@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/l10n/validation_error.dart';
 import 'package:fitness_trainer_app/features/templates/domain/plan_template.dart' as domain;
 import 'package:fitness_trainer_app/features/templates/data/templates_repository.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_service.dart';
@@ -13,8 +14,10 @@ class TemplatesService {
   Future<domain.PlanTemplate?> getTemplate(int id) => repository.getTemplate(id);
 
   Future<int> createTemplate(String name, int sessions, int days) async {
-    if (name.trim().isEmpty) throw ArgumentError('نام قالب نمی‌تواند خالی باشد');
-    if (sessions <= 0 || days <= 0) throw ArgumentError('جلسات و روزها باید بزرگتر از صفر باشند');
+    if (name.trim().isEmpty) throw const ValidationError(ValidationField.templateName);
+    if (sessions <= 0 || days <= 0) {
+      throw const ValidationError(ValidationField.templateCounts);
+    }
     return repository.insertTemplate(PlanTemplatesCompanion.insert(
       name: name.trim(),
       sessions: sessions,
@@ -23,8 +26,10 @@ class TemplatesService {
   }
 
   Future<void> updateTemplate(int id, String name, int sessions, int days) async {
-    if (name.trim().isEmpty) throw ArgumentError('نام قالب نمی‌تواند خالی باشد');
-    if (sessions <= 0 || days <= 0) throw ArgumentError('جلسات و روزها باید بزرگتر از صفر باشند');
+    if (name.trim().isEmpty) throw const ValidationError(ValidationField.templateName);
+    if (sessions <= 0 || days <= 0) {
+      throw const ValidationError(ValidationField.templateCounts);
+    }
     await repository.updateTemplate(PlanTemplatesCompanion.insert(
       id: Value(id),
       name: name.trim(),

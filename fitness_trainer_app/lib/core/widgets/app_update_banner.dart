@@ -71,15 +71,19 @@ class _AppUpdateBannerState extends ConsumerState<AppUpdateBanner> {
               onPressed: reloadApp,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                minimumSize: const Size(0, 40),
+                minimumSize: const Size(0, 44),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(s.updateReload),
             ),
             IconButton(
               onPressed: () => setState(() => _dismissed = true),
-              icon: Icon(Icons.close, size: 18, color: t.onSurface),
+              icon: Icon(Icons.close, size: 20, color: t.onSurface),
               tooltip: s.updateLater,
-              visualDensity: VisualDensity.compact,
+              style: IconButton.styleFrom(
+                minimumSize: const Size(44, 44),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           ],
         ),

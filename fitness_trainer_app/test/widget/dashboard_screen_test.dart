@@ -36,18 +36,15 @@ void main() {
       );
     });
 
-    testWidgets('renders the today attendance section', (WidgetTester tester) async {
+    testWidgets('has no today-attendance list', (WidgetTester tester) async {
       await tester.pumpWidget(_harness(const DashboardScreen()));
       await tester.pump();
 
       expect(find.byType(RefreshIndicator), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byType(ListView),
-          matching: find.text('حضور امروز'),
-        ),
-        findsOneWidget,
-      );
+      // Deliberately absent: marking a client happens on the Clients page, and
+      // the landing screen only points at it. This guards against the section
+      // creeping back in.
+      expect(find.text('حضور امروز'), findsNothing);
     });
   });
 }

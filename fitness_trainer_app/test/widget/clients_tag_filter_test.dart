@@ -58,12 +58,30 @@ void main() {
     });
 
     testWidgets('combining tags narrows the list (AND)', (tester) async {
+      // A surface taller than the 800x600 default.
+      //
+      // The client list is lazy, so how many rows even exist in the tree
+      // depends on the viewport — and the page now carries a filter bar above
+      // the list, where before nothing was rendered unless a filter was active.
+      // Asserting on a row that simply wasn't built is a flake waiting to
+      // happen; giving the list room tests the filtering, which is the point.
+      tester.view.physicalSize = const Size(1000, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       await tester.pumpWidget(buildHarness(db));
       await settle(tester);
 
       expect(find.text('علی'), findsOneWidget);
       expect(find.text('مریم'), findsOneWidget);
       expect(find.text('رضا'), findsOneWidget);
+
+      // Tags live in the filter sheet now. They used to sit in their own,
+      // visually identical, chip row on the page — which made two different
+      // things read as one, and let a selected tag scroll out of view, leaving a
+      // short list with no visible cause.
+      await tester.tap(find.widgetWithText(ActionChip, 'فیلترها'));
+      await settle(tester);
 
       await tester.tap(find.widgetWithText(FilterChip, 'ویژه'));
       await settle(tester);

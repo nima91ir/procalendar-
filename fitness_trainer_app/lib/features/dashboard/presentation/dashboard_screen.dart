@@ -10,13 +10,8 @@ import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/utils/date_format.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
-import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
-import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
-import 'package:fitness_trainer_app/features/tags/domain/tag.dart' as domain;
-import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
-import 'package:fitness_trainer_app/routing/routes.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -26,42 +21,24 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  final Set<int> _selectedTagIds = {};
-
   String _num(int? value, String languageCode) =>
       localizeNumber(value?.toString() ?? '—', languageCode);
+
+  /// Switches to the Clients tab and guarantees it shows the client *list*.
+  ///
+  /// Each tab keeps its own navigation stack, so a client profile opened
+  /// earlier in that tab would still be on top — the user would land back on
+  /// that profile instead of on the list this action promises. The request
+  /// makes `MainShell` clear the stack; a plain tab tap deliberately does not.
+  void _openClientsList() {
+    ref.read(tabIndexProvider.notifier).select(1);
+    ref.read(tabRootRequestProvider.notifier).request();
+  }
 
   /// Applies a client-list quick filter and switches to the Clients tab.
   void _drillDown(ClientQuickFilter filter) {
     ref.read(clientQuickFilterProvider.notifier).set(filter);
-    ref.read(tabIndexProvider.notifier).select(1);
-  }
-
-  Future<void> _mark(WidgetRef ref, BuildContext context, AppStrings s, String lang, int clientId, String status) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final label = status == 'present' ? s.present : s.absent;
-    try {
-      await ref.read(attendanceProvider.notifier).addSession(clientId, jalaliToday(), status: status);
-      if (!context.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(s.recordAdded(label, formatDateLong(jalaliToday(), lang)))));
-    } catch (e) {
-      if (!context.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
-    }
-  }
-
-  Future<void> _undo(WidgetRef ref, BuildContext context, AppStrings s, String lang, int clientId) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final refund = await ref.read(attendanceProvider.notifier).removeLatestSession(clientId, jalaliToday());
-      if (!context.mounted) return;
-      messenger.showSnackBar(SnackBar(
-        content: Text(s.sessionRemovalMessage(refund, formatDateLong(jalaliToday(), lang))),
-      ));
-    } catch (e) {
-      if (!context.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
-    }
+    _openClientsList();
   }
 
   @override
@@ -77,17 +54,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final queuedAsync = ref.watch(queuedPlansProvider);
     final lowSessionAsync = ref.watch(lowSessionPlansProvider);
     final bonusAsync = ref.watch(bonusSessionClientsProvider);
-    final todayAttendanceAsync = ref.watch(todayAttendanceProvider);
-    final clientNamesAsync = ref.watch(clientNamesProvider);
-    final allClientsAsync = ref.watch(allClientsProvider);
-    final tagsAsync = ref.watch(allTagsProvider);
-    final tagFilterAsync = ref.watch(clientTagFilterProvider);
-    // A tag may be deleted while selected; drop stale ids so the filter never
-    // silently empties the list.
-    final validTagIds = (tagsAsync.value ?? const <domain.Tag>[]).map((t) => t.id).toSet();
-    final selectedTags = _selectedTagIds.where(validTagIds.contains).toSet();
 
-    final clientNames = clientNamesAsync.value ?? const <int, String>{};
+    // Distinct clients, not plans: this row opens a client list, so a plan count
+    // could read 13 while the list showed 12.
+    final lowSessionClientCount = {
+      for (final plan in lowSessionAsync.value ?? const <Map<String, dynamic>>[])
+        plan['clientId'] as int,
+    }.length;
 
     return Scaffold(
       appBar: AppBar(title: Text(s.dashboardTitle)),
@@ -153,166 +126,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const SizedBox(height: AppSpacing.xxl),
             const BackupReminderBanner(),
-            SectionHeader(
-              title: s.todayAttendance,
-              actionLabel: s.viewClients,
-              onAction: () => ref.read(tabIndexProvider.notifier).select(1),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            tagsAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
-              data: (tags) {
-                if (tags.isEmpty) return const SizedBox.shrink();
-                return SizedBox(
-                  height: 44,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: tags.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                          child: FilterChip(
-                            label: Text(s.allLabel),
-                            selected: _selectedTagIds.isEmpty,
-                            onSelected: (_) => setState(_selectedTagIds.clear),
-                            selectedColor: t.primaryLight,
-                            checkmarkColor: t.onSurface,
-                          ),
-                        );
-                      }
-                      final tag = tags[index - 1];
-                      final isSelected = selectedTags.contains(tag.id);
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                        child: FilterChip(
-                          label: Text(tag.emoji.isNotEmpty ? '${tag.emoji} ${tag.name}' : tag.name),
-                          selected: isSelected,
-                          onSelected: (_) => setState(() {
-                            if (isSelected) {
-                              _selectedTagIds.remove(tag.id);
-                            } else {
-                              _selectedTagIds.add(tag.id!);
-                            }
-                          }),
-                          selectedColor: Color(tag.color),
-                          checkmarkColor: Colors.white,
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            allClientsAsync.when(
-              loading: () => const SizedBox(
-                height: 120,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (error, _) => AppErrorState(message: '$error'),
-              data: (clients) {
-                if (clients.isEmpty) {
-                  return AppEmptyState(
-                    icon: Icons.person_add_alt_1_outlined,
-                    title: s.noClientsTitle,
-                    subtitle: s.noClientsSubtitle,
-                  );
-                }
-                final tagIdsByClient = tagFilterAsync.value ?? const <int, List<int>>{};
-                // AND semantics: a client is shown only when it carries every
-                // selected tag, so combining tags narrows the list.
-                final visible = selectedTags.isEmpty
-                    ? clients
-                    : clients
-                        .where((c) =>
-                            selectedTags.every((id) => (tagIdsByClient[c.id] ?? const <int>[]).contains(id)))
-                        .toList();
-                if (visible.isEmpty) {
-                  return AppEmptyState(
-                    icon: Icons.filter_alt_off_outlined,
-                    title: s.noClientsWithTag,
-                  );
-                }
-                final statuses = todayAttendanceAsync.value ?? const <int, Map<String, int>>{};
-                return Column(
-                  children: [
-                    for (final client in visible)
-                      _TodayRow(
-                        name: client.name,
-                        counts: statuses[client.id],
-                        onTap: () => Navigator.pushNamed(
-                          context,
-                          '${AppRoutes.clientDetail}/${client.id}',
-                        ),
-                        onMarkPresent: () => _mark(ref, context, s, lang, client.id!, 'present'),
-                        onMarkAbsent: () => _mark(ref, context, s, lang, client.id!, 'absent'),
-                        onUndo: () => _undo(ref, context, s, lang, client.id!),
-                      ),
-                  ],
-                );
-              },
-            ),
             const SizedBox(height: AppSpacing.xxl),
-            if (lowSessionAsync.value != null && lowSessionAsync.value!.isNotEmpty) ...[
+            // These two are the same *kind* of thing — a count of clients worth
+            // a look — so they are built the same way: a heading with an action,
+            // then one summary row that opens that filtered list.
+            //
+            // Low-session used to render a card per plan. On a full book that
+            // was a wall of rows on the landing screen (the same problem the
+            // today-attendance list had), and it contradicted its own action:
+            // the rows counted plans while "view clients" led to clients.
+            if (lowSessionClientCount > 0) ...[
               SectionHeader(
                 title: s.lowSessionPlans,
                 actionLabel: s.viewClients,
                 onAction: () => _drillDown(ClientQuickFilter.lowSession),
               ),
               const SizedBox(height: AppSpacing.xs),
-              ...lowSessionAsync.value!.map((p) {
-                final clientId = p['clientId'] as int;
-                final remaining = p['remaining'] as int;
-                return AppCard(
-                  margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.md,
-                  ),
-                  onTap: () => Navigator.pushNamed(
-                    context,
-                    '${AppRoutes.clientDetail}/$clientId',
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.timelapse, color: t.warning, size: 20),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Text(
-                          clientNames[clientId] ?? s.noClientsTitle,
-                          style: AppTypography.bodyLarge,
-                        ),
-                      ),
-                      _TonePill(
-                        label: '${_num(remaining, lang)} ${s.sessionsLeft}',
-                        bg: t.warningSoft,
-                        fg: t.warning,
-                      ),
-                    ],
-                  ),
-                );
-              }),
+              _DashboardSummaryRow(
+                icon: Icons.timelapse,
+                // Amber stays for the one that genuinely needs action.
+                iconColor: t.warning,
+                label: s.lowSessionClients(lowSessionClientCount),
+                onTap: () => _drillDown(ClientQuickFilter.lowSession),
+              ),
               const SizedBox(height: AppSpacing.xxl),
             ],
             if (bonusAsync.value != null && bonusAsync.value!.isNotEmpty) ...[
-              AppCard(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+              SectionHeader(
+                title: s.bonusSessions,
+                actionLabel: s.viewClients,
+                onAction: () => _drillDown(ClientQuickFilter.bonus),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              _DashboardSummaryRow(
+                icon: Icons.card_giftcard,
+                // Neutral, deliberately not a warning: holding gift sessions is
+                // a fact, not a problem. It was painted amber before, which made
+                // information read like an alert.
+                iconColor: t.onSurfaceVar,
+                label: s.bonusClients(bonusAsync.value!.length),
                 onTap: () => _drillDown(ClientQuickFilter.bonus),
-                child: Row(
-                  children: [
-                    Icon(Icons.card_giftcard, color: t.warning),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Text(
-                        s.bonusClients(bonusAsync.value!.length),
-                        style: AppTypography.bodyLarge,
-                      ),
-                    ),
-                    Icon(Icons.chevron_left, color: t.onSurfaceVar, size: 20),
-                  ],
-                ),
               ),
             ],
           ],
@@ -364,173 +217,40 @@ class _HeroStat extends StatelessWidget {
   }
 }
 
-/// One client, ready for today's attendance. The quick-mark buttons stay
-/// available even after records exist (a client can be marked more than once
-/// per day); once any records exist a per-status count pill plus undo appear
-/// on the first line so the coach can review or roll back.
-class _TodayRow extends StatelessWidget {
-  final String name;
-  final Map<String, int>? counts;
+/// A dashboard section reduced to a single row: icon, count-and-label, chevron.
+///
+/// Both dashboard sections now use this, so they cannot drift apart again. One
+/// was a list of plans and the other a single count, which gave no clue what a
+/// tap would do — and the list version grew without bound as plans ran low.
+class _DashboardSummaryRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
   final VoidCallback onTap;
-  final VoidCallback onMarkPresent;
-  final VoidCallback onMarkAbsent;
-  final VoidCallback onUndo;
 
-  const _TodayRow({
-    required this.name,
-    required this.counts,
+  const _DashboardSummaryRow({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
     required this.onTap,
-    required this.onMarkPresent,
-    required this.onMarkAbsent,
-    required this.onUndo,
   });
 
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
-    final s = AppStrings.of(context);
-    final present = counts?['present'] ?? 0;
-    final absent = counts?['absent'] ?? 0;
-    final marked = present > 0 || absent > 0;
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: t.primaryLight,
-                child: Text(
-                  name.isEmpty ? '؟' : name[0],
-                  style: AppTypography.bodySmall.copyWith(color: t.onSurface),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  name,
-                  style: AppTypography.bodyLarge,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (marked) ...[
-                if (present > 0) ...[
-                  _TonePill(
-                    label: s.attendanceCount(s.present, present),
-                    bg: t.successSoft,
-                    fg: t.success,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                ],
-                if (absent > 0) ...[
-                  _TonePill(
-                    label: s.attendanceCount(s.absent, absent),
-                    bg: t.errorSoft,
-                    fg: t.error,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                ],
-                IconButton(
-                  onPressed: onUndo,
-                  tooltip: s.undoAttendance,
-                  icon: Icon(Icons.undo, size: 20, color: t.onSurfaceVar),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: _QuickButton(
-                  label: s.registerPresent,
-                  bg: t.successSoft,
-                  fg: t.success,
-                  onTap: onMarkPresent,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _QuickButton(
-                  label: s.registerAbsent,
-                  bg: t.errorSoft,
-                  fg: t.error,
-                  onTap: onMarkAbsent,
-                ),
-              ),
-            ],
-          ),
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: Text(label, style: AppTypography.bodyLarge)),
+          Icon(Icons.chevron_left, color: t.onSurfaceVar, size: 20),
         ],
-      ),
-    );
-  }
-}
-
-class _QuickButton extends StatelessWidget {
-  final String label;
-  final Color bg;
-  final Color fg;
-  final VoidCallback onTap;
-
-  const _QuickButton({
-    required this.label,
-    required this.bg,
-    required this.fg,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Center(
-            child: Text(
-              label,
-              style: AppTypography.bodySmall.copyWith(
-                color: fg,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TonePill extends StatelessWidget {
-  final String label;
-  final Color bg;
-  final Color fg;
-
-  const _TonePill({required this.label, required this.bg, required this.fg});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.bodySmall.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }

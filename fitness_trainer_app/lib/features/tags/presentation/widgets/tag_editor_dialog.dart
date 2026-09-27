@@ -105,7 +105,7 @@ Future<domain.Tag?> showTagEditorDialog(
                 } catch (e) {
                   setDialogState(() => isSaving = false);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطا: $e')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.errorText(e))));
                   }
                 }
               },

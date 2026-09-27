@@ -6,6 +6,7 @@ import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/utils/date_format.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
 import 'package:fitness_trainer_app/core/utils/thousands_input_formatter.dart';
@@ -60,6 +61,10 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
   Widget build(BuildContext context) {
     final t = context.tones;
     final s = AppStrings.of(context);
+    // Dates are stored as Jalali keys; the displayed form follows the app
+    // language, so an English user gets the Gregorian equivalent rather than
+    // Persian digits on a Jalali number.
+    final lang = s.isPersian ? 'fa' : 'en';
     final templatesAsync = ref.watch(allTemplatesProvider);
 
     return Scaffold(
@@ -125,7 +130,6 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
               return AppCard(
                 margin: const EdgeInsets.only(bottom: AppSpacing.md),
                 onTap: () => setState(() => _selectedTemplateId = template.id),
-                accentColor: isSelected ? t.primary : null,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -159,7 +163,7 @@ class _AddPlanScreenState extends ConsumerState<AddPlanScreen> {
                           const SizedBox(width: AppSpacing.xs),
                           Expanded(
                             child: Text(
-                              s.approximateEnd(formatJalali(_endDateFor(template.days))),
+                              s.approximateEnd(formatDateShort(_endDateFor(template.days), lang)),
                               style: AppTypography.bodySmall,
                             ),
                           ),
@@ -278,6 +282,7 @@ attendanceMap: const <String, List<String>>{},
     if (!mounted) return;
     final hasCurrent = plans.any((p) => p.isActive || p.isFrozen);
     final s = AppStrings.of(context);
+    final lang = s.isPersian ? 'fa' : 'en';
     final t = context.tones;
     final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
@@ -290,8 +295,8 @@ attendanceMap: const <String, List<String>>{},
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _ConfirmRow(label: s.planTemplateLabel, value: template.name),
-              _ConfirmRow(label: s.startDateLabel, value: formatJalali(_startDateKey)),
-              _ConfirmRow(label: s.endDateLabel, value: formatJalali(_endDateFor(template.days))),
+              _ConfirmRow(label: s.startDateLabel, value: formatDateShort(_startDateKey, lang)),
+              _ConfirmRow(label: s.endDateLabel, value: formatDateShort(_endDateFor(template.days), lang)),
               _ConfirmRow(
                 label: s.sessionsLabel,
                 value: s.isPersian ? toPersian(template.sessions.toString()) : '${template.sessions}',
@@ -350,7 +355,7 @@ attendanceMap: const <String, List<String>>{},
       ref.invalidateAppData();
       navigator.pop();
       messenger.showSnackBar(
-        SnackBar(content: Text(s.planAddedWithStart(formatJalali(_startDateKey)))),
+        SnackBar(content: Text(s.planAddedWithStart(formatDateShort(_startDateKey, lang)))),
       );
     }
   }
@@ -367,6 +372,7 @@ class _StartDateTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tones;
     final s = AppStrings.of(context);
+    final lang = s.isPersian ? 'fa' : 'en';
     return InkWell(
       onTap: onChange,
       borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -388,7 +394,7 @@ class _StartDateTile extends StatelessWidget {
                   Text(s.startDateLabel, style: AppTypography.labelMedium),
                   const SizedBox(height: 2),
                   Text(
-                    formatJalali(startDateKey),
+                    formatDateShort(startDateKey, lang),
                     style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ],

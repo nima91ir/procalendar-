@@ -4,9 +4,15 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/l10n/validation_error.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_service.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_repository.dart';
+
+/// Services throw a language-neutral [ValidationError] so the message can be
+/// localized in the UI layer; the field is what identifies which rule failed.
+Matcher rejectsWith(ValidationField field) =>
+    throwsA(isA<ValidationError>().having((e) => e.field, 'field', field));
 
 Future<AppDatabase> createTestDb() async {
   final tempDir = Directory.systemTemp;
@@ -33,8 +39,8 @@ void main() {
     });
 
     test('createClient rejects empty name', () async {
-      expect(() => clientsService.createClient(''), throwsA(isA<ArgumentError>()));
-      expect(() => clientsService.createClient('   '), throwsA(isA<ArgumentError>()));
+      expect(() => clientsService.createClient(''), rejectsWith(ValidationField.clientName));
+      expect(() => clientsService.createClient('   '), rejectsWith(ValidationField.clientName));
     });
 
     test('createClient inserts client with defaults', () async {
@@ -203,7 +209,7 @@ test('deleteClient cascades plans and attendance', () async {
 
     test('updateClient rejects empty name', () async {
       final id = await clientsService.createClient('Valid');
-      expect(() => clientsService.updateClient(id, ''), throwsA(isA<ArgumentError>()));
+      expect(() => clientsService.updateClient(id, ''), rejectsWith(ValidationField.clientName));
     });
   });
 }

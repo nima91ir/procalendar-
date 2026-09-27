@@ -100,5 +100,24 @@ void main() {
       expect((await db.getPlan(planId))!.remaining, 5);
       expect((await db.select(db.attendance).get()), isEmpty);
     });
+
+    testWidgets('the same client can be marked twice in one day', (tester) async {
+      await pumpScreen(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'حاضر +'));
+      await settle(tester);
+
+      // Let the confirmation SnackBar clear so it cannot swallow the next tap.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'حاضر +'));
+      await settle(tester);
+
+      // Two records, two sessions consumed — the multi-attendance rule. This
+      // moved here from the dashboard's test when that screen's inline marking
+      // was removed: the rule matters, which screen checks it does not.
+      expect((await db.getPlan(planId))!.remaining, 3);
+      expect((await db.select(db.attendance).get()).length, 2);
+    });
   });
 }

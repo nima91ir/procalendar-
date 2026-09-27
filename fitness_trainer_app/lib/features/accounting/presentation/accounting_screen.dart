@@ -47,7 +47,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+          .showSnackBar(SnackBar(content: Text(s.errorText(e))));
     }
   }
 
@@ -66,7 +66,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+          .showSnackBar(SnackBar(content: Text(s.errorText(e))));
     }
   }
 
@@ -88,7 +88,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+          .showSnackBar(SnackBar(content: Text(s.errorText(e))));
     }
   }
 

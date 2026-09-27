@@ -66,7 +66,11 @@ void main() {
       await pumpCard(tester);
       expect(find.text(AppStrings.fa.remainingDetail(5, 5)), findsOneWidget);
       expect(find.text(AppStrings.fa.remainingDays(30)), findsOneWidget);
-      expect(find.byTooltip('متوقف'), findsOneWidget);
+      // Found by its label now, not a tooltip: the freeze control is a labelled
+      // button rather than a tooltip-only icon. A visible label is the better
+      // accessible name, and moving it out of the plan pill stopped an
+      // interactive control sitting inside a run of text.
+      expect(find.widgetWithText(OutlinedButton, 'متوقف'), findsOneWidget);
     });
 
     testWidgets('offers an add-plan action', (tester) async {
@@ -86,15 +90,15 @@ void main() {
 
     testWidgets('freeze toggle freezes and activates the plan', (tester) async {
       await pumpCard(tester);
-      await tester.tap(find.byTooltip('متوقف'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'متوقف'));
       await settle(tester);
       expect((await db.getPlan(planId))!.status, 'frozen');
-      expect(find.byTooltip('فعال‌سازی'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'فعال‌سازی'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('فعال‌سازی'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'فعال‌سازی'));
       await settle(tester);
       expect((await db.getPlan(planId))!.status, 'active');
-      expect(find.byTooltip('متوقف'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'متوقف'), findsOneWidget);
     });
   });
 }

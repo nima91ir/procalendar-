@@ -33,9 +33,17 @@ class TemplateCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (onEdit != null)
-              IconButton(icon: const Icon(Icons.edit), onPressed: onEdit),
+              IconButton(
+                icon: const Icon(Icons.edit),
+                tooltip: s.editTemplateTitle,
+                onPressed: onEdit,
+              ),
             if (onDelete != null)
-              IconButton(icon: Icon(Icons.delete_outline, color: t.error), onPressed: onDelete),
+              IconButton(
+                icon: Icon(Icons.delete_outline, color: t.error),
+                tooltip: s.deleteTemplateTitle,
+                onPressed: onDelete,
+              ),
           ],
         ),
         onTap: onTap,

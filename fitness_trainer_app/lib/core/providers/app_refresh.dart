@@ -39,6 +39,12 @@ final List<Object> _appDataProviders = [
   todayAttendanceStatusCountsProvider,
   planStatusClientIdsProvider,
   quickFilterClientIdsProvider,
+  // Both back the Clients-page filters. Left out of this list, their values
+  // went stale after a mutation — the chip said one number while the list it
+  // produced showed another, which is exactly what sharing one resolver was
+  // meant to prevent.
+  clientFilterCountsProvider,
+  lastAttendanceByClientProvider,
   clientNamesProvider,
   clientTagFilterProvider,
   clientTagsProvider,

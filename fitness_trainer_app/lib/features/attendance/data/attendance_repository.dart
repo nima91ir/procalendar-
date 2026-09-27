@@ -17,6 +17,23 @@ class AttendanceRepository {
     )).toList();
   }
 
+  /// Every attendance record, unscoped.
+  ///
+  /// The dashboard uses this to work out each client's most recent visit, which
+  /// is the only signal the data model offers about who is likely to train
+  /// today — there is no schedule to consult.
+  Future<List<domain.AttendanceRecord>> getAllAttendance() async {
+    final rows = await db.getAllAttendance();
+    return rows.map((r) => domain.AttendanceRecord(
+      id: r.id,
+      clientId: r.clientId,
+      planId: r.planId,
+      date: r.date,
+      status: r.status,
+      createdAt: r.createdAt,
+    )).toList();
+  }
+
   Future<domain.AttendanceRecord?> getAttendance(int clientId, String date) async {
     final row = await db.getAttendance(clientId, date);
     if (row == null) return null;

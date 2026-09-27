@@ -107,7 +107,7 @@ class _AddEditClientScreenState extends ConsumerState<AddEditClientScreen> {
         if (Navigator.canPop(context)) Navigator.pop(context, true);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${s.errorPrefix}$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.errorText(e))));
     } finally {
       setState(() => _isLoading = false);
     }

@@ -10,6 +10,10 @@ import 'package:fitness_trainer_app/core/theme/app_theme.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_repository.dart';
 import 'package:fitness_trainer_app/features/clients/data/clients_service.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/widgets/client_card.dart';
+import 'package:fitness_trainer_app/features/plans/data/plans_repository.dart';
+import 'package:fitness_trainer_app/features/plans/data/plans_service.dart';
+import 'package:fitness_trainer_app/features/templates/data/templates_repository.dart';
+import 'package:fitness_trainer_app/features/templates/data/templates_service.dart';
 import 'package:fitness_trainer_app/main.dart';
 
 /// Pumps fixed frames: several screens show indeterminate progress
@@ -45,10 +49,11 @@ Widget _harness(AppDatabase db, {Widget? home, String? initialRoute}) {
 
 void main() {
   late AppDatabase db;
+  late int clientId;
 
   setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
-    await ClientsService(ClientsRepository(db)).createClient('سارا محمدی');
+    clientId = await ClientsService(ClientsRepository(db)).createClient('سارا محمدی');
   });
 
   tearDown(() async {
@@ -70,6 +75,13 @@ void main() {
   });
 
   testWidgets('dashboard "view clients" action switches tabs instead of pushing', (tester) async {
+    // The dashboard now carries a "view clients" action only on its low-session
+    // section, so the client needs a plan that is nearly used up. The
+    // today-attendance section this test used to tap has been removed.
+    final templateId =
+        await TemplatesService(TemplatesRepository(db)).createTemplate('T', 5, 30);
+    await PlansService(PlansRepository(db), db).assignPlan(clientId, templateId, 2, 30);
+
     await tester.pumpWidget(_harness(db, home: const MainShell()));
     await settle(tester);
 
