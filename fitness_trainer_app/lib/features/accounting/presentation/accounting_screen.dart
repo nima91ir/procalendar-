@@ -7,6 +7,7 @@ import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/utils/date_format.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
+import 'package:fitness_trainer_app/features/accounting/domain/accounting_period.dart';
 import 'package:fitness_trainer_app/features/accounting/domain/transaction_entry.dart';
 import 'package:fitness_trainer_app/features/accounting/presentation/add_transaction_sheet.dart';
 import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
@@ -32,6 +33,30 @@ class AccountingScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountingScreenState extends ConsumerState<AccountingScreen> {
+  /// How many per-plan rows show before "show all".
+  static const _planPreviewCount = 5;
+
+  /// Period chips, narrowest first, with the unbounded default last.
+  static const _periodOrder = [
+    AccountingPeriod.today,
+    AccountingPeriod.thisMonth,
+    AccountingPeriod.lastMonth,
+    AccountingPeriod.last6Months,
+    AccountingPeriod.thisYear,
+    AccountingPeriod.lifetime,
+  ];
+
+  bool _showAllPlans = false;
+
+  static String _periodLabel(AppStrings s, AccountingPeriod period) => switch (period) {
+        AccountingPeriod.today => s.todayLabel,
+        AccountingPeriod.thisMonth => s.thisMonthLabel,
+        AccountingPeriod.lastMonth => s.lastMonthLabel,
+        AccountingPeriod.last6Months => s.last6MonthsLabel,
+        AccountingPeriod.thisYear => s.thisYearLabel,
+        AccountingPeriod.lifetime => s.allLabel,
+      };
+
   Future<void> _addTransaction() async {
     final s = AppStrings.of(context);
     final entry = await AppBottomSheet.show(
@@ -103,7 +128,17 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     final templatesAsync = ref.watch(allTemplatesProvider);
     final plansService = ref.read(plansServiceProvider);
 
-    final transactions = transactionsAsync.value ?? const [];
+    // One period drives the whole screen — the summary, the ledger and the
+    // per-plan breakdown all narrow together, so every number on screen
+    // describes the same window.
+    final period = ref.watch(accountingPeriodProvider);
+    final range = rangeFor(period);
+
+    final allTransactions = transactionsAsync.value ?? const [];
+    final transactions = range == null
+        ? allTransactions
+        : allTransactions.where((tx) => range.contains(tx.date)).toList();
+
     var income = 0;
     var expense = 0;
     for (final tx in transactions) {
@@ -113,14 +148,28 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
         expense += tx.amount;
       }
     }
+
+    // The share is derived from the plans, and a plan's price is recorded
+    // against its start date — so narrowing plans by that date keeps the share
+    // in step with the income rows it came from. A plan with no start date has
+    // not begun, so it belongs to no dated period, only to "all time".
     final pricedPlans = (plansAsync.value ?? const [])
         .where((p) => p.price > 0)
+        .where((p) {
+          if (range == null) return true;
+          final start = p.startDate;
+          return start != null && start.isNotEmpty && range.contains(start);
+        })
         .toList();
     final gymShare = pricedPlans.fold<int>(
       0,
       (sum, plan) => sum + plansService.planShareDeduction(plan),
     );
     final net = income - gymShare - expense;
+    // Capped: one row per priced plan is hundreds of rows, which is not
+    // something to land on.
+    final shownPlans =
+        _showAllPlans ? pricedPlans : pricedPlans.take(_planPreviewCount).toList();
     final clientNames = clientNamesAsync.value ?? const <int, String>{};
     final templateNames = {
       for (final template in templatesAsync.value ?? const []) template.id: template.name,
@@ -149,13 +198,36 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           // not hidden behind it.
           padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 88),
           children: [
+            // Period selector. Chips rather than a dropdown, matching the filter
+            // bar on the Clients page — same control for the same job.
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final option in _periodOrder)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                      child: FilterChip(
+                        label: Text(_periodLabel(s, option)),
+                        selected: period == option,
+                        onSelected: (_) =>
+                            ref.read(accountingPeriodProvider.notifier).set(option),
+                        selectedColor: t.primaryLight,
+                        checkmarkColor: t.onSurface,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // Deliberately untitled. The four tiles label themselves, and a
+            // heading here repeated the ledger's — which now sits directly below.
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(s.transactionsLabel, style: AppTypography.titleLarge),
-                  const SizedBox(height: AppSpacing.md),
                   Row(
                     children: [
                       Expanded(child: _SummaryTile(
@@ -190,19 +262,10 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
                 ],
               ),
             ),
-            if (pricedPlans.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.md),
-              SectionHeader(title: s.perPlanShareTitle),
-              for (final plan in pricedPlans)
-                _PlanShareTile(
-                  templateName: templateNames[plan.templateId] ?? '${s.addPlan} #${plan.templateId}',
-                  clientName: clientNames[plan.clientId],
-                  priceText: s.money(plan.price),
-                  shareText: s.shareRate(plan.sharePercent),
-                  deductionText: s.gymShareDeduction(plansService.planShareDeduction(plan)),
-                  remainingText: planRemainingText(plansService, plan, s),
-                ),
-            ],
+            // The ledger comes first: it is the only part of this screen you can
+            // act on, and it used to sit below the per-plan breakdown — which on
+            // a full book is one row per plan, pushing the ledger dozens of
+            // screens down.
             const SizedBox(height: AppSpacing.md),
             SectionHeader(title: s.transactionsLabel),
             if (transactionsAsync.isLoading)
@@ -210,11 +273,19 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
                 padding: EdgeInsets.all(AppSpacing.xxl),
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (transactions.isEmpty)
+            // An empty ledger and an empty *window* are different situations.
+            // Showing "nothing recorded yet" for a quiet month reads as broken.
+            else if (allTransactions.isEmpty)
               AppEmptyState(
                 icon: Icons.account_balance_wallet_outlined,
                 title: s.noTransactionsTitle,
                 subtitle: s.noTransactionsSubtitle,
+              )
+            else if (transactions.isEmpty)
+              AppEmptyState(
+                icon: Icons.filter_alt_off_outlined,
+                title: s.noResults,
+                subtitle: _periodLabel(s, period),
               )
             else
               for (final tx in transactions)
@@ -229,6 +300,32 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
                   onEdit: () => _editTransaction(tx),
                   onDelete: () => _deleteTransaction(tx.id!),
                 ),
+            // The per-plan breakdown, after the ledger and capped.
+            //
+            // It is real information — Reports does not carry it — so it stays
+            // rather than collapsing to a link. But one row per priced plan is
+            // hundreds of rows, so it shows a few and offers the rest.
+            if (pricedPlans.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xxl),
+              SectionHeader(title: s.perPlanShareTitle),
+              for (final plan in shownPlans)
+                _PlanShareTile(
+                  templateName: templateNames[plan.templateId] ?? '${s.addPlan} #${plan.templateId}',
+                  clientName: clientNames[plan.clientId],
+                  priceText: s.money(plan.price),
+                  shareText: s.shareRate(plan.sharePercent),
+                  deductionText: s.gymShareDeduction(plansService.planShareDeduction(plan)),
+                  remainingText: planRemainingText(plansService, plan, s),
+                ),
+              if (pricedPlans.length > shownPlans.length)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: () => setState(() => _showAllPlans = true),
+                    child: Text(s.showAll(pricedPlans.length)),
+                  ),
+                ),
+            ],
           ],
         ),
       ),

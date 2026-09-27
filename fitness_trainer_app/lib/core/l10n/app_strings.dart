@@ -33,6 +33,11 @@ class AppStrings {
   final String no;
   final String cancel;
   final String confirm;
+
+  /// Asked when the back button would close the app. There is nothing unsaved
+  /// to lose, so this exists purely to catch an accidental press.
+  final String exitConfirmTitle;
+  final String exitConfirmMessage;
   final String delete;
   final String edit;
   final String close;
@@ -104,6 +109,14 @@ class AppStrings {
   final String weeklyLabel;
   final String monthlyLabel;
   final String yearlyLabel;
+
+  // Accounting report periods. `allLabel` already exists and covers "all time".
+  final String thisMonthLabel;
+  final String lastMonthLabel;
+  final String last6MonthsLabel;
+  final String thisYearLabel;
+  /// `نمایش همه ({count})` — expands a capped list.
+  final String showAllTemplate;
   final String monthlyChartTitle;
   final String weeklyChartTitle;
   final String noReportsTitle;
@@ -391,6 +404,8 @@ class AppStrings {
     required this.no,
     required this.cancel,
     required this.confirm,
+    required this.exitConfirmTitle,
+    required this.exitConfirmMessage,
     required this.delete,
     required this.edit,
     required this.close,
@@ -455,6 +470,11 @@ class AppStrings {
     required this.weeklyLabel,
     required this.monthlyLabel,
     required this.yearlyLabel,
+    required this.thisMonthLabel,
+    required this.lastMonthLabel,
+    required this.last6MonthsLabel,
+    required this.thisYearLabel,
+    required this.showAllTemplate,
     required this.monthlyChartTitle,
     required this.weeklyChartTitle,
     required this.noReportsTitle,
@@ -770,6 +790,10 @@ class AppStrings {
   /// A plain number in the app's digits, e.g. a filter chip's count.
   String digits(int value) => _digits('$value');
 
+  /// `نمایش همه (۱۲)` — expands a capped list, naming how much is hidden.
+  String showAll(int count) =>
+      showAllTemplate.replaceAll('{count}', _digits('$count'));
+
   String gymShareDeduction(int amount) =>
       gymShareDeductionTemplate.replaceAll('{amount}', money(amount));
 
@@ -858,6 +882,8 @@ class AppStrings {
     no: 'خیر',
     cancel: 'انصراف',
     confirm: 'تأیید',
+    exitConfirmTitle: 'بستن برنامه؟',
+    exitConfirmMessage: 'اگر سهواً دکمهٔ بازگشت را زده‌اید، «انصراف» را بزنید.',
     delete: 'حذف',
     edit: 'ویرایش',
     close: 'بستن',
@@ -922,6 +948,11 @@ class AppStrings {
     weeklyLabel: 'هفتگی',
     monthlyLabel: 'ماهانه',
     yearlyLabel: 'سالانه',
+    thisMonthLabel: 'این ماه',
+    lastMonthLabel: 'ماه گذشته',
+    last6MonthsLabel: '۶ ماه اخیر',
+    thisYearLabel: 'امسال',
+    showAllTemplate: 'نمایش همه ({count})',
     monthlyChartTitle: 'روند درآمد ماهانه (۱۲ ماه اخیر)',
     weeklyChartTitle: 'درآمد هفت روز اخیر',
     noReportsTitle: 'هنوز گزارشی برای نمایش نیست',
@@ -1163,6 +1194,8 @@ class AppStrings {
     no: 'No',
     cancel: 'Cancel',
     confirm: 'OK',
+    exitConfirmTitle: 'Close the app?',
+    exitConfirmMessage: 'If you tapped back by mistake, choose Cancel.',
     delete: 'Delete',
     edit: 'Edit',
     close: 'Close',
@@ -1227,6 +1260,11 @@ class AppStrings {
     weeklyLabel: 'Weekly',
     monthlyLabel: 'Monthly',
     yearlyLabel: 'Yearly',
+    thisMonthLabel: 'This month',
+    lastMonthLabel: 'Last month',
+    last6MonthsLabel: 'Last 6 months',
+    thisYearLabel: 'This year',
+    showAllTemplate: 'Show all ({count})',
     monthlyChartTitle: 'Monthly income trend (last 12 months)',
     weeklyChartTitle: 'Last 7 days income',
     noReportsTitle: 'Nothing to report yet',

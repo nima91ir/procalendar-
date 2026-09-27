@@ -201,12 +201,26 @@ void main() {
     expect(pops, isEmpty);
     expect(tester.takeException(), isNull);
 
-    // Second back has no nested routes left, so the shell reports it as
-    // unhandled and the system pops the app.
-    final handled2 = await tester.binding.handlePopRoute();
+    // Second back has no nested routes left. The shell now asks before letting
+    // the platform close the app, so this call does not resolve until the dialog
+    // is answered — hence not awaiting it here.
+    final pending = tester.binding.handlePopRoute();
     await settle(tester);
+    expect(find.widgetWithText(AlertDialog, 'بستن برنامه؟'), findsOneWidget);
 
-    expect(handled2, isFalse);
+    // Cancelling keeps the app open: reported as handled, nothing popped.
+    await tester.tap(find.widgetWithText(TextButton, 'انصراف'));
+    await settle(tester);
+    expect(await pending, isTrue);
+    expect(pops, isEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+
+    // Confirming lets the platform close it.
+    final pendingAgain = tester.binding.handlePopRoute();
+    await settle(tester);
+    await tester.tap(find.widgetWithText(ElevatedButton, 'تأیید'));
+    await settle(tester);
+    expect(await pendingAgain, isFalse);
     expect(pops, hasLength(1));
   });
 }

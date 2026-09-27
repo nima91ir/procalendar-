@@ -256,14 +256,34 @@ class _MainShellState extends ConsumerState<MainShell>
 
   /// Platform back button. [WidgetsApp.didPopRoute] runs first and pops the
   /// root navigator; its first route (this shell) bubbles, so it returns
-  /// false and we get the event. Pop the active tab's stack instead, and only
-  /// return false (letting the system close the app) when it is empty.
+  /// false and we get the event.
+  ///
+  /// Three outcomes, in order:
+  ///  * a screen is pushed in this tab — go back to the previous one;
+  ///  * nothing is pushed — ask before letting the platform close the app, so
+  ///    a stray press does not drop the coach out mid-session;
+  ///  * confirmed — return false, which is what lets the close proceed.
+  ///
+  /// Returning `true` means "handled": the framework stops there and the app
+  /// stays open, which is the whole point of asking.
   @override
   Future<bool> didPopRoute() async {
     final index = ref.read(tabIndexProvider);
     final navigator = _tabNavigators[index].currentState;
-    if (navigator == null || !navigator.canPop()) return false;
-    return navigator.maybePop();
+    if (navigator != null && navigator.canPop()) return navigator.maybePop();
+
+    if (!mounted) return false;
+    final s = AppStrings.of(context);
+    final leave = await AppConfirmDialog.show(
+      context,
+      title: s.exitConfirmTitle,
+      message: s.exitConfirmMessage,
+      confirmLabel: s.confirm,
+      cancelLabel: s.cancel,
+    );
+    // Nothing to lose here — every edit saves as it is made — so this is only
+    // about an accidental press, which is exactly what the dialog catches.
+    return leave != true;
   }
 
   /// Coming back to the foreground is when a deploy most plausibly landed while
