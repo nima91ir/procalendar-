@@ -9,29 +9,60 @@ final backupServiceProvider = Provider<BackupService>((ref) {
   return BackupService(ref.watch(databaseProvider));
 });
 
-/// What the dashboard reminder needs: the last backup (Jalali key or null) and
-/// whether the user should be nudged right now.
+/// What the backup reminder needs: when the newest backup was made (a Jalali
+/// key, or null) and whether it is old enough to warn about.
 class BackupReminderState {
   final String? lastBackup;
-  final bool due;
+  final bool overdue;
 
-  const BackupReminderState({required this.lastBackup, required this.due});
+  const BackupReminderState({required this.lastBackup, required this.overdue});
 }
 
-/// Reads the two persisted dates and applies [BackupReminder].
+/// Reads the last-backup date and applies [BackupReminder].
 ///
-/// Invalidate this after a successful backup (and after snoozing) so the banner
-/// reacts immediately instead of waiting for a rebuild.
+/// Invalidate this after a successful backup so the reminder updates at once
+/// instead of waiting for a rebuild.
 final backupReminderProvider = FutureProvider.autoDispose<BackupReminderState>((ref) async {
   final settings = ref.watch(settingsServiceProvider);
   final last = await settings.getLastBackupDate();
-  final snoozedUntil = await settings.getBackupSnoozeUntil();
   return BackupReminderState(
     lastBackup: last,
-    due: BackupReminder.isDue(
-      lastBackup: last,
-      snoozedUntil: snoozedUntil,
-      today: jalaliToday(),
-    ),
+    overdue: BackupReminder.isOverdue(lastBackup: last, today: jalaliToday()),
+  );
+});
+
+/// How many records the database actually holds.
+///
+/// Shown in Settings so the user can see at a glance that the numbers still look
+/// right. That is the check that was missing when a live user's database was
+/// wiped: the app looked normal and nobody could tell whether the zeros were
+/// real. Counted in SQL so a year of attendance is never loaded to count it.
+///
+/// The table names are written out because this schema is frozen at v7 — new
+/// columns go through migrations and the tables themselves cannot be renamed.
+class DataHealth {
+  final int clients;
+  final int plans;
+  final int attendance;
+
+  const DataHealth({
+    required this.clients,
+    required this.plans,
+    required this.attendance,
+  });
+}
+
+final dataHealthProvider = FutureProvider.autoDispose<DataHealth>((ref) async {
+  final db = ref.watch(databaseProvider);
+
+  Future<int> countRows(String table) async {
+    final row = await db.customSelect('SELECT COUNT(*) AS c FROM $table').getSingle();
+    return row.read<int>('c');
+  }
+
+  return DataHealth(
+    clients: await countRows('clients'),
+    plans: await countRows('client_plans'),
+    attendance: await countRows('attendance'),
   );
 });

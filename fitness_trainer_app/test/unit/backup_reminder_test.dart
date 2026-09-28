@@ -6,6 +6,9 @@ import 'package:fitness_trainer_app/features/backup/domain/backup_reminder.dart'
 /// entire database lives in browser storage, so its thresholds are pinned here
 /// rather than left to the widget that renders it.
 ///
+/// The reminder is always on screen now; `isOverdue` only decides how loudly it
+/// is drawn, so these tests pin when it stops being calm.
+///
 /// Dates are always derived from `jalaliToday()` with an offset, so these tests
 /// do not break when the clock rolls over.
 void main() {
@@ -13,11 +16,8 @@ void main() {
 
   String daysBack(int days) => addJalaliDays(today, -days);
 
-  bool due(String? lastBackup, {String? snoozedUntil}) => BackupReminder.isDue(
-        lastBackup: lastBackup,
-        snoozedUntil: snoozedUntil,
-        today: today,
-      );
+  bool overdue(String? lastBackup) =>
+      BackupReminder.isOverdue(lastBackup: lastBackup, today: today);
 
   group('daysSince', () {
     test('counts whole days between two Jalali keys', () {
@@ -37,51 +37,29 @@ void main() {
     });
   });
 
-  group('isDue', () {
-    test('prompts when the user has never backed up', () {
-      expect(due(null), isTrue);
+  group('isOverdue', () {
+    test('warns when the user has never backed up', () {
+      expect(overdue(null), isTrue);
     });
 
-    test('stays quiet one day before the interval', () {
-      expect(due(daysBack(BackupReminder.intervalDays - 1)), isFalse);
+    test('stays calm one day before the interval', () {
+      expect(overdue(daysBack(BackupReminder.intervalDays - 1)), isFalse);
     });
 
-    test('prompts exactly on the interval', () {
-      expect(due(daysBack(BackupReminder.intervalDays)), isTrue);
+    test('warns exactly on the interval', () {
+      expect(overdue(daysBack(BackupReminder.intervalDays)), isTrue);
     });
 
-    test('prompts long after the interval', () {
-      expect(due(daysBack(BackupReminder.intervalDays * 3)), isTrue);
+    test('warns long after the interval', () {
+      expect(overdue(daysBack(BackupReminder.intervalDays * 3)), isTrue);
     });
 
-    test('prompts when the stored date is unreadable', () {
-      expect(due('not-a-date'), isTrue);
+    test('warns when the stored date is unreadable', () {
+      expect(overdue('not-a-date'), isTrue);
     });
 
-    test('stays quiet while a snooze has not expired', () {
-      // Snoozed until tomorrow, even though the backup is long overdue.
-      expect(due(daysBack(40), snoozedUntil: addJalaliDays(today, 1)), isFalse);
-    });
-
-    test('prompts again on the day the snooze expires', () {
-      expect(due(daysBack(40), snoozedUntil: today), isTrue);
-    });
-
-    test('prompts again once the snooze is in the past', () {
-      expect(due(daysBack(40), snoozedUntil: addJalaliDays(today, -1)), isTrue);
-    });
-
-    test('a snooze silences the never-backed-up prompt too', () {
-      expect(due(null, snoozedUntil: addJalaliDays(today, 1)), isFalse);
-    });
-  });
-
-  group('snoozeUntilFrom', () {
-    test('pushes the banner out by snoozeDays', () {
-      final until = BackupReminder.snoozeUntilFrom(DateTime.now());
-
-      expect(until, addJalaliDays(today, BackupReminder.snoozeDays));
-      expect(BackupReminder.daysSince(today, until), BackupReminder.snoozeDays);
+    test('a backup taken today is never a warning', () {
+      expect(overdue(daysBack(0)), isFalse);
     });
   });
 }

@@ -31,9 +31,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   String _query = '';
   final Set<int> _selectedTagIds = {};
   _SortMode _sort = _SortMode.name;
-  /// Clients already dismissed by swipe; kept out of the list until the async
-  /// delete finishes so the Dismissible leaves the tree on the next build.
-  final Set<int> _dismissedIds = {};
 
   @override
   void dispose() {
@@ -434,53 +431,75 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           // tags included, surfaces as a chip at the head of this row.
           SizedBox(
             height: 40,
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
-                // Everything currently filtering the list leads the row, so it
-                // is the first thing seen and is always clearable.
-                if (selectedTags.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
-                    child: Chip(
-                      avatar: const Icon(Icons.local_offer_outlined, size: 18),
-                      label: Text('${s.tagsSection}: $selectedTagNames'),
-                      onDeleted: () => setState(_selectedTagIds.clear),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsetsDirectional.only(
+                      start: AppSpacing.lg,
+                      end: AppSpacing.sm,
                     ),
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      // Everything currently filtering the list leads the row,
+                      // so it is the first thing seen and is always clearable.
+                      if (selectedTags.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                          child: Chip(
+                            avatar: const Icon(Icons.local_offer_outlined, size: 18),
+                            label: Text('${s.tagsSection}: $selectedTagNames'),
+                            onDeleted: () => setState(_selectedTagIds.clear),
+                          ),
+                        ),
+                      // A filter picked from the sheet is not one of the presets,
+                      // so without this the bar would show nothing selected while
+                      // the list sat filtered — no way to see what is applied,
+                      // and no way to clear it.
+                      if (quickFilter != ClientQuickFilter.all &&
+                          !_presetFilters.contains(quickFilter))
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                          child: Chip(
+                            avatar: const Icon(Icons.filter_alt_outlined, size: 18),
+                            label: Text(_quickFilterLabel(quickFilter, s)),
+                            onDeleted: () => ref
+                                .read(clientQuickFilterProvider.notifier)
+                                .set(ClientQuickFilter.all),
+                          ),
+                        ),
+                      for (final filter in _presetFilters)
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                          child: FilterChip(
+                            label: Text(_chipLabel(filter, s, filterCounts)),
+                            selected: quickFilter == filter,
+                            onSelected: (_) => ref
+                                .read(clientQuickFilterProvider.notifier)
+                                .set(filter),
+                            selectedColor: t.primaryLight,
+                            checkmarkColor: t.onSurface,
+                          ),
+                        ),
+                    ],
                   ),
-                // A filter picked from the sheet is not one of the presets, so
-                // without this the bar would show nothing selected while the
-                // list sat filtered — no way to see what is applied, and no way
-                // to clear it.
-                if (quickFilter != ClientQuickFilter.all &&
-                    !_presetFilters.contains(quickFilter))
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
-                    child: Chip(
-                      avatar: const Icon(Icons.filter_alt_outlined, size: 18),
-                      label: Text(_quickFilterLabel(quickFilter, s)),
-                      onDeleted: () => ref
-                          .read(clientQuickFilterProvider.notifier)
-                          .set(ClientQuickFilter.all),
-                    ),
+                ),
+                // Pinned OUTSIDE the scroller on purpose. This is the only route
+                // to the full filter list, and on a 360px phone it used to sit
+                // past the edge of the row: two and a half chips were visible,
+                // the third clipped mid-word, and nothing suggested the rest
+                // existed. Pinning it means the presets may scroll but the way
+                // through to every filter never disappears.
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(
+                    start: AppSpacing.sm,
+                    end: AppSpacing.lg,
                   ),
-                for (final filter in _presetFilters)
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
-                    child: FilterChip(
-                      label: Text(_chipLabel(filter, s, filterCounts)),
-                      selected: quickFilter == filter,
-                      onSelected: (_) =>
-                          ref.read(clientQuickFilterProvider.notifier).set(filter),
-                      selectedColor: t.primaryLight,
-                      checkmarkColor: t.onSurface,
-                    ),
+                  child: ActionChip(
+                    avatar: const Icon(Icons.tune, size: 18),
+                    label: Text(s.filtersButton),
+                    onPressed: () => _showFilterSheet(context, s),
                   ),
-                ActionChip(
-                  avatar: const Icon(Icons.tune, size: 18),
-                  label: Text(s.filtersButton),
-                  onPressed: () => _showFilterSheet(context, s),
                 ),
               ],
             ),
@@ -512,7 +531,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                   tagFiltered,
                   lastVisitAsync.value ?? const <int, String>{},
                 );
-                final visibleClients = clients.where((c) => !_dismissedIds.contains(c.id)).toList();
+                final visibleClients = clients;
                 if (visibleClients.isEmpty) {
                   if (quickFilter != ClientQuickFilter.all) {
                     return AppEmptyState(
@@ -538,55 +557,17 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                   itemCount: visibleClients.length,
                   itemBuilder: (context, index) {
                     final client = visibleClients[index];
-                      return Dismissible(
-                        key: ValueKey(client.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                          decoration: BoxDecoration(
-                            color: t.error,
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                          ),
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.only(left: AppSpacing.lg),
-                          child: const Icon(Icons.delete_outline, color: Colors.white),
-                        ),
-                        confirmDismiss: (direction) async {
-                          return await AppConfirmDialog.show(
-                            context,
-                            title: s.deleteClientTitle,
-                            message: s.deleteClientMessage(client.name),
-                            confirmLabel: s.delete,
-                            cancelLabel: s.cancel,
-                          );
-                        },
-                        onDismissed: (_) async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          // Take the row out of the tree synchronously so the
-                          // Dismissible isn't rebuilt while still present (the
-                          // classic "dismissed Dismissible still part of the
-                          // tree" framework error).
-                          setState(() => _dismissedIds.add(client.id!));
-                          try {
-                            await ref.read(clientsServiceProvider).deleteClient(client.id!);
-                            ref.invalidateAppData();
-                            if (mounted) {
-                              messenger.showSnackBar(SnackBar(content: Text(s.clientDeleted(client.name))));
-                            }
-                          } catch (e) {
-                            // Delete failed: bring the row back.
-                            if (mounted) {
-                              setState(() => _dismissedIds.remove(client.id!));
-                              messenger.showSnackBar(SnackBar(content: Text(s.errorText(e))));
-                            }
-                          }
-                        },
-                        child: ClientCard(
-                          clientId: client.id!,
-                          onTap: () => Navigator.pushNamed(context, '${AppRoutes.clientDetail}/${client.id}'),
-                          onLongPress: () => _showClientActions(client),
-                          onShowActions: () => _showClientActions(client),
-                        ),
+                      // No swipe-to-delete here, deliberately. Its horizontal
+                      // drag recogniser competed with the vertical scroll: on a
+                      // phone a swipe that drifted sideways let the card capture
+                      // the gesture, so the list stalled mid-scroll and then
+                      // jumped. Delete is unchanged in the card's ⋮ menu and on
+                      // long-press, so no route to it was lost.
+                      return ClientCard(
+                        clientId: client.id!,
+                        onTap: () => Navigator.pushNamed(context, '${AppRoutes.clientDetail}/${client.id}'),
+                        onLongPress: () => _showClientActions(client),
+                        onShowActions: () => _showClientActions(client),
                       );
                     },
                   );

@@ -78,6 +78,15 @@ void main() {
     // The dashboard now carries a "view clients" action only on its low-session
     // section, so the client needs a plan that is nearly used up. The
     // today-attendance section this test used to tap has been removed.
+    //
+    // A taller surface than the default 800x600: the permanent backup card now
+    // sits above that section, so the action ends up beneath the bottom
+    // navigation bar — and a tap there does not fail loudly, it hits the nav bar
+    // and switches to the wrong tab, which is far more confusing to diagnose.
+    tester.view.physicalSize = const Size(1000, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final templateId =
         await TemplatesService(TemplatesRepository(db)).createTemplate('T', 5, 30);
     await PlansService(PlansRepository(db), db).assignPlan(clientId, templateId, 2, 30);

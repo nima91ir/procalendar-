@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
 import 'package:fitness_trainer_app/core/theme/app_theme_spec.dart';
+import 'package:fitness_trainer_app/core/widgets/ui_scale.dart';
 import 'package:fitness_trainer_app/features/settings/data/settings_service.dart';
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
@@ -114,5 +115,41 @@ class LanguageNotifier extends Notifier<String> {
   Future<void> setLanguage(String code) async {
     state = code;
     await ref.read(settingsServiceProvider).setLanguagePreference(code);
+  }
+}
+
+/// Display size, persisted in `app_settings` and applied by
+/// `MaterialApp.builder`, so every screen shrinks or grows together.
+///
+/// Splitting preview from persist is deliberate: a slider writes on every frame
+/// it moves, and round-tripping each tick through the database would both stutter
+/// and hammer it. [preview] changes the state only — which is what makes the
+/// change visible live — and [persist] writes once, when the drag ends.
+final uiScaleProvider = NotifierProvider<UiScaleNotifier, double>(UiScaleNotifier.new);
+
+class UiScaleNotifier extends Notifier<double> {
+  @override
+  double build() {
+    _load();
+    return kUiScaleDefault;
+  }
+
+  Future<void> _load() async {
+    try {
+      final stored = await ref.read(settingsServiceProvider).getUiScalePreference();
+      state = parseUiScale(stored);
+    } catch (_) {
+      // Database not ready; keep the default size.
+    }
+  }
+
+  /// Live preview while the slider is being dragged. Not persisted.
+  void preview(double scale) {
+    state = scale.clamp(kUiScaleMin, kUiScaleMax);
+  }
+
+  /// Writes the current value. Call when the drag ends.
+  Future<void> persist() async {
+    await ref.read(settingsServiceProvider).setUiScalePreference(state);
   }
 }

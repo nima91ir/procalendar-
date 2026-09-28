@@ -45,22 +45,28 @@ class SettingsService {
   Future<void> setLanguagePreference(String code) => repository.setSetting('language', code);
 
   // --- Backup-reminder bookkeeping -------------------------------------------
-  // Both values are Jalali `yyyy/MM/dd` keys, like every other date this app
-  // stores. Nothing here needs a schema change: they ride on the existing
-  // key/value `app_settings` table, so live databases at v7 are untouched.
+  // A Jalali `yyyy/MM/dd` key, like every other date this app stores. Nothing
+  // here needs a schema change: it rides on the existing key/value
+  // `app_settings` table, so live databases at v7 are untouched.
+  //
+  // The old `backup_snooze_until` key is left in place rather than migrated
+  // away: the reminder is permanent now, so nothing reads it, and an unused row
+  // in a key/value table costs nothing.
 
   static const _lastBackupKey = 'last_backup_date';
-  static const _snoozeKey = 'backup_snooze_until';
+  static const _uiScaleKey = 'ui_scale';
 
   Future<String?> getLastBackupDate() => repository.getSetting(_lastBackupKey);
 
   Future<void> setLastBackupDate(String jalaliDate) =>
       repository.setSetting(_lastBackupKey, jalaliDate);
 
-  Future<String?> getBackupSnoozeUntil() => repository.getSetting(_snoozeKey);
+  /// Display size, stored as a plain number string. Read it through
+  /// `parseUiScale` so a missing or out-of-range value cannot be applied.
+  Future<String?> getUiScalePreference() => repository.getSetting(_uiScaleKey);
 
-  Future<void> setBackupSnoozeUntil(String jalaliDate) =>
-      repository.setSetting(_snoozeKey, jalaliDate);
+  Future<void> setUiScalePreference(double scale) =>
+      repository.setSetting(_uiScaleKey, scale.toString());
 
   Future<Map<String, String>> getAllSettings() async {
     final rows = await db.select(db.appSettings).get();

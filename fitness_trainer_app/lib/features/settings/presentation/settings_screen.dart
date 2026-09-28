@@ -1,26 +1,25 @@
 ﻿import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fitness_trainer_app/core/app_links.dart';
 import 'package:fitness_trainer_app/core/dev/demo_data.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_theme_spec.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/platform/file_transfer.dart';
+import 'package:fitness_trainer_app/core/platform/link_opener.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/providers/app_refresh.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
-import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
+import 'package:fitness_trainer_app/core/widgets/ui_scale.dart';
 import 'package:fitness_trainer_app/core/utils/date_format.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/features/backup/data/backup_service.dart';
 import 'package:fitness_trainer_app/features/backup/domain/backup_reminder.dart';
 import 'package:fitness_trainer_app/features/backup/providers/backup_providers.dart';
-import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
-import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/settings/providers/settings_providers.dart';
-import 'package:fitness_trainer_app/features/tags/providers/tags_providers.dart';
-import 'package:fitness_trainer_app/features/templates/providers/templates_providers.dart';
 import 'package:fitness_trainer_app/routing/routes.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -74,16 +73,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final summary = await ref.read(demoDataServiceProvider).seed();
       if (!mounted) return;
-      ref.invalidate(allClientsProvider);
-      ref.invalidate(allTagsProvider);
-      ref.invalidate(allTemplatesProvider);
-      ref.invalidate(totalClientsProvider);
-      ref.invalidate(lowSessionPlansProvider);
-      ref.invalidate(bonusSessionClientsProvider);
-      ref.invalidate(todayAttendanceProvider);
-      ref.invalidate(clientNamesProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(clientTransactionsProvider);
+      // The whole graph, not a hand-picked list. The list this replaced had
+      // already gone stale: `dataHealthProvider` (the stored-record counts) was
+      // not in it, so Settings went on reporting 0 clients while four sat in the
+      // list — exactly the wrong signal from the line that exists to be trusted.
+      // Anything new added to `app_refresh.dart` would have hit the same trap.
+      ref.invalidateAppData();
       if (mounted) _loadSettings();
       messenger.showSnackBar(SnackBar(content: Text(summary)));
     } catch (e) {
@@ -147,6 +142,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(s.backupFailed('$e'))));
     }
+  }
+
+  /// Where the slider is being dragged to, while the drag is in progress.
+  ///
+  /// Non-null only during a drag. The display size itself is applied on release,
+  /// so this is what the percentage label follows in the meantime — the live
+  /// feedback, without the control moving under the finger.
+  double? _uiScaleDrag;
+
+  /// Back to the default display size, persisted like any other change.
+  Future<void> _resetUiScale() async {
+    setState(() => _uiScaleDrag = null);
+    final notifier = ref.read(uiScaleProvider.notifier);
+    notifier.preview(kUiScaleDefault);
+    await notifier.persist();
+  }
+
+  /// Opens the support channel — or copies the address when there is nothing to
+  /// open it with, which is the case on native builds. A tap that does nothing
+  /// at all is the one outcome worth avoiding.
+  Future<void> _openSupport() async {
+    final s = AppStrings.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    if (await openExternalLink(supportTelegramUrl)) return;
+    await Clipboard.setData(const ClipboardData(text: supportTelegramUrl));
+    messenger.showSnackBar(SnackBar(content: Text(s.contactLinkCopied)));
   }
 
   Future<void> _openCsvSheet() async {
@@ -246,11 +267,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final s = AppStrings.of(context);
     final themeMode = ref.watch(themeModeProvider);
+    final uiScale = ref.watch(uiScaleProvider);
     final language = ref.watch(languageProvider);
     final tones = context.tones;
     // Shown next to the backup buttons so the state is visible where the user
     // would act on it, whether or not the dashboard banner was dismissed.
     final lastBackup = ref.watch(backupReminderProvider).value?.lastBackup;
+    final dataHealth = ref.watch(dataHealthProvider).value;
     final backupDays = BackupReminder.daysSince(lastBackup, jalaliToday());
     final backupOverdue =
         backupDays != null && backupDays >= BackupReminder.intervalDays;
@@ -323,6 +346,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ref.read(themeModeProvider.notifier).setThemeMode(selection.first);
                   },
                 ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(s.uiScaleLabel, style: AppTypography.bodySmall),
+                    ),
+                    Text(
+                      s.uiScalePercent(((_uiScaleDrag ?? uiScale) * 100).round()),
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: tones.onSurface,
+                      ),
+                    ),
+                    if (_uiScaleDrag != null || uiScale != kUiScaleDefault)
+                      TextButton(
+                        onPressed: _resetUiScale,
+                        child: Text(s.uiScaleReset),
+                      ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.text_decrease, size: 18),
+                    Expanded(
+                      child: Slider(
+                        value: _uiScaleDrag ?? uiScale,
+                        min: kUiScaleMin,
+                        max: kUiScaleMax,
+                        // Applied on RELEASE, deliberately. Resizing the app
+                        // live resizes this very slider — measured: dragging it
+                        // grew it 1.24x and pushed it 118px down the page — so
+                        // the control slid out from under the finger and the
+                        // value could not be fine-tuned. The percentage above is
+                        // the live feedback instead.
+                        onChanged: (value) =>
+                            setState(() => _uiScaleDrag = value),
+                        onChangeEnd: (value) async {
+                          final notifier = ref.read(uiScaleProvider.notifier);
+                          notifier.preview(value);
+                          await notifier.persist();
+                          if (mounted) setState(() => _uiScaleDrag = null);
+                        },
+                      ),
+                    ),
+                    const Icon(Icons.text_increase, size: 18),
+                  ],
+                ),
+                Text(
+                  s.uiScaleHint,
+                  style: AppTypography.caption.copyWith(color: tones.onSurfaceVar),
+                ),
               ],
             ),
           ),
@@ -378,6 +452,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
+                // What the database actually holds, right beside the buttons that
+                // protect it. When a live user's storage was wiped the app still
+                // looked perfectly normal and nobody could tell whether the
+                // zeros were real; this is the number that answers that.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(s.dataHealthLabel, style: AppTypography.bodySmall),
+                    Flexible(
+                      child: Text(
+                        dataHealth == null
+                            ? '—'
+                            : s.dataHealthCounts(
+                                dataHealth.clients,
+                                dataHealth.plans,
+                                dataHealth.attendance,
+                              ),
+                        textAlign: TextAlign.end,
+                        style: AppTypography.bodySmall.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: tones.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
                 Text(s.backupDescription, style: AppTypography.bodySmall),
                 const SizedBox(height: AppSpacing.md),
                 OutlinedButton.icon(
@@ -400,6 +501,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+          // Hidden while the channel handle is unset rather than pointing users
+          // at a link that does not exist. See core/app_links.dart.
+          if (supportTelegramUrl.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xxl),
+            SectionHeader(title: s.contactSection),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Material(
+                type: MaterialType.transparency,
+                child: ListTile(
+                  leading: const Icon(Icons.support_agent_outlined),
+                  title: Text(s.contactTelegramTitle),
+                  subtitle: Text(s.contactTelegramSubtitle),
+                  trailing: const Icon(Icons.open_in_new),
+                  onTap: _openSupport,
+                ),
+              ),
+            ),
+          ],
           if (kDebugMode) ...[
             const SizedBox(height: AppSpacing.xxl),
             SectionHeader(title: s.devTools),

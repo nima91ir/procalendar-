@@ -148,6 +148,8 @@ class AppStrings {
   final String seedLargeDemoData;
   final String seedLargeDemoDataConfirm;
   final String databaseFailedTitle;
+  final String storageUnavailableTitle;
+  final String storageUnavailableMessage;
 
   // Dashboard
   final String dashboardTitle;
@@ -323,6 +325,18 @@ class AppStrings {
   final String backupFailedTemplate;
   final String lastBackupLabel;
   final String lastBackupNever;
+  final String backupReminderTitle;
+  final String backupReminderWhy;
+  final String dataHealthLabel;
+  final String dataHealthCountsTemplate;
+  final String contactSection;
+  final String contactTelegramTitle;
+  final String contactTelegramSubtitle;
+  final String contactLinkCopied;
+  final String uiScaleLabel;
+  final String uiScaleHint;
+  final String uiScalePercentTemplate;
+  final String uiScaleReset;
   final String lastBackupOnTemplate;
   final String daysAgoTemplate;
   final String backupReminderNeverBody;
@@ -504,6 +518,8 @@ class AppStrings {
     required this.seedLargeDemoData,
     required this.seedLargeDemoDataConfirm,
     required this.databaseFailedTitle,
+    required this.storageUnavailableTitle,
+    required this.storageUnavailableMessage,
     required this.dashboardTitle,
     required this.totalClients,
     required this.expiredPlans,
@@ -638,6 +654,18 @@ class AppStrings {
     required this.backupFailedTemplate,
     required this.lastBackupLabel,
     required this.lastBackupNever,
+    required this.backupReminderTitle,
+    required this.backupReminderWhy,
+    required this.dataHealthLabel,
+    required this.dataHealthCountsTemplate,
+    required this.contactSection,
+    required this.contactTelegramTitle,
+    required this.contactTelegramSubtitle,
+    required this.contactLinkCopied,
+    required this.uiScaleLabel,
+    required this.uiScaleHint,
+    required this.uiScalePercentTemplate,
+    required this.uiScaleReset,
     required this.lastBackupOnTemplate,
     required this.daysAgoTemplate,
     required this.backupReminderNeverBody,
@@ -760,6 +788,15 @@ class AppStrings {
   String daysAgo(int days) => daysAgoTemplate.replaceAll('{days}', _digits('$days'));
   String backupReminderDueTitle(int days) =>
       backupReminderDueTitleTemplate.replaceAll('{days}', _digits('$days'));
+
+  String uiScalePercent(int percent) =>
+      uiScalePercentTemplate.replaceAll('{percent}', _digits('$percent'));
+
+  String dataHealthCounts(int clients, int plans, int attendance) =>
+      dataHealthCountsTemplate
+          .replaceAll('{clients}', _digits('$clients'))
+          .replaceAll('{plans}', _digits('$plans'))
+          .replaceAll('{attendance}', _digits('$attendance'));
   String importSummary(int clients, int plans, int attendance) => importSummaryTemplate
       .replaceAll('{clients}', _digits('$clients'))
       .replaceAll('{plans}', _digits('$plans'))
@@ -982,6 +1019,8 @@ class AppStrings {
     seedLargeDemoData: 'ساخت داده پرحجم (۱۲۰ مشتری، یک سال)',
     seedLargeDemoDataConfirm: 'همهٔ مشتریان، برنامه‌ها، سوابق حضور و تراکنش‌های فعلی حذف و با دادهٔ پرحجم جایگزین می‌شوند. ادامه می‌دهید؟',
     databaseFailedTitle: 'راه‌اندازی پایگاه داده ناموفق بود',
+    storageUnavailableTitle: 'دسترسی به اطلاعات ذخیره‌شده ممکن نشد',
+    storageUnavailableMessage: 'اطلاعات شما پاک نشده است. برنامه را کاملاً ببندید و دوباره باز کنید. برنامه را حذف نکنید و داده‌های مرورگر را پاک نکنید.',
     dashboardTitle: 'تقویم حرفه‌ای',
     totalClients: 'تعداد مشتریان',
     expiredPlans: 'پایان‌یافته',
@@ -1111,6 +1150,19 @@ class AppStrings {
     csvPlans: 'برنامه‌ها',
     lastBackupLabel: 'آخرین پشتیبان‌گیری',
     lastBackupNever: 'هنوز پشتیبان نگرفته‌اید',
+    backupReminderTitle: 'پشتیبان‌گیری از اطلاعات',
+    backupReminderWhy:
+        'اطلاعات شما فقط در حافظهٔ همین مرورگر ذخیره می‌شود و برنامه هیچ کنترلی روی آن ندارد؛ مرورگر یا گوشی می‌تواند آن را پاک کند. پس مرتب پشتیبان بگیرید.',
+    dataHealthLabel: 'اطلاعات ذخیره‌شده',
+    dataHealthCountsTemplate: '{clients} مشتری · {plans} برنامه · {attendance} رکورد حضور',
+    contactSection: 'پشتیبانی',
+    contactTelegramTitle: 'کانال تلگرام',
+    contactTelegramSubtitle: 'برای گزارش مشکل یا پرسیدن سؤال، در کانال تلگرام پیام بگذارید.',
+    contactLinkCopied: 'باز کردن لینک ممکن نشد؛ آدرس کپی شد. آن را در مرورگر بچسبانید.',
+    uiScaleLabel: 'اندازهٔ نمایش',
+    uiScaleHint: 'هر چه کوچک‌تر، چیزهای بیشتری روی صفحه جا می‌شود.',
+    uiScalePercentTemplate: '{percent}٪',
+    uiScaleReset: 'بازنشانی',
     lastBackupOnTemplate: 'آخرین پشتیبان: {date}',
     daysAgoTemplate: '{days} روز پیش',
     backupReminderNeverBody:
@@ -1294,6 +1346,8 @@ class AppStrings {
     seedLargeDemoData: 'Build large dataset (120 clients, one year)',
     seedLargeDemoDataConfirm: 'Every current client, plan, attendance record and transaction will be deleted and replaced with the large dataset. Continue?',
     databaseFailedTitle: 'Database setup failed',
+    storageUnavailableTitle: 'Could not reach your saved data',
+    storageUnavailableMessage: 'Your data has not been deleted. Close the app completely and open it again. Do not uninstall the app or clear your browser data.',
     dashboardTitle: 'Pro Calendar',
     totalClients: 'Total clients',
     expiredPlans: 'Expired',
@@ -1430,6 +1484,19 @@ class AppStrings {
     backupFailedTemplate: 'Could not save file: {error}',
     lastBackupLabel: 'Last backup',
     lastBackupNever: 'No backup yet',
+    backupReminderTitle: 'Back up your data',
+    backupReminderWhy:
+        'Your data lives in this browser only, and the app has no control over it — the browser or the phone can wipe it. So back up often.',
+    dataHealthLabel: 'Stored data',
+    dataHealthCountsTemplate: '{clients} clients · {plans} plans · {attendance} attendance records',
+    contactSection: 'Support',
+    contactTelegramTitle: 'Telegram channel',
+    contactTelegramSubtitle: 'Report a bug or ask a question on our Telegram channel.',
+    contactLinkCopied: 'Could not open the link; the address was copied. Paste it into a browser.',
+    uiScaleLabel: 'Display size',
+    uiScaleHint: 'Smaller fits more on the screen.',
+    uiScalePercentTemplate: '{percent}%',
+    uiScaleReset: 'Reset',
     lastBackupOnTemplate: 'Last backup: {date}',
     daysAgoTemplate: '{days} days ago',
     backupReminderNeverBody:

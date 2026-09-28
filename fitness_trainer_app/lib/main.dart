@@ -2,6 +2,7 @@
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/core/database/app_database.dart';
+import 'package:fitness_trainer_app/core/database/database_open_failure.dart';
 import 'package:fitness_trainer_app/core/database/database_providers.dart';
 import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
@@ -12,6 +13,7 @@ import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/widgets/app_update_banner.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
 import 'package:fitness_trainer_app/core/widgets/bottom_nav_bar.dart';
+import 'package:fitness_trainer_app/core/widgets/ui_scale.dart';
 import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
 import 'package:fitness_trainer_app/features/backup/presentation/import_backup_screen.dart';
 import 'package:fitness_trainer_app/features/clients/presentation/clients_screen.dart';
@@ -39,6 +41,14 @@ void main() async {
     runApp(ProviderScope(overrides: [
       databaseProvider.overrideWithValue(db),
     ], child: const ProCalendarApp()));
+  } on PersistentStorageUnavailable catch (error) {
+    // The database opened, but into storage that is forgotten the moment the
+    // app closes. Letting the app run is exactly what a live user hit: a
+    // normal-looking calendar with no data, then a day of typing that could
+    // never be saved. Stopping here leaves the real database untouched, and
+    // the screen explains that the data is safe and a full relaunch is the fix.
+    debugPrint('PRO CALENDAR: no persistent storage -> ${error.reason}');
+    runApp(const StartupErrorApp(storageUnavailable: true));
   } catch (error, stackTrace) {
     // Without this guard a database failure (corrupt file, unsupported
     // platform, missing sqlite3) produced a black screen with no UI.
@@ -50,13 +60,29 @@ void main() async {
 
 /// Shown when the database cannot be opened, instead of a blank window.
 class StartupErrorApp extends StatelessWidget {
+  /// Set when the failure is specifically "the saved data could not be
+  /// reached". That needs its own wording: the data itself is intact and a
+  /// full relaunch is the fix, so a raw exception string would be both
+  /// alarming and unhelpful.
+  final bool storageUnavailable;
   final String message;
 
-  const StartupErrorApp({super.key, required this.message});
+  const StartupErrorApp({
+    super.key,
+    this.message = '',
+    this.storageUnavailable = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final t = context.tones;
+    // The chosen language is stored in the database, and this screen exists
+    // precisely because that database could not be used — so Persian is the
+    // only locale it can honestly assume, matching the rest of this widget.
+    final s = AppStrings.fa;
+    final title =
+        storageUnavailable ? s.storageUnavailableTitle : s.databaseFailedTitle;
+    final detail = storageUnavailable ? s.storageUnavailableMessage : message;
     return MaterialApp(
       title: AppStrings.fa.appTitle,
       debugShowCheckedModeBanner: false,
@@ -73,12 +99,12 @@ class StartupErrorApp extends StatelessWidget {
                   Icon(Icons.storage_rounded, size: 64, color: t.error),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
-                    AppStrings.fa.databaseFailedTitle,
+                    title,
                     style: AppTypography.headlineMedium.copyWith(color: t.onSurface),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  Text(message, style: AppTypography.bodySmall, textAlign: TextAlign.center),
+                  Text(detail, style: AppTypography.bodySmall, textAlign: TextAlign.center),
                 ],
               ),
             ),
@@ -96,6 +122,9 @@ class ProCalendarApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final lang = ref.watch(languageProvider);
+    // Read here, in the build phase — not inside `builder` below, which runs
+    // later and is not a valid place to watch a provider.
+    final uiScale = ref.watch(uiScaleProvider);
     return MaterialApp(
       title: lang == 'fa' ? AppStrings.fa.appTitle : AppStrings.en.appTitle,
       debugShowCheckedModeBanner: false,
@@ -120,7 +149,12 @@ class ProCalendarApp extends ConsumerWidget {
           maxScaleFactor: 1.3,
           child: child!,
         );
-        if (gradient == null) return content;
+        // Display size from Settings. Wrapping the whole app means text, padding
+        // and controls resize as one, and a slider drag shows the result live
+        // because MaterialApp rebuilds this builder. The gradient stays outside
+        // so it keeps covering the physical screen untransformed.
+        final scaled = UiScale(scale: uiScale, child: content);
+        if (gradient == null) return scaled;
         return DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -129,7 +163,7 @@ class ProCalendarApp extends ConsumerWidget {
               colors: gradient,
             ),
           ),
-          child: content,
+          child: scaled,
         );
       },
       theme: AppTheme.lightFor(theme),

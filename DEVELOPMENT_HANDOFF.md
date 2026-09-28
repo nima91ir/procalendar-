@@ -985,3 +985,293 @@ Changed since the 2026-09-24 snapshot: the client filter bar and filter sheet, t
 theme system (8 themes, replacing accents), accounting periods, the motion
 helpers, the back-button confirmation, and the plan-history calendar month. The
 detail is in the three dated entries above.
+
+---
+
+## 2026-09-28 — a live user saw an EMPTY app; the web database could silently forget everything
+
+**Reported:** a user opened the app, switched to another app before it finished
+loading, and came back to a calendar with no data. Closing and reopening brought it
+back — once. A later report said reopening did *not* bring it back.
+
+**Root cause.** `main()` awaits `AppDatabase.create()` before `runApp`, and on web
+that is:
+
+```
+WasmDatabase.open(...) -> result.resolvedExecutor      // only this was kept
+```
+
+`WasmDatabaseResult` also carries `chosenImplementation` and `missingFeatures`, and
+drift uses those to report that it **fell back to a database that stores nothing**
+when the browser probe cannot reach IndexedDB or the drift worker
+(`availableImplementations` starts as `[inMemory]`; IndexedDB/OPFS are only added
+after a successful worker probe, and both probes swallow their own errors).
+Discarding those two fields meant the app returned a *perfectly healthy executor*
+over an empty, memory-only database. drift's own documentation says to warn the
+user in exactly this case.
+
+Nothing was ever lost: the real database stayed in IndexedDB throughout. The app
+merely looked normal with zero clients — and anything typed in that session existed
+only in memory. Switching away during boot is a plausible trigger, because that is
+the window in which the worker probe runs.
+
+**A second detail that matters for support:** `main()` opens the database once per
+page load, and `didChangeAppLifecycleState` only re-runs the build-id check.
+"Closing" the app by switching away does **not** re-open the database, so it cannot
+recover from this; only a real relaunch does.
+
+**Fix** (no schema change; `app_database.dart`, its `.g.dart` and
+`backup_service.dart` untouched):
+- `lib/core/database/database_open_failure.dart` (new) — `PersistentStorageUnavailable`.
+- `lib/core/database/connection/web.dart` — retry `open()` once (the failure is
+  usually transient, so that case now recovers silently with no screen at all),
+  then throw when `chosenImplementation == WasmStorageImplementation.inMemory`.
+  Deliberately only `inMemory`: `unsafeIndexedDb` does persist and only races
+  between tabs, so refusing it would break users whose browser legitimately picks it.
+- `main.dart` — catches it and shows `StartupErrorApp(storageUnavailable: true)`,
+  with new `storageUnavailableTitle` / `storageUnavailableMessage` in both
+  languages, telling the user their data is safe and to relaunch fully — not to
+  reinstall or clear browser data.
+- `test/widget/startup_error_test.dart` (new, 2 tests).
+
+**Verified:** `flutter analyze` → No issues found!; `flutter test` → **246 passed**
+(244 + 2). The deployed web build was checked from a clean browser and is healthy —
+build id `e3d91a1`, IndexedDB `fitness_trainer` created, served `drift_worker.js`
+byte-identical to the repo's, `sqlite3.wasm` at the app root. This is not a bad deploy.
+
+**Not verified:** the failure was never reproduced — no probe failure was forced — so
+the trigger is inferred from the code rather than observed. The guard is web-only
+code and cannot be unit-tested on the VM, which is why the test covers the screen
+rather than the retry.
+
+**Still open for the affected user:** they have no backup, are on Android with the
+app installed, and the data did not return on relaunch. Decisive, tooling-free test:
+add a test client, fully close the app (swipe it from recents), reopen. If the client
+survives, the app's storage works but is empty (the original is gone); if it
+vanishes, storage is non-persistent and the original data is still on the device.
+Either way: do not clear site data and do not reinstall — an Android installed PWA
+shares Chrome's origin storage, so clearing it destroys the only copy.
+
+**RESOLVED 2026-09-28 — and the news is good.** The user did have a JSON export from
+two days before, taken through the app's own backup flow, so the backup reminder did
+its job. They restored and it worked, losing only ~2 days of input.
+
+Verdict on the outage: the database was cleared or evicted by something *outside* the
+app, and the app then recreated it empty — which is why a freshly created test client
+survived a full close while the real data was gone. The app is exonerated by the code:
+`connection/web.dart` has exactly one commit in the entire history, so the database
+name and storage implementation have never changed; `pubspec.lock` is tracked, so
+dependencies cannot drift between deploys; and the release build has no mass-delete
+path (no dev-tools section in Settings, and `_wipe()` only runs on import-replace).
+The decisive check was the dashboard's «تعداد مشتریان» card reading ۱ — that card
+counts the whole database, so no filter can hide it.
+
+**A restore trap worth knowing, because it is counter-intuitive:** for this case
+`replace` («جایگزینی کامل») was the *safer* choice, not `merge` («ادغام با داده
+موجود»). `_merge` inserts with `insertOrIgnore` and skips conflicting ids, and the
+freshly recreated empty database already had the test client sitting at id 1 — so
+merging would have silently dropped the backup's client id 1 while still inserting
+that client's plans and attendance, welding them onto the test client. `replace` wipes
+first, so nothing can collide. It also exports a safety copy of the current database
+before wiping, and on web adds a confirmation that the download actually landed.
+
+**Status:** the guard above is implemented, `flutter analyze` is clean and the suite is
+246/246, but it is **uncommitted and undeployed** — nothing shipped from this
+investigation. Prevention is the real fix and is a product decision rather than a bug
+fix: storage loss inside a browser cannot be prevented by code, so the worst-case loss
+equals the backup age. The levers are `BackupReminder.intervalDays` (currently 14, with
+a 2-day snooze), a visible "last backup: N days ago" plus record counts in Settings, and
+a one-tap export shortcut instead of Settings → scroll → button.
+
+---
+
+## 2026-09-28 — backup safety: permanent reminder, one-tap export, data counts, Contact us
+
+All four prevention levers from the entry above, built in one pass. `flutter
+analyze` → No issues found!; `flutter test` → **244 passed**.
+
+- **`BackupReminder.intervalDays` 14 → 7.** `snoozeDays`, `snoozeUntilFrom` and
+  `isDue` are gone, replaced by `isOverdue({lastBackup, today})`. A permanent
+  reminder and a "later" button contradict each other, so the snooze went with it,
+  along with `SettingsService.get/setBackupSnoozeUntil`. The existing
+  `backup_snooze_until` row is left inert in live databases — `app_settings` is a
+  key/value table, so there is nothing to migrate.
+- **The dashboard reminder is now permanent.** `BackupReminderBanner` renders
+  always instead of only when overdue, and freshness is expressed in colour (calm
+  vs amber) so the warning colour keeps meaning something. New copy explains the
+  thing nobody would guess: the records live in browser storage, the app has no
+  control over it, and the browser or the phone can wipe it. While the provider is
+  still loading the card renders without the last-backup line, so it never briefly
+  claims "never backed up" to someone who has.
+- **One tap to export, on the dashboard card.** It goes through
+  `textFileSaverProvider` rather than calling `saveTextFile` directly — that
+  indirection exists so a save is observable on the VM, and without it this new
+  action could not be tested at all. The date is still recorded only when the saver
+  reports a name.
+- **Settings now shows what is actually stored** (`dataHealthProvider`: clients,
+  plans and attendance counts, counted in SQL rather than by loading rows). This is
+  the check that was missing during the incident — when the database was wiped the
+  app still looked perfectly normal and nobody could tell whether the zeros were
+  real. It is registered in `_appDataProviders`, which is the rule that came out of
+  the earlier stale-chip-count bug.
+- **Contact us → Telegram channel**, for bug reports and questions. Strings, a
+  Settings row, and `core/platform/link_opener{,_io,_web}.dart` following the same
+  conditional-export pattern as `file_transfer.dart` — no new package, and on native
+  (where there is no URL launcher) the address is copied to the clipboard rather
+  than leaving a button that does nothing. **`supportTelegramUrl` in
+  `core/app_links.dart` is empty, so the row is hidden until the real channel handle
+  is set.** Deliberately not guessed: a wrong handle would send users to a
+  stranger's channel.
+
+**A real bug was caught by the new test, not by review.** The card's two actions
+were a `Row` and overflowed by 64px at 320 logical width; they are a `Wrap` now.
+The 'fits a narrow phone without overflowing' test pins it, and is worth copying for
+any dense row in this app — an overflow surfaces as an exception in a widget test.
+
+**Two tests were silently lost mid-edit.** A later batch replacement clobbered the
+tail of the banner test file, so it ended up green at 241 with two tests missing.
+Only counting `testWidgets(` against the expected total caught it. The suite is at
+244 now; count the tests, do not just look for green.
+
+**Test bookkeeping:** the reminder unit test went from 13 tests to 9 (the nine
+`isDue` + one `snoozeUntilFrom` cases became six `isOverdue` cases), and the banner
+test from 5 to 7. `navigation_ux_test`'s "view clients" case needed
+`tester.view.physicalSize = Size(1000, 2000)` because the new card pushes that action
+under the bottom navigation bar, where the tap hit the nav bar and selected tab 4
+instead of failing loudly. Assertions were not changed — this is the same pattern
+`clients_tag_filter_test` already uses.
+
+Inert strings left behind on purpose, as with `accentGreen..`: 
+`backupReminderDueTitleTemplate`, `backupReminderNeverBody`, `backupReminderLater`.
+
+**Nothing here is committed or deployed**, and the web build has not been exercised
+in a browser this time — the layout is covered by widget tests instead, including
+the narrow-width case.
+
+---
+
+## 2026-09-28 — the Clients filter bar was clipped on phones (real bug, user-reported)
+
+**Reported:** "i'm on clients page and filters are not visible." Legitimate. I found
+it by resizing the shared dev page to 360x780 — my own resize is what made it
+visible — but it affects every real user, since they are all on phones.
+
+**Cause.** The filter bar was a horizontal `ListView` inside
+`SizedBox(height: 40, …)`, with the preset chips *and* the «فیلترها» ActionChip
+inside the scroller. On a 360px-wide phone the three presets fill the row, so
+«فیلترها» — the only route to the complete filter list, tags included — sat past the
+left edge. Two and a half chips were visible, the third clipped mid-word.
+
+Nothing threw: a horizontal `ListView` clips rather than overflowing, so there was no
+exception and no failing test. The 2026-09-27 browser verification of this feature was
+done at desktop width, which is exactly why it survived.
+
+**Fix** (`clients_screen.dart` only): the ActionChip is now pinned **outside** the
+scroller, as `Row([Expanded(ListView(presets…)), Padding(ActionChip)])`. The presets
+may still scroll; the way through to every filter can never disappear.
+
+**Verified by measuring, not by looking.** The rendered semantics rects at 360 wide:
+
+| chip | left | right |
+|---|---|---|
+| «فیلترها» (pinned) | 16 | 109 |
+| «نیاز به توجه · ۰» (in the scroller) | −57 | 59 |
+
+The pinned chip is inside 0..360 and the scrolled one is clipped past the edge, so the
+new assertion is genuinely sensitive rather than vacuously passing.
+
+**New guard** — `clients_tag_filter_test.dart`, "the way into every filter stays on
+screen on a phone": a 360x800 surface asserting the ActionChip's rect lies within
+0..360. `findsOneWidget` on its own would **not** have caught this, because a
+horizontal `ListView` builds children just past the viewport, so the off-screen chip
+was in the tree and findable all along. Worth remembering for any horizontal scroller.
+
+`flutter analyze` → No issues found!; `flutter test` → **245 passed**. Still
+uncommitted and undeployed.
+
+---
+
+## 2026-09-28 — Clients list "jumps" while scrolling on a phone: swipe-to-delete removed
+
+**Reported:** swiping up and down on the Clients page on a phone "jumps sometimes".
+Confirmed by the user as: not a reload, and on the **installed app**, not in a browser.
+The user then guessed it might be a touch-target problem — right in spirit.
+
+**Cause.** Every client row was wrapped in `Dismissible(direction:
+DismissDirection.endToStart)`, and a `Dismissible` installs a **horizontal** drag
+recogniser. That recogniser competes in the gesture arena with the list's **vertical**
+scroll. A thumb swipe that drifts sideways — which real thumbs do, and a mouse wheel
+never does — lets the card capture the gesture, so the list stalls mid-scroll and then
+jumps. That is exactly why every earlier browser verification missed it: those were all
+driven with a wheel on a desktop.
+
+**Fix.** The `Dismissible` is gone from the client list. Delete is unchanged in the
+card's ⋮ menu (`_showClientActions` → «حذف مشتری», rendered in the error colour) and on
+long-press, so no route to it was lost. Removing it also deleted a duplicated
+destructive path and its `_dismissedIds` bookkeeping (the `unused_field` warning pointed
+at the leftovers). Reverting is one small block if the swipe is wanted back — but note
+the two cannot fully coexist, because the horizontal recogniser will always be able to
+win a diagonal gesture.
+
+**Not verified on a device.** The mechanism is inferred from the gesture setup, so this
+is the best-supported explanation rather than a reproduced one. If the jump survives,
+the next suspect is a layout shift rather than a gesture: `AppUpdateBanner` lives in
+`Scaffold.bottomNavigationBar` inside a `Column`, and it only appears once the **async**
+build-id fetch resolves — so the body's height changes under the list mid-scroll — and
+`didChangeAppLifecycleState` re-runs that check on every foreground.
+
+`flutter analyze` → No issues found!; `flutter test` → **245 passed**.
+
+---
+
+## 2026-09-28 — Display size (compact/zoom) control, and the two bugs it shipped with
+
+**What it is.** A slider in Settings → Appearance («اندازهٔ نمایش»), 70–130%, live percentage
+readout, and a «بازنشانی» reset. Stored in `app_settings` as `ui_scale` (no schema change) and
+applied by `UiScale` in `MaterialApp.builder`. **Default is exactly 100%, and at that value
+`UiScale` returns its child untouched** — so the default path is byte-for-byte what it was and
+no existing user is affected unless they drag the slider.
+
+It applies **on release**, not while dragging, and that is deliberate: the app resizing live
+resizes the slider itself (measured: it grew 1.24× and moved 118px down the page), so the
+control slid out from under the finger and could not be fine-tuned. The percentage readout is
+the live feedback instead.
+
+**Two real bugs, both found by the user, both now fixed:**
+
+1. **The app shrank into a corner instead of reflowing.** `SizedBox` cannot exceed its parent's
+   constraints, so the app laid out at the *physical* size and was then painted smaller. Fixed
+   with `OverflowBox`, which hands it a genuinely larger canvas.
+2. **The bottom `1 − scale` of every screen was dead, and the nav bar became unclickable.**
+   Every render box rejects a position outside its own `size`. `RenderTransform` is the
+   exception — it maps the position through the inverse transform and hit-tests the child with
+   no size check of its own. So the constraint relaxation must go **above** the transform, with
+   the logical-sized box as the transform's **direct child**:
+   `ClipRect > OverflowBox > Transform.scale > SizedBox(logical) > MediaQuery > app`.
+   With the `OverflowBox` below the transform its own box was only the physical size, so taps
+   below that line were rejected before reaching the app. **Layout looked perfect — only hit
+   testing broke.** This also explains the report that sub-screens were unusable: every pushed
+   screen's action buttons sit along that dead band.
+
+**My first test was worthless, and that is the lesson worth keeping.** It asserted the
+`MediaQuery.size` that `UiScale` had just set itself — tautological, so it passed against the
+broken build and let bug 2 reach the user. It now captures the child's **real constraints**
+through a `LayoutBuilder`, plus a bottom-of-screen tap test. Assert what a widget *receives*,
+never the value you just wrote.
+
+**Measured, not assumed** (360×780 viewport): theme chips per row **5 at 100% → 6 at 82%**;
+nav bar height **80 → 61 at 76%**; the nav bar spans the full width and stays clickable at 76%.
+
+**Still open:** the user wants the nav bar to *not* scale (it currently shrinks with everything,
+80 → 61). A `Transform` cannot easily exclude one child, so this needs either a counter-scale
+around `BottomNavBar` (with the reserved height matched) or a different mechanism.
+
+**If this needs to go further:** `Transform`-based zoom changes `MediaQuery.size` for the whole
+app, so it also moves responsive breakpoints — that is why it was invasive. A density approach
+(`VisualDensity` + text scaler + scaled shared tokens) would give "more rows fit" without
+touching layout constraints or hit testing at all, and would leave the nav bar's frame alone.
+
+**Also fixed here:** `_seedDemoData` refreshed a *hand-picked* provider list that predated
+`dataHealthProvider`, so Settings reported "۰ مشتری" while four clients existed — the worst
+possible signal from the line that exists to be trusted. It now uses `invalidateAppData()`,
+matching `seedLarge`, so anything added to `app_refresh.dart` in future cannot slip through.

@@ -1,6 +1,7 @@
 ﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitness_trainer_app/features/accounting/providers/transactions_providers.dart';
 import 'package:fitness_trainer_app/features/attendance/providers/attendance_providers.dart';
+import 'package:fitness_trainer_app/features/backup/providers/backup_providers.dart';
 import 'package:fitness_trainer_app/features/clients/providers/clients_providers.dart';
 import 'package:fitness_trainer_app/features/dashboard/providers/dashboard_providers.dart';
 import 'package:fitness_trainer_app/features/plans/providers/plans_providers.dart';
@@ -55,6 +56,9 @@ final List<Object> _appDataProviders = [
   trainerNameProvider,
   transactionsProvider,
   clientTransactionsProvider,
+  // Backs the record counts in Settings, so it has to move whenever records do —
+  // otherwise the numbers understate what the user actually has.
+  dataHealthProvider,
 ];
 
 extension AppDataRefresh on Ref {

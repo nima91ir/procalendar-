@@ -104,5 +104,31 @@ void main() {
       expect(find.text('مریم'), findsOneWidget);
       expect(find.text('رضا'), findsOneWidget);
     });
+
+    testWidgets('the way into every filter stays on screen on a phone', (
+      tester,
+    ) async {
+      // 360 logical pixels — a real phone width, and narrower than any other
+      // test here. At this size the preset chips no longer fit, and the row used
+      // to be a plain horizontal scroller, so the «فیلترها» chip (the only route
+      // to the full filter list) sat past the edge with nothing to suggest it
+      // existed. It is pinned outside the scroller now.
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(buildHarness(db));
+      await settle(tester);
+
+      final filters = find.widgetWithText(ActionChip, 'فیلترها');
+      expect(filters, findsOneWidget);
+
+      // Being in the tree is not enough: a horizontal ListView builds children
+      // just past the viewport, so `findsOneWidget` passed even when the chip
+      // was invisible. Assert it actually lies inside the screen.
+      final rect = tester.getRect(filters);
+      expect(rect.left, greaterThanOrEqualTo(0));
+      expect(rect.right, lessThanOrEqualTo(360));
+    });
   });
 }
