@@ -801,3 +801,184 @@ debounced.
 Test gap: the fetch in `build_info_web.dart` cannot run on the VM, so the widget
 tests override `deployedBuildIdProvider` instead; the browser run above is what
 covers the real fetch path.
+
+## 2026-09-27 — client filters, dashboard consistency, selectable themes, touch targets
+
+Commit `70e5d58` (60 files). The reasoning matters more than the diff:
+
+**The client list became filterable.** `ClientQuickFilter` already existed with six
+values and the filtering logic worked, but there was **no UI to choose one** — the
+Clients page only *watched* the filter and offered a chip to clear it, and the only
+way to set one was to tap a dashboard stat card. That is why filtering felt
+"tags only". Added a filter bar with three presets (همهٔ مشتریان / امروز ثبت نشده /
+نیاز به توجه) plus a sheet holding every filter, and six new time-based ones:
+not-marked-today, away 14+ days, never attended, no active plan, expires within
+7 days, needs-attention. `_idsForFilter(Ref, filter)` is the single implementation
+shared by `quickFilterClientIdsProvider` and the new
+`clientFilterCountsProvider`, so a chip's count can never disagree with the list it
+produces. `needsAttention` deliberately **excludes** "has an expired plan" —
+almost every long-standing client has one, so it would match nearly everybody.
+
+**Tags left the page.** Two visually identical chip rows made two different things
+read as one. Worse, with a long tag list a selected tag could scroll out of view,
+leaving a short or empty list whose cause was invisible — which reads as "my
+clients are gone". Tags now live in the filter sheet as *wrapped* chips (wrapping
+means a selected tag cannot hide past the edge), and anything filtering the list
+surfaces as a leading chip in the bar that names it.
+
+**Two dashboard sections were inconsistent by accident.** «برنامه‌های رو به اتمام»
+rendered one card per plan (twelve rows at 120 clients) and counted *plans* while
+its own action opened *clients*; «جلسات هدیه» was a single row tinted amber, i.e.
+information painted as a warning. Both are now one `_DashboardSummaryRow` under a
+SectionHeader, counting distinct clients, with amber kept only for the real
+warning. The today-attendance list was removed — it duplicated the Clients page and
+built a row for every client.
+
+**Themes replaced the accent picker.** `app_accents.dart` deleted,
+`app_theme_spec.dart` added: `AppThemeSpec` + `AppThemePalette`, with
+`AppThemes.all` as the single registry — adding a theme is one entry.
+`AppTones.forTheme` supplies surfaces/ink/primary from the theme, while **status
+colours stay on the shared base on purpose**: they carry meaning, not brand.
+
+**Touch targets.** `client_card.dart` had `VisualDensity.compact` (twice) plus
+`padding: EdgeInsets.zero` with 28px constraints on the freeze control. Rendered
+sizes measured 20–36px while Material still claimed a padded ~40px tap area, so
+neighbouring invisible targets overlapped and an imprecise tap hit the wrong one —
+confirmed by aiming 8px above a button and activating its neighbour. The freeze
+control also sat *inside* the plan pill among its text; it moved to its own
+labelled row. `minimumSize: Size(0, 44)` now applies to the Elevated and Outlined
+button themes; TextButton is deliberately excluded because it is used inline in
+section headers where 44 would stretch dense rows. A zero-overflow sweep across
+all five tabs was run after the change.
+
+**Found while verifying:** a pre-existing `RenderFlex overflowed by 2.3 pixels` in
+the plan pill. Its Row is `mainAxisSize: min` but only the template name was
+`Flexible`, so the two fixed trailing texts overflowed — worst in English. Both are
+now Flexible with ellipsis. Caught because the **console** was checked, not only
+the screenshot.
+
+**Two bugs I introduced and then fixed, both worth remembering:**
+- The new providers were missing from `_appDataProviders` in `app_refresh.dart`,
+  so their values went stale after a mutation — a chip advertised one number while
+  the list showed another. The rule already exists; the lesson is that a *new*
+  provider must be added to that list.
+- `seedLarge` wrote plans + attendance + transactions in **one** transaction of
+  ~11k rows and the result did not persist on web. Chunked to 10 clients per
+  transaction. It is behind `kDebugMode` so it could never ship, but it cost real
+  time and produced a false "data loss" scare.
+
+## 2026-09-28 — accounting ledger first, with period reports
+
+Commit `bfb7fd3`.
+
+The accounting screen listed **every priced plan before the ledger**, so the only
+interactive part of the screen sat behind one row per plan. Measured at 120
+clients: **~38,400px, about 41 screens** of scrolling to reach the transactions.
+The ledger moved directly under the summary; the per-plan share follows it, capped
+at five with a «نمایش همه (N)» expander.
+
+Kept rather than collapsed to a link, deliberately: I proposed replacing it with a
+summary row linking to Reports, then checked — **Reports carries no per-plan
+breakdown**, so that would have deleted information.
+
+A period selector (today / this month / last month / last 6 months / this year /
+all) drives the summary, the ledger *and* the per-plan share together. The share is
+narrowed by `plan.startDate` so it stays in step with the income rows it derives
+from — verified: last month reports 46,620,000 of 155,400,000, exactly 30%.
+
+`accounting_period.dart` is pure Jalali date maths with 8 new tests covering the
+cases that fail quietly: Farvardin rolling back into the previous year, six months
+crossing a year boundary, and Esfand's 29-vs-30 day length.
+
+Empty states now distinguish "nothing recorded yet" from "nothing in this window",
+the second naming the period — a quiet month used to read as a broken screen.
+
+Also: the Android back button now asks before closing the app (at the root of a tab
+only; a pushed screen still pops). **This broke a test in a way worth knowing:** the
+existing test's second `handlePopRoute()` awaited a dialog that was never answered,
+so the suite *hung* rather than failing — and the stuck `flutter_tester` then held
+`build/native_assets/windows/sqlite3.dll`, making every later run fail with a
+misleading "Flutter failed to delete file". When a change makes a framework call
+block on user input, watch for a suite that stops progressing, not for a red test.
+
+## 2026-09-28 (later) — three more themes, colour names, motion, plan-history calendar
+
+Commit `64dcc0a`.
+
+**Themes now number eight**, adding نارنجی / یخی / زیتونی. یخی needed something the
+system could not do: its identity is a background **gradient** with translucent
+panels, so a flat colour would have been a pale imitation.
+`AppThemePalette.backgroundGradient` is new; the theme's `scaffoldBackgroundColor`
+goes transparent when it is set, and `MaterialApp` paints the gradient behind the
+whole app, which is what lets translucent surfaces read as frosted panes.
+
+**Theme names are now colour names** (سبز، شیری، آبی، سرمه‌ای، خاکستری، نارنجی،
+یخی، زیتونی). The old ones came from design mockups that also define corner radii
+this app does not implement, so «پرشتاب» promised motion and «کاغذی» promised paper
+texture. **Ids are unchanged** — they are persisted in `app_settings`, and renaming
+one would silently reset the theme for anyone already using it.
+
+**Motion respects reduce-motion.** `AppMotion.of(context)` returns `Duration.zero`
+when `MediaQuery.disableAnimations` is set, so the change is instant rather than
+merely faster — verified by emulating `prefers-reduced-motion` in the browser. The
+session figures on the attendance screen now ease in. Measured **701ms to update
+with the animation against 622ms with reduced motion**, so the ~620ms database
+round-trip is the cost and the motion is not. That figure is from a *debug web*
+build and is not representative of release.
+
+The default `AnimatedSwitcher` layout keeps the outgoing child, so during the
+crossfade the accessibility tree held **both** values ("جلسات ثبت‌شده ۸۷ ۸۸") and a
+screen reader would have read the number twice. Fixed with a `layoutBuilder` that
+wraps `previousChildren` in `ExcludeSemantics`.
+
+**Opening an expired plan now shows that plan's month.** `initState` seeded the
+calendar from today unconditionally, so an expired plan's history opened on an
+empty current month. Now **expired** jumps to its newest record's month, while
+**active** and **queued** keep today — that is where marking happens. A
+`_monthChosenByUser` flag stops a late-arriving load moving the month after the
+user has already paged. All three states verified in the browser. Frozen plans were
+left out: not named by the user, and a one-line change if wanted.
+
+## Still open
+
+- **Frozen plans** keep the current month rather than jumping to history.
+- **Six inert accent strings** (`accentGreen`…`accentTeal`, `accentColorLabel`) and
+  **`undoAttendance`** are now unused in `AppStrings`. Inert data, harmless, but
+  `undoAttendance` was orphaned by removing the dashboard undo button.
+- **English pluralisation** is fixed for two client-count strings only; most count
+  templates still render "1 sessions left".
+- **Per-theme corner radius** is not implemented. `AppThemeSpec.cardRadius` exists
+  and returns `null`; the mockups define radii per theme (paper 2px, kinetic 23px),
+  which is why those themes read as close-but-not-identical. About 45 call sites.
+- **The attendance history builds every row eagerly** — 93 rows for one client,
+  measured — inside `ListView(children: [...])` while other lists use
+  `ListView.builder`. This is the one place worth fixing before animating it.
+- **Accessibility**: tooltips now cover icon buttons and text scaling is clamped to
+  0.8–1.3, but non-button content still has no explicit semantics.
+- **Declined by the user** (do not re-propose unprompted): day-cell reaction
+  animation, haptics on mark, undo on the mark message, and the direction-aware
+  month sweep. On undo the user was right to decline it as a *fix* — the day sheet
+  already removes a record with confirmation, so it is a 1-tap-vs-3-tap
+  convenience. I had wrongly claimed "there is no way back" and corrected the
+  proposal document at `build/mockups/redesign/marking-feedback-proposal.html`.
+- **`DEVELOPMENT_HANDOFF.md` was not updated per-task** during the batches above;
+  this entry is the catch-up, which is why it covers three commits.
+
+## CURRENT STATE — verified 2026-09-28 (supersedes the 2026-09-24 block above)
+
+Re-run immediately before writing these lines, so the numbers are measured rather
+than remembered:
+
+- `flutter analyze` → **No issues found!**
+- `flutter test` → **244 passed**, 0 failed. The 2026-09-24 block above says 236 —
+  that snapshot is stale; trust this one.
+- `schemaVersion` is still **7**. No migration has been written and none is
+  needed. It must not change: live users' databases are at v7.
+- HEAD was `64dcc0a` with a clean tree, level with `origin/main`.
+- Publishing is still **manual** (`deploy.yml` is `workflow_dispatch` only) — a
+  push runs `ci.yml` and never deploys.
+
+Changed since the 2026-09-24 snapshot: the client filter bar and filter sheet, the
+theme system (8 themes, replacing accents), accounting periods, the motion
+helpers, the back-button confirmation, and the plan-history calendar month. The
+detail is in the three dated entries above.
