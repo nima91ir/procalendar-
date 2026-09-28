@@ -126,11 +126,14 @@ next. It is the only long-form source of truth besides `AGENTS.md`.
 - Verified after the work: `git status` over `lib/`, `pubspec.yaml`, `android/`, `ios/`,
   `test/`, `assets/` and `analysis_options.yaml` returns **0 changed files**. No Flutter
   analyze/test run was needed because no application code changed.
-- Serve with the background task "Serve mockups" (`python -m http.server 8765
-  --directory …\build\mockups\redesign`) and open
-  `http://127.0.0.1:8765/ux-laws-all-pages.html`. **Screenshots in this browser come out
-  blank or at the wrong scale** — trust `getBoundingClientRect()` / `getComputedStyle()`
-  assertions instead; that is how every number above was verified.
+- Serve with `python -m http.server 8765 --directory …\build\mockups\redesign` and open
+  `http://127.0.0.1:8765/ux-laws-all-pages.html`. `.vscode/tasks.json` wraps that as a "Serve
+  mockups" task, but it is deliberately **not tracked**: it hard-codes this machine's absolute
+  path and points into the gitignored `build/`, so it would be broken in a fresh clone. Use the
+  plain command above.
+  **Screenshots in this browser come out blank or at the wrong scale** — trust
+  `getBoundingClientRect()` / `getComputedStyle()` assertions instead; that is how every number
+  above was verified.
 
 **PREVIOUS HEAD (2026-09-26) — ۷ UX-LAW PROTOTYPE, no app code touched (design-only deliverable):**
 - New standalone file: `fitness_trainer_app/build/mockups/redesign/ux-laws-lab.html`. Separate from
