@@ -62,7 +62,10 @@ class AppTheme {
               error: AppColors.error,
             ),
       fontFamily: fontFamily,
-      scaffoldBackgroundColor: p.background,
+      // Transparent when the theme paints a gradient: `MaterialApp` puts the
+      // gradient behind everything, so an opaque scaffold would hide it.
+      scaffoldBackgroundColor:
+          p.backgroundGradient != null ? Colors.transparent : p.background,
       appBarTheme: AppBarTheme(
         backgroundColor: p.surface,
         foregroundColor: p.onSurface,

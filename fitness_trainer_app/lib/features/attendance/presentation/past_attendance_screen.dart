@@ -5,6 +5,7 @@ import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
 import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
+import 'package:fitness_trainer_app/core/utils/app_motion.dart';
 import 'package:fitness_trainer_app/core/utils/date_format.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/core/utils/persian_numbers.dart';
@@ -35,16 +36,60 @@ class _PastAttendanceScreenState extends ConsumerState<PastAttendanceScreen> {
   late int _year;
   late int _month;
 
+  /// Set once the user pages the calendar themselves, so a load that lands
+  /// afterwards cannot move the month out from under them.
+  bool _monthChosenByUser = false;
+
   @override
   void initState() {
     super.initState();
     final now = Jalali.fromDateTime(DateTime.now());
     _year = now.year;
     _month = now.month;
+    // An expired plan's sessions are history, usually months old, so opening on
+    // the current month shows an empty calendar. Active and queued plans are the
+    // ones the client is on now, and that is where marking happens — they keep
+    // today.
+    if (widget.planId != null) _startOnExpiredPlanHistory();
+  }
+
+  /// Moves the calendar to the newest record's month, for an expired plan only.
+  ///
+  /// Runs after the first frame because it awaits providers; until it resolves
+  /// the calendar sits on today, which is a harmless default rather than a
+  /// wrong one.
+  Future<void> _startOnExpiredPlanHistory() async {
+    try {
+      final plan = await ref.read(plansServiceProvider).getPlan(widget.planId!);
+      if (plan == null || plan.status != 'expired') return;
+
+      final records = await ref.read(planAttendanceProvider(widget.planId!).future);
+      if (!mounted || _monthChosenByUser || records.isEmpty) return;
+
+      // Newest: reviewing a finished plan usually means seeing how it ended.
+      final newest = records
+          .map((r) => r.date)
+          .reduce((a, b) => a.compareTo(b) >= 0 ? a : b);
+      final parts = newest.split('/');
+      if (parts.length != 3) return;
+      final year = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      if (year == null || month == null) return;
+
+      setState(() {
+        _year = year;
+        _month = month;
+      });
+    } catch (_) {
+      // Leave the calendar on today rather than failing the screen.
+    }
   }
 
   void _shiftMonth(int delta) {
     setState(() {
+      // Once the user has paged, the month is theirs: a late-arriving load must
+      // not jump them somewhere else.
+      _monthChosenByUser = true;
       var month = _month + delta;
       var year = _year;
       if (month < 1) {
@@ -472,7 +517,15 @@ class _SummaryRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: AppTypography.bodySmall),
-        Text(value, style: AppTypography.labelLarge.copyWith(color: color)),
+        // The value eases in when it changes, so marking a session draws the eye
+        // to the number that moved. It cannot delay anything: the figure is
+        // already the new one, and the animation runs on top of it. Instant when
+        // the platform asks for reduced motion.
+        AppMotion.valueChange(
+          context,
+          Text(value, style: AppTypography.labelLarge.copyWith(color: color)),
+          ValueKey(value),
+        ),
       ],
     );
   }

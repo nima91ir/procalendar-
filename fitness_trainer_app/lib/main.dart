@@ -7,8 +7,7 @@ import 'package:fitness_trainer_app/core/l10n/app_strings.dart';
 import 'package:fitness_trainer_app/core/navigation/navigation_providers.dart';
 import 'package:fitness_trainer_app/core/providers/app_update.dart';
 import 'package:fitness_trainer_app/core/theme/app_tones.dart';
-import 'package:fitness_trainer_app/core/theme/app_theme.dart';
-import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
+import 'package:fitness_trainer_app/core/theme/app_theme.dart';import 'package:fitness_trainer_app/core/theme/app_theme_spec.dart';import 'package:fitness_trainer_app/core/theme/app_tokens.dart';
 import 'package:fitness_trainer_app/core/theme/app_typography.dart';
 import 'package:fitness_trainer_app/core/widgets/app_update_banner.dart';
 import 'package:fitness_trainer_app/core/widgets/app_widgets.dart';
@@ -100,16 +99,39 @@ class ProCalendarApp extends ConsumerWidget {
     return MaterialApp(
       title: lang == 'fa' ? AppStrings.fa.appTitle : AppStrings.en.appTitle,
       debugShowCheckedModeBanner: false,
-      // Follow the system font size, but only so far. Several widgets are
-      // deliberately fixed-height (the 44px calendar day cells, the client
-      // avatar tile), and at extreme system scales their text clipped instead
-      // of growing. Capping keeps larger text readable *and* unclipped; the
-      // alternative was a layout audit of every fixed size in the app.
-      builder: (context, child) => MediaQuery.withClampedTextScaling(
-        minScaleFactor: 0.8,
-        maxScaleFactor: 1.3,
-        child: child!,
-      ),
+      builder: (context, child) {
+        // Some themes paint a gradient page background. It has to sit behind
+        // the whole app rather than on each screen, so translucent surfaces can
+        // read as frosted panes over it — the theme's scaffold colour is
+        // transparent in that case, which is what lets this show through.
+        final active = Theme.of(context).extension<AppThemeData>()?.theme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final gradient = active == null
+            ? null
+            : (isDark ? active.dark.backgroundGradient : active.light.backgroundGradient);
+
+        // Follow the system font size, but only so far. Several widgets are
+        // deliberately fixed-height (the 44px calendar day cells, the client
+        // avatar tile), and at extreme system scales their text clipped instead
+        // of growing. Capping keeps larger text readable *and* unclipped; the
+        // alternative was a layout audit of every fixed size in the app.
+        final content = MediaQuery.withClampedTextScaling(
+          minScaleFactor: 0.8,
+          maxScaleFactor: 1.3,
+          child: child!,
+        );
+        if (gradient == null) return content;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: gradient,
+            ),
+          ),
+          child: content,
+        );
+      },
       theme: AppTheme.lightFor(theme),
       darkTheme: AppTheme.darkFor(theme),
       // The palette theme and the light/dark mode are independent: a theme

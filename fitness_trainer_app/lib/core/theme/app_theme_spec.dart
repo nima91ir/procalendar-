@@ -22,8 +22,22 @@ class AppThemeSpec {
     required this.dark,
   });
 
-  /// Stable key persisted in `app_settings`. Do not rename.
+  /// Stable key persisted in `app_settings`. Do not rename — that silently
+  /// resets the choice for anyone already using the theme.
   final String id;
+
+  /// Display names, named for the **colour**, not for a design language.
+  ///
+  /// These started out mirroring the design mockups («پرشتاب», «کاغذی»), which
+  /// was misleading: the mockups also define corner radii that this app does not
+  /// implement, so a name promising an effect was describing something the user
+  /// would not get. A colour name is honest about what actually changes, and it
+  /// is checkable at a glance.
+  ///
+  /// Deliberately here rather than in [AppStrings]: adding a theme should stay a
+  /// single entry in [AppThemes.all], and routing two names per theme through
+  /// the localisation file's four regions would make that a chore. Both
+  /// languages are present, so nothing is left untranslated.
   final String nameFa;
   final String nameEn;
 
@@ -49,6 +63,7 @@ class AppThemeSpec {
 @immutable
 class AppThemePalette {
   const AppThemePalette({
+    this.backgroundGradient,
     required this.surface,
     required this.surfaceVariant,
     required this.background,
@@ -62,6 +77,15 @@ class AppThemePalette {
     required this.onPrimary,
     required this.gradientPrimary,
   });
+
+  /// Optional page background gradient.
+  ///
+  /// Some themes are defined by their background as much as by their tones —
+  /// Frosted Sky is a wash of colour, not a flat tint — so a single colour
+  /// cannot express them. When set, screens let this show through instead of
+  /// painting [background]; surfaces stay translucent so the gradient reads
+  /// behind them, which is what makes the frosted look work at all.
+  final List<Color>? backgroundGradient;
 
   /// Cards and sheets.
   final Color surface;
@@ -121,8 +145,8 @@ class AppThemes {
 
   static const sage = AppThemeSpec(
     id: 'sage',
-    nameFa: 'روشن آرام',
-    nameEn: 'Soft Light',
+    nameFa: 'سبز',
+    nameEn: 'Green',
     swatches: [Color(0xFFF5F8F1), Color(0xFFE8F1E2), Color(0xFF182318), Color(0xFF5C945B)],
     light: AppThemePalette(
       surface: Color(0xFFFFFFFF),
@@ -156,8 +180,8 @@ class AppThemes {
 
   static const paper = AppThemeSpec(
     id: 'paper',
-    nameFa: 'کاغذی',
-    nameEn: 'Paper',
+    nameFa: 'شیری',
+    nameEn: 'Cream',
     swatches: [Color(0xFFF8F4EB), Color(0xFFEEE7D8), Color(0xFF25241F), Color(0xFF315A45)],
     light: AppThemePalette(
       surface: Color(0xFFFFFDF8),
@@ -191,8 +215,8 @@ class AppThemes {
 
   static const blueprint = AppThemeSpec(
     id: 'blueprint',
-    nameFa: 'فنی',
-    nameEn: 'Blueprint',
+    nameFa: 'آبی',
+    nameEn: 'Blue',
     swatches: [Color(0xFFEEF6F8), Color(0xFFE0EFF3), Color(0xFF173C4A), Color(0xFF21758D)],
     light: AppThemePalette(
       surface: Color(0xFFF8FDFF),
@@ -226,8 +250,8 @@ class AppThemes {
 
   static const sport = AppThemeSpec(
     id: 'sport',
-    nameFa: 'ورزشی',
-    nameEn: 'Sport',
+    nameFa: 'سرمه‌ای',
+    nameEn: 'Navy',
     swatches: [Color(0xFFF5F7FB), Color(0xFFE7EDF7), Color(0xFF172641), Color(0xFF19335F)],
     light: AppThemePalette(
       surface: Color(0xFFFFFFFF),
@@ -261,8 +285,8 @@ class AppThemes {
 
   static const mono = AppThemeSpec(
     id: 'mono',
-    nameFa: 'مینیمال',
-    nameEn: 'Mono',
+    nameFa: 'خاکستری',
+    nameEn: 'Grey',
     swatches: [Color(0xFFF8F8F6), Color(0xFFEDEDEB), Color(0xFF191A19), Color(0xFF252825)],
     light: AppThemePalette(
       surface: Color(0xFFFFFFFF),
@@ -294,10 +318,133 @@ class AppThemes {
     ),
   );
 
+  static const kinetic = AppThemeSpec(
+    id: 'kinetic',
+    nameFa: 'نارنجی',
+    nameEn: 'Orange',
+    swatches: [Color(0xFFFFF8F2), Color(0xFFFFE7D8), Color(0xFF281C2A), Color(0xFFFF5D3A)],
+    light: AppThemePalette(
+      surface: Color(0xFFFFFFFF),
+      surfaceVariant: Color(0xFFFFE7D8),
+      background: Color(0xFFFFF8F2),
+      onSurface: Color(0xFF281C2A),
+      onSurfaceVar: Color(0xFF77626C),
+      outline: Color(0xFFF1D5C5),
+      outlineVariant: Color(0xFFF7E6DC),
+      primary: Color(0xFFFF5D3A),
+      primaryDark: Color(0xFFE14B30),
+      primaryLight: Color(0xFFFFE0D6),
+      onPrimary: Color(0xFFFFFFFF),
+      // Three stops, not two: the mockup's hero runs orange -> violet -> teal,
+      // and that spread is what gives the theme its energy.
+      gradientPrimary: [Color(0xFFFF633F), Color(0xFF7A57D7), Color(0xFF2EBAC1)],
+    ),
+    dark: AppThemePalette(
+      surface: Color(0xFF221A2C),
+      surfaceVariant: Color(0xFF2E2238),
+      background: Color(0xFF191322),
+      onSurface: Color(0xFFF3E9F5),
+      onSurfaceVar: Color(0xFFB39FBB),
+      outline: Color(0xFF43334F),
+      outlineVariant: Color(0xFF322741),
+      primary: Color(0xFFFF8163),
+      primaryDark: Color(0xFFFF5D3A),
+      primaryLight: Color(0xFF3D2438),
+      onPrimary: Color(0xFF1A1020),
+      gradientPrimary: [Color(0xFFC04A2E), Color(0xFF5A3EB4), Color(0xFF1F8A92)],
+    ),
+  );
+
+  static const frosted = AppThemeSpec(
+    id: 'frosted',
+    nameFa: 'یخی',
+    nameEn: 'Icy',
+    swatches: [Color(0xFFE7F3F6), Color(0xFFF5EFFA), Color(0xFF1D2C35), Color(0xFF428FB1)],
+    light: AppThemePalette(
+      // Translucent on purpose. Over the gradient below these read as frosted
+      // panes; as opaque colours they would be a flat pale card and the effect
+      // would be gone.
+      surface: Color(0xA8FFFFFF),
+      surfaceVariant: Color(0x8CFFFFFF),
+      background: Color(0xFFEAF4F7),
+      backgroundGradient: [Color(0xFFE7F3F6), Color(0xFFF5EFFA), Color(0xFFFFF6E9)],
+      onSurface: Color(0xFF1D2C35),
+      onSurfaceVar: Color(0xFF6C7B82),
+      outline: Color(0xB8FFFFFF),
+      outlineVariant: Color(0xD0FFFFFF),
+      primary: Color(0xFF428FB1),
+      primaryDark: Color(0xFF286B81),
+      primaryLight: Color(0xFFD8ECF3),
+      onPrimary: Color(0xFFFFFFFF),
+      gradientPrimary: [Color(0xB8FFFFFF), Color(0xAAB9E1E4)],
+    ),
+    dark: AppThemePalette(
+      surface: Color(0xFF1E2B33),
+      surfaceVariant: Color(0xFF26333C),
+      background: Color(0xFF16232A),
+      backgroundGradient: [Color(0xFF16232A), Color(0xFF1E1A2B), Color(0xFF241F18)],
+      onSurface: Color(0xFFE2EEF2),
+      onSurfaceVar: Color(0xFF9DB0B8),
+      outline: Color(0xFF35505C),
+      outlineVariant: Color(0xFF27404A),
+      primary: Color(0xFF6FBCD8),
+      primaryDark: Color(0xFF428FB1),
+      primaryLight: Color(0xFF1C3540),
+      onPrimary: Color(0xFF10222A),
+      gradientPrimary: [Color(0xFF3F7386), Color(0xFF35646F)],
+    ),
+  );
+
+  static const softUtility = AppThemeSpec(
+    id: 'softutility',
+    nameFa: 'زیتونی',
+    nameEn: 'Olive',
+    swatches: [Color(0xFFEEF2EF), Color(0xFFE5EBE7), Color(0xFF1B2B22), Color(0xFF4E7D64)],
+    light: AppThemePalette(
+      surface: Color(0xFFF9FBF9),
+      surfaceVariant: Color(0xFFE5EBE7),
+      background: Color(0xFFEEF2EF),
+      onSurface: Color(0xFF1B2B22),
+      onSurfaceVar: Color(0xFF6B7C71),
+      outline: Color(0xFFD0DAD3),
+      outlineVariant: Color(0xFFE0E8E3),
+      primary: Color(0xFF4E7D64),
+      primaryDark: Color(0xFF3C6450),
+      primaryLight: Color(0xFFDCE9E1),
+      onPrimary: Color(0xFFFFFFFF),
+      // A light hero with dark ink — the opposite of the other themes, which
+      // all use a saturated header.
+      gradientPrimary: [Color(0xFFE1EDE4), Color(0xFFC8DFCD)],
+    ),
+    dark: AppThemePalette(
+      surface: Color(0xFF1B241F),
+      surfaceVariant: Color(0xFF242F29),
+      background: Color(0xFF121815),
+      onSurface: Color(0xFFDFE8E1),
+      onSurfaceVar: Color(0xFF98A89D),
+      outline: Color(0xFF33423A),
+      outlineVariant: Color(0xFF26332C),
+      primary: Color(0xFF7FAE92),
+      primaryDark: Color(0xFF5F8F74),
+      primaryLight: Color(0xFF24352C),
+      onPrimary: Color(0xFF0F1612),
+      gradientPrimary: [Color(0xFF33513F), Color(0xFF223528)],
+    ),
+  );
+
   /// Every theme, in picker order. **The first entry is the default.**
   ///
   /// This is the single place to add a theme.
-  static const all = <AppThemeSpec>[sage, paper, blueprint, sport, mono];
+  static const all = <AppThemeSpec>[
+    sage,
+    paper,
+    blueprint,
+    sport,
+    mono,
+    kinetic,
+    frosted,
+    softUtility,
+  ];
 
   static AppThemeSpec get fallback => all.first;
 
