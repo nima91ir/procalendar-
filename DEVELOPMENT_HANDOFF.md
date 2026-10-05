@@ -1275,3 +1275,146 @@ touching layout constraints or hit testing at all, and would leave the nav bar's
 `dataHealthProvider`, so Settings reported "۰ مشتری" while four clients existed — the worst
 possible signal from the line that exists to be trusted. It now uses `invalidateAppData()`,
 matching `seedLarge`, so anything added to `app_refresh.dart` in future cannot slip through.
+
+---
+
+## 2026-09-28 (later) — planning only, plus the queue
+
+Nothing below was built. This entry exists so the next session does not have to rediscover it.
+
+**Booking + server.** Full plan lives in `BOOKING_AND_SERVER_PLAN.md` at the repo root, and is
+**uncommitted**. Its §13 lists five open questions; the two that change the design most are
+whether a bookable window is one session or is split into sub-slots, and whether confirming a
+booking consumes a plan session. §0 records the user's product principle — *the trainer must never
+leave the app* — which rules out the Calendly and Telegram short-cuts that were considered first.
+
+**Queued ahead of any of that**, because it rewrites records that already exist in live databases:
+
+1. **#1-C** — confirm before an attendance record that consumes nothing. The add path has no such
+   check today (`past_attendance_screen._addRecord`, the day-sheet buttons, all plain `onPressed`).
+2. **Expired-plan work** — backdated attendance inside an expired plan's range, plus retroactive
+   attach of earlier attendance to a plan whose range covers it. `addSession` only consults
+   `getActivePlan(clientId)`, so an expired plan is never credited. Every record's stored `planId`
+   is the refund source of truth, so a retroactive move must move the refund target with it. Needs
+   the assign → deduct → remove cycle proven, not assumed.
+
+**Small deferred items, all discussed and none started:**
+
+- Call `navigator.storage.persist()` on web. **Measured: `persisted()` returns false today**, so
+  the database is evictable — this is the real defence against the incident that started the day.
+- An **iOS install nudge**, with corrected copy: WebKit states installed home-screen web apps are
+  **not** subject to the 7-day cap, only Safari browsing is. An earlier claim of mine to the
+  contrary was wrong and must not be written into the UI.
+- The **display-size slider cap**: above 100% the layout overflows (a real `RenderFlex` overflow
+  was observed in `client_detail_screen.dart`). Either cap at 100%, or fix overflows case by case.
+- Excluding the **nav bar** from the display-size scaling.
+- A **Tavily MCP key** in `%APPDATA%\Code\User\mcp.json` is 23 characters and is rejected as
+  invalid. Not blocking: the Apify web tools and `fetch_webpage` both work.
+---
+
+## 2026-10-05 — RTL money isolate; removed two dead attendance methods
+
+Compared this app against the successor app (`D:\work\ZAHRA\business_manager`) and
+implemented the two changes that need no schema change. Full comparison report:
+session folder `plan.md`.
+
+**Important context discovered:** `business_manager` is the successor app, built by
+reading this one. Its `docs/DOMAIN_RULES.md` opens "Extracted from the legacy PRO
+CALENDER app... the old app is frozen" and catalogues nine traps in *this* app's
+code. That is why most of its ideas are deliberately not ours — they need schema
+changes, and `schemaVersion` is frozen at 7.
+
+### 1. `AppStrings.money()` now isolates the figure for bidi
+
+`lib/core/l10n/app_strings.dart`. Money rendered as grouped Persian digits into an
+RTL paragraph can come out visually reversed — `۲,۰۰۰,۰۰۰` renders as `۰,۰۰۰,۰۰۲`,
+which reads as a different amount. `money()` now wraps its result in a
+left-to-right isolate (U+2066 … U+2069).
+
+Applied **inside** `money()`, not at call sites, so the accounting screen, plan
+prices and the gym-share deduction are all covered by one change. `groupDigits`
+and `ThousandsSeparatorInputFormatter` deliberately untouched: they feed an
+editable `TextEditingController`, where a direction mark is visible garbage.
+New `test/unit/app_strings_money_test.dart` (6 tests) pins this, including the
+negative and English-digit cases.
+
+### 2. Removed `AttendanceService.markAttendance` and `.undoAttendance`
+
+`lib/features/attendance/data/attendance_service.dart`. Both had zero callers in
+`lib/`. The successor documents the second as a trap: it deleted the latest record
+for a client/day **without refunding**, so an undo would silently destroy a
+paid-for session. All live paths already went through
+`AttendanceSessionService.addSession` / `removeSessionById`, which are atomic
+with their refund.
+
+Two corrections to an earlier reading of this app, worth recording:
+
+- **`addAttendance` was NOT dead.** `AttendanceSessionService.addSession` calls it
+  (`attendance_session_service.dart:60`); it is the production insert and its
+  `planId` parameter carries the session-source distinction. It stays.
+- **Trap #1 (`planId: null` ambiguity) was already fixed here.**
+  `kNoSessionConsumed = 0` (`attendance_session_service.dart:16`) already
+  distinguishes plan id / bonus (`null`) / nothing consumed (`0`), and the refund
+  path switches on it at `:115`. Do not "fix" this again.
+
+Test fixtures that seeded rows via `markAttendance` now use
+`addAttendance(..., planId: kNoSessionConsumed)`, so the fixture states its intent.
+
+### Verification
+
+- `flutter analyze` — No issues found!
+- `flutter test` — **258 passing** (all green).
+- No `build_runner` run needed: no Drift table, provider or `*.g.dart`-backed file
+  changed. **No schema change; live user data is untouched.**
+- `AGENTS.md` updated: test count corrected to 258 (it said 236, but the real
+  pre-change baseline was 252 — the number was already stale), plus two new
+  convention rules on money formatting and the single attendance write path.
+
+### Still open, in priority order
+
+1. **Backup file is plaintext JSON.** `exportJson()` writes every client's name,
+   phone, plans and financials unencrypted. The successor uses AES-256-GCM with
+   PBKDF2-HMAC-SHA256 (120k iterations) and a user passphrase. **Blocked**: the
+   `cryptography` package is not in `pubspec.yaml` and `pub get` cannot reach
+   pub.dev from this network. Do not half-implement — decide first whether the
+   dependency resolves.
+2. **Backup mapper hazard.** `exportJson()` maps every table field-by-field in
+   Dart, so a newly added Drift column is silently omitted from every backup
+   until someone remembers the mapper. Cheap fix is a warning comment; the real
+   fix is `VACUUM INTO`, which needs checking on the web/wasm build.
+3. **Frozen plans never expire by time.** `expireElapsedPlans` skips frozen plans
+   because no freeze timestamp is stored. Real bug, needs a column — successor app.
+4. **No debt/receivables concept.** Only `income`/`expense` exist; no per-client
+   balance. Successor app.
+
+---
+
+## 2026-10-05 (later) — Fixed web attendance/data persistence loss
+
+**Problem:** Users reported that attendance (and in fact any data entry) added in
+one session disappeared after closing and reopening the app on a phone. Locally
+reproduced: the web build was losing writes made inside Drift transactions.
+
+**Root cause:** The resolved `drift` package was `2.35.0`, which contains a web
+bug where writes made in transactions are not flushed to IndexedDB
+(drift#3864). The fix shipped in `drift 2.35.1`: "Fix writes made in transactions
+or through `RETURNING` statements not being persisted to IndexedDB".
+
+**Changes:**
+- `fitness_trainer_app/pubspec.yaml`: `drift: ^2.31.0` → `drift: ^2.35.1`.
+- `fitness_trainer_app/pubspec.lock`: resolved `drift 2.35.1` (offline pub get,
+  package already in local pub cache).
+- `fitness_trainer_app/web/drift_worker.js` and `web/sqlite3.wasm`: replaced with
+  the copies bundled with `drift 2.35.1` so the worker/wasm runtime matches the
+  Dart package version. The old files matched `drift 2.35.0`.
+- `fitness_trainer_app/lib/core/database/app_database.g.dart`: regenerated by
+  `dart run build_runner build` for drift 2.35.1.
+
+**No schema change.** `schemaVersion` remains 7 and live user databases are
+untouched. The bug was purely in how Drift flushed transaction writes to browser
+storage.
+
+**Verification:**
+- `flutter analyze` — No issues found!
+- `flutter test` — **258 passing** (all green).
+- `dart run build_runner build` completed with 260 outputs.

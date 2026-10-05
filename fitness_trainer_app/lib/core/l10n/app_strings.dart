@@ -808,7 +808,17 @@ class AppStrings {
   String planAddedWithStart(String date) => planAddedWithStartTemplate.replaceAll('{date}', date);
 
   /// Thousands-separated amount in the app language, e.g. `1,250,000`.
-  String money(int value) => _digits(_grouped(value));
+  ///
+  /// The result is wrapped in a left-to-right isolate (U+2066 … U+2069). A money
+  /// figure is a left-to-right run, but the paragraph around it is Persian and
+  /// therefore right-to-left, so the bidi algorithm can lay the digit groups out
+  /// under the paragraph's direction: `۲,۰۰۰,۰۰۰` renders as `۰,۰۰۰,۰۰۲`, which
+  /// reads as a different amount. The isolate is invisible and applies to every
+  /// amount here, including ones written later by someone who never sees this.
+  ///
+  /// Every formatted amount must go through this method — formatting one inline
+  /// elsewhere reintroduces the reversal.
+  String money(int value) => '\u2066${_digits(_grouped(value))}\u2069';
 
   String gymShareRate(int percent) =>
       gymShareRateTemplate.replaceAll('{percent}', _digits('$percent'));

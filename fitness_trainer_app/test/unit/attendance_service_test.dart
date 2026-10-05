@@ -7,6 +7,7 @@ import 'package:fitness_trainer_app/core/database/app_database.dart';
 import 'package:fitness_trainer_app/core/l10n/validation_error.dart';
 import 'package:fitness_trainer_app/core/utils/jalali_calendar.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_service.dart';
+import 'package:fitness_trainer_app/features/attendance/data/attendance_session_service.dart';
 import 'package:fitness_trainer_app/features/attendance/data/attendance_repository.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_service.dart';
 import 'package:fitness_trainer_app/features/plans/data/plans_repository.dart';
@@ -47,37 +48,44 @@ void main() {
       await db.close();
     });
 
-    test('markAttendance creates a new record', () async {
+    test('addAttendance creates a new record', () async {
       final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
-      final record = await attendanceService.markAttendance(clientId, '1405/06/21', 'present');
-      expect(record, isNotNull);
-      expect(record!.clientId, clientId);
-      expect(record.date, '1405/06/21');
-      expect(record.status, 'present');
-    });
+          final id = await attendanceService.addAttendance(
+            clientId,
+            '1405/06/21',
+            'present',
+            planId: kNoSessionConsumed,
+          );
+          expect(id, isNotNull);
+          final record = await attendanceService.getAttendanceById(id);
+          expect(record, isNotNull);
+          expect(record!.clientId, clientId);
+          expect(record.date, '1405/06/21');
+          expect(record.status, 'present');
+          expect(record.planId, kNoSessionConsumed);
+        });
 
-    test('markAttendance inserts another record for the same day (multi allowed)', () async {
-      final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
-      await attendanceService.markAttendance(clientId, '1405/06/21', 'present');
-      final second = await attendanceService.markAttendance(clientId, '1405/06/21', 'absent');
-      expect(second, isNotNull);
-      expect(second!.status, 'absent');
-      final fromDb = await db.getAttendance(clientId, '1405/06/21');
-      expect(fromDb, isNotNull);
-      expect(fromDb!.id, second.id, reason: 'getAttendance returns the latest record');
-      final count = await db.select(db.attendance).get();
-      expect(count.length, 2);
-    });
+        test('addAttendance inserts another record for the same day (multi allowed)', () async {
+          final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
+          await attendanceService.addAttendance(clientId, '1405/06/21', 'present', planId: kNoSessionConsumed);
+          final second = await attendanceService.addAttendance(clientId, '1405/06/21', 'absent', planId: kNoSessionConsumed);
+          expect(second, isNotNull);
+          final fromDb = await db.getAttendance(clientId, '1405/06/21');
+          expect(fromDb, isNotNull);
+          expect(fromDb!.id, second, reason: 'getAttendance returns the latest record');
+          final count = await db.select(db.attendance).get();
+          expect(count.length, 2);
+        });
 
-    test('getAttendance returns the latest record for a client/day', () async {
-      final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
-      await attendanceService.markAttendance(clientId, '1405/06/21', 'present');
-      await attendanceService.markAttendance(clientId, '1405/06/21', 'present');
-      await attendanceService.markAttendance(clientId, '1405/06/21', 'absent');
-      final fromDb = await db.getAttendance(clientId, '1405/06/21');
-      expect(fromDb!.status, 'absent');
-    });
-  });
+        test('getAttendance returns the latest record for a client/day', () async {
+          final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
+          await attendanceService.addAttendance(clientId, '1405/06/21', 'present', planId: kNoSessionConsumed);
+          await attendanceService.addAttendance(clientId, '1405/06/21', 'present', planId: kNoSessionConsumed);
+          await attendanceService.addAttendance(clientId, '1405/06/21', 'absent', planId: kNoSessionConsumed);
+          final fromDb = await db.getAttendance(clientId, '1405/06/21');
+          expect(fromDb!.status, 'absent');
+        });
+      });
 
   group('Plans Service', () {
     late AppDatabase db;
@@ -377,10 +385,10 @@ void main() {
       final clientId = await db.insertClient(ClientsCompanion.insert(name: 'Test Client'));
       final otherId = await db.insertClient(ClientsCompanion.insert(name: 'Other Client'));
       final today = jalaliToday();
-      await attendanceService.markAttendance(clientId, today, 'present');
-      await attendanceService.markAttendance(clientId, today, 'present');
-      await attendanceService.markAttendance(clientId, today, 'absent');
-      await attendanceService.markAttendance(otherId, today, 'absent');
+          await attendanceService.addAttendance(clientId, today, 'present', planId: kNoSessionConsumed);
+          await attendanceService.addAttendance(clientId, today, 'present', planId: kNoSessionConsumed);
+          await attendanceService.addAttendance(clientId, today, 'absent', planId: kNoSessionConsumed);
+          await attendanceService.addAttendance(otherId, today, 'absent', planId: kNoSessionConsumed);
       final result = await dashboardService.getTodayAttendance();
       expect(result[clientId], {'present': 2, 'absent': 1});
       expect(result[otherId], {'absent': 1});

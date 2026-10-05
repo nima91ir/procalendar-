@@ -8,7 +8,7 @@ Long-form plan + per-file changelog lives in `../DEVELOPMENT_HANDOFF.md`
 - **flutter is NOT on PATH.** Prefix every command:
   `$env:PATH = "C:\flutter\bin;$env:PATH"; flutter ...`
 - Analyze: `flutter analyze` — leave it at "No issues found!".
-- Tests: `flutter test` — currently **236**, keep them all green.
+- Tests: `flutter test` — currently **258**, keep them all green.
 - After editing Drift tables/providers in `app_database.dart` or any
   `*.g.dart`-backed file:
   `dart run build_runner build --delete-conflicting-outputs`
@@ -32,6 +32,21 @@ Long-form plan + per-file changelog lives in `../DEVELOPMENT_HANDOFF.md`
   (`lib/core/l10n/app_strings.dart`) with BOTH `fa` and `en` values + a
   constructor param. New template methods must render Persian digits via
   `_digits()`. Never hardcode new Persian strings in localized screens.
+- **Money must go through `AppStrings.money()`** — never group an amount inline.
+  `money()` wraps the figure in a left-to-right isolate (U+2066 … U+2069)
+  because a number is a left-to-right run inside a right-to-left paragraph, and
+  without it `۲,۰۰۰,۰۰۰` renders as `۰,۰۰۰,۰۰۲` — a *different amount*, reading
+  as one. Do not put the isolate into `groupDigits` /
+  `ThousandsSeparatorInputFormatter`: those feed an editable text field, where a
+  direction mark is visible garbage. `digits()` is for counts, not money.
+- **Attendance has exactly one insert and one remove.**
+  `AttendanceService.addAttendance` is the only insert;
+  `AttendanceSessionService.addSession` / `removeSessionById` are the only paths
+  that consume or refund a session, and they are atomic with the record. There
+  are deliberately **no** `markAttendance` / `undoAttendance` methods: an insert
+  that consumes nothing and an insert that consumed a bonus session are told
+  apart by `kNoSessionConsumed`, and an undo that skipped the refund would
+  silently destroy a paid session. Do not add a second way in.
 - **Dates**: store Jalali `yyyy/MM/dd` strings; display via `formatDateLong`
   / `formatDateShort` (`core/utils/date_format.dart`) with the app language.
 - **State**: Riverpod 3 — `FutureProvider.autoDispose` for reads,
